@@ -156,12 +156,17 @@ The first coding session should focus on scaffolding only:
 
 That is the right first slice because every later command depends on the same file layout, config model, and state persistence.
 
+## Current Decisions
+
+These are the current project decisions and should be treated as the default until deliberately revised:
+- the CLI name is `sy`
+- Codex is the first-class runtime for the early project
+- broader runtime abstraction is deferred until the core lifecycle is real
+
 ## Open Decisions
 
 These still need to be resolved or confirmed:
 - Should we stay on Node built-ins for SQLite, or move to a dedicated SQLite package before M3?
-- Is `sy` the right CLI name?
-- Is Codex the first-class runtime, or should we build a neutral adapter layer immediately?
 - Do we want tmux as a hard dependency in v1?
 - Should mail be part of MVP, or can it wait until after spawn/status/stop are solid?
 
