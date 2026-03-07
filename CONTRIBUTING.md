@@ -46,6 +46,8 @@ Do not create broad subsystem directories before there is real code to justify t
 When the project state changes materially, update these files:
 - `docs/current-state.md` for what exists now
 - `docs/roadmap.md` for the next recommended slice
+- `docs/cli-contract.md` when command behavior or output expectations change
+- `docs/decisions/` when a durable technical choice is made
 - `docs/overstory-notes.md` when a Switchyard decision is informed by Overstory
 - `PLAN.md` or `docs/architecture.md` when the actual product direction changes
 

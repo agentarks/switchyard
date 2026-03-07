@@ -24,5 +24,7 @@ Project docs:
 - `docs/milestones.md`
 - `docs/roadmap.md`
 - `docs/current-state.md`
+- `docs/cli-contract.md`
+- `docs/decisions/`
 - `docs/overstory-notes.md`
 - `CONTRIBUTING.md`
