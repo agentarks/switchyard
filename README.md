@@ -15,6 +15,7 @@ Current status:
 
 Development:
 - `npm run build`
+- `npm run check`
 - `npm run typecheck`
 - `npm test`
 
@@ -24,6 +25,9 @@ Project docs:
 - `docs/milestones.md`
 - `docs/roadmap.md`
 - `docs/current-state.md`
+- `docs/next-steps.md`
+- `docs/backlog.md`
+- `docs/dev-workflow.md`
 - `docs/cli-contract.md`
 - `docs/decisions/`
 - `docs/overstory-notes.md`

@@ -14,10 +14,11 @@ Use these rules when deciding whether to add or defer something:
 ## Development Commands
 
 - `npm run build`
+- `npm run check`
 - `npm run typecheck`
 - `npm test`
 
-If a change affects CLI behavior, run all three before closing the session.
+If a change affects CLI behavior, run `npm run check` before closing the session.
 
 ## Working Agreement
 
@@ -46,6 +47,9 @@ Do not create broad subsystem directories before there is real code to justify t
 When the project state changes materially, update these files:
 - `docs/current-state.md` for what exists now
 - `docs/roadmap.md` for the next recommended slice
+- `docs/next-steps.md` for the exact owner execution path for the current slice
+- `docs/backlog.md` for the ordered task list beyond the immediate slice
+- `docs/dev-workflow.md` when the recommended session workflow changes
 - `docs/cli-contract.md` when command behavior or output expectations change
 - `docs/decisions/` when a durable technical choice is made
 - `docs/overstory-notes.md` when a Switchyard decision is informed by Overstory
