@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+.switchyard/worktrees/
+.switchyard/logs/
+.switchyard/*.db
+.switchyard/*.db-shm
+.switchyard/*.db-wal
+.switchyard/current-run.txt

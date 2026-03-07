@@ -1,0 +1,28 @@
+{
+  "name": "switchyard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLI-first multi-agent orchestration for coding agents",
+  "type": "module",
+  "bin": {
+    "sy": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=25.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "commander": "^14.0.1",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2"
+  }
+}
