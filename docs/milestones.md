@@ -9,9 +9,8 @@ Deliverables:
 
 Questions to resolve:
 - SQLite implementation choice
-- runtime target
 - tmux requirement
-- MVP command set
+- MVP mail scope
 
 ## M1: Project Scaffold
 
