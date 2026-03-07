@@ -53,11 +53,14 @@ Future target:
 ## `sy status [args...]`
 
 Current contract:
-- command exists and accepts positional arguments
-- command is a placeholder until session persistence exists
+- command exists and accepts positional arguments reserved for future filters
+- command loads `.switchyard/config.yaml` from the canonical repo root
+- command reads durable session state from `sessions.db`
+- when no sessions exist, print `No Switchyard sessions recorded yet.`
+- when sessions exist, print a concise tab-separated table ordered by most recent update
 
 Future target:
-- read durable session state
+- check liveness where needed
 - show concise operator-friendly status for active and recent sessions
 
 ## `sy stop [args...]`

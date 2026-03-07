@@ -9,20 +9,21 @@ This repository is still in the setup phase. The codebase has enough structure t
 - TypeScript Node CLI scaffold
 - `sy` entrypoint with command registration
 - implemented `sy init`
-- placeholder `sy sling`, `sy status`, `sy stop`, and `sy mail`
+- implemented `sy status`
+- placeholder `sy sling`, `sy stop`, and `sy mail`
 - repo root detection that handles nested directories and git worktrees
 - canonical branch detection that prefers `origin/HEAD`
 - config loading that normalizes `project.root` to the canonical repo root
 - `.switchyard/` bootstrap for directories and placeholder database files
-- regression tests around config/root behavior and placeholder command parsing
+- session store with schema ownership for `sessions.db`
+- regression tests around config/root behavior, session persistence, and command parsing
 
 ## What Does Not Exist Yet
 
-- session store with schema management and real queries
 - worktree manager
 - Codex runtime adapter
 - process spawning and tmux control
-- real `status`, `stop`, or `mail` behavior
+- real `stop` or `mail` behavior
 - event storage or inspection commands
 - merge workflow
 
@@ -35,7 +36,9 @@ This repository is still in the setup phase. The codebase has enough structure t
 - `sy sling [args...]`
   - placeholder only
 - `sy status [args...]`
-  - placeholder only
+  - loads config and session state
+  - prints an empty-state message when no sessions exist
+  - prints a tab-separated session table ordered by most recent update
 - `sy stop [args...]`
   - placeholder only
 - `sy mail [args...]`
@@ -43,20 +46,20 @@ This repository is still in the setup phase. The codebase has enough structure t
 
 ## Current Risks
 
-- `src/config.ts` is carrying both config logic and git root-resolution behavior; that should eventually split once session/worktree code arrives.
-- database files exist, but schema ownership has not been implemented yet.
+- `src/config.ts` is carrying both config logic and git root-resolution behavior; that should eventually split once worktree/runtime code arrives.
+- `node:sqlite` is still experimental in Node 25, so the SQLite choice may need revision if core API churn becomes painful.
 - there is no end-to-end test around `sy init`.
 - runtime/process decisions are still mostly architectural intent rather than code.
 
 ## Recommended Next Task
 
-Implement the first real session store:
-- create a storage module that initializes `sessions.db`
-- define one small session record
-- add insert and list operations
-- wire `sy status` to read from it, even if spawn is still missing
+Implement the first real worktree path:
+- create a worktree manager module
+- define deterministic branch and worktree naming rules
+- start wiring the first real `sy sling`
+- persist one created session from `sy sling`
 
-That gives the repo its first persistent subsystem beyond config/bootstrap and reduces ambiguity for later work.
+That keeps momentum on the first end-to-end operator loop instead of adding more passive storage work.
 
 ## How To Use This File
 

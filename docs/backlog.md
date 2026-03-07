@@ -4,34 +4,31 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Implement the first session store under `src/sessions/`
-2. Replace the `sy status` placeholder with real session listing
-3. Add tests for empty and non-empty status output
+1. Implement a worktree manager under `src/worktrees/`
+2. Define deterministic branch and worktree naming rules
+3. Add tests for worktree creation and cleanup edge cases
 
 ## Next
 
-4. Implement a worktree manager under `src/worktrees/`
-5. Define deterministic branch and worktree naming rules
-6. Add tests for worktree creation and cleanup edge cases
+4. Add a narrow Codex runtime seam under `src/runtimes/codex/`
+5. Implement the first real `sy sling`
+6. Persist a created session from `sy sling`
 
 ## After That
 
-7. Add a narrow Codex runtime seam under `src/runtimes/codex/`
-8. Implement the first real `sy sling`
-9. Persist a created session from `sy sling`
-10. Define readiness and failure handling for the first spawned session
+7. Define readiness and failure handling for the first spawned session
+8. Implement `sy stop`
+9. Add liveness checks and state transitions
 
 ## Then
 
-11. Implement `sy stop`
-12. Add liveness checks and state transitions
-13. Define cleanup behavior for stopped sessions and worktrees
+10. Define cleanup behavior for stopped sessions and worktrees
+11. Implement the first mail store path
+12. Add minimal event logging
 
 ## Later
 
-14. Implement the first mail store path
-15. Add minimal event logging
-16. Improve status and inspection surfaces
+13. Improve status and inspection surfaces
 
 ## Not A Priority Yet
 
