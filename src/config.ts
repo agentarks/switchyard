@@ -28,34 +28,37 @@ export function buildDefaultConfig(projectRoot: string, projectName: string, can
 }
 
 export async function detectCanonicalBranch(projectRoot: string): Promise<string> {
-  const branch = await runGit(projectRoot, ["branch", "--show-current"]);
-  return branch.trim() || "main";
+  try {
+    const ref = await runGit(projectRoot, ["symbolic-ref", "refs/remotes/origin/HEAD"]);
+    const branch = ref.trim().split("/").pop();
+    if (branch) {
+      return branch;
+    }
+  } catch {
+    // Fall through to the current branch when origin/HEAD is unavailable.
+  }
+
+  try {
+    const branch = await runGit(projectRoot, ["branch", "--show-current"]);
+    if (branch.trim()) {
+      return branch.trim();
+    }
+  } catch {
+    // Fall through to the default branch fallback.
+  }
+
+  return "main";
 }
 
 export async function detectProjectRoot(startDir = process.cwd()): Promise<string> {
-  let current = resolve(startDir);
-
   while (true) {
     try {
-      const gitPath = join(current, ".git");
-      await readFile(gitPath);
-      return current;
+      const commonDir = await runGit(startDir, ["rev-parse", "--git-common-dir"]);
+      const resolvedCommonDir = resolve(startDir, commonDir.trim());
+      return dirname(resolvedCommonDir);
     } catch {
-      // .git may be a file in worktrees; reading it is enough to prove repo membership.
-    }
-
-    try {
-      await readFile(join(current, ".git", "HEAD"));
-      return current;
-    } catch {
-      // keep walking upward
-    }
-
-    const parent = dirname(current);
-    if (parent === current) {
       throw new ConfigError("Not inside a git repository.");
     }
-    current = parent;
   }
 }
 
@@ -82,7 +85,13 @@ export async function loadConfig(startDir = process.cwd()): Promise<SwitchyardCo
     throw new ConfigError(`Invalid ${SWITCHYARD_DIR}/${CONFIG_FILE} shape.`);
   }
 
-  return parsed;
+  return {
+    ...parsed,
+    project: {
+      ...parsed.project,
+      root: projectRoot
+    }
+  };
 }
 
 export async function writeConfig(config: SwitchyardConfig): Promise<string> {
