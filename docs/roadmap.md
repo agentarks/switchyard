@@ -4,7 +4,7 @@
 
 Switchyard is in early scaffold/bootstrap territory:
 - M1 scaffold is effectively present
-- M2 repo bootstrap is in progress
+- M2 repo bootstrap is effectively complete
 - later milestones remain design targets, not implementation commitments
 
 ## Near-Term Rule

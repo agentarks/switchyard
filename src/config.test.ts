@@ -57,7 +57,7 @@ test("detectCanonicalBranch prefers origin HEAD over the current feature branch"
   }
 });
 
-test("loadConfig normalizes project.root to the actual checkout path", async () => {
+test("loadConfig normalizes project.root to the canonical repo root", async () => {
   const repoDir = await createTempRepo();
 
   try {

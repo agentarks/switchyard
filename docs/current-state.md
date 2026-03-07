@@ -12,7 +12,7 @@ This repository is still in the setup phase. The codebase has enough structure t
 - placeholder `sy sling`, `sy status`, `sy stop`, and `sy mail`
 - repo root detection that handles nested directories and git worktrees
 - canonical branch detection that prefers `origin/HEAD`
-- config loading that normalizes `project.root` to the active checkout
+- config loading that normalizes `project.root` to the canonical repo root
 - `.switchyard/` bootstrap for directories and placeholder database files
 - regression tests around config/root behavior and placeholder command parsing
 
