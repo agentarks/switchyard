@@ -31,6 +31,7 @@ Project docs:
 - `docs/roadmap.md`
 - `docs/current-state.md`
 - `docs/next-steps.md`
+- `docs/focus-tracker.md`
 - `docs/backlog.md`
 - `docs/dev-workflow.md`
 - `docs/cli-contract.md`

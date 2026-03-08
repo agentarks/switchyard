@@ -116,6 +116,31 @@ test("eventsCommand filters events for one resolved session", async () => {
   }
 });
 
+test("eventsCommand reads events for a direct session id even when the session row is missing", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createEvent(repoDir, {
+      sessionId: "session-orphan",
+      agentName: "agent-orphan",
+      eventType: "stop.completed",
+      payload: {
+        outcome: "stopped"
+      },
+      createdAt: "2026-03-08T11:00:00.000Z"
+    });
+
+    const output = await captureStdout(async () => {
+      await eventsCommand({ startDir: repoDir, selector: "session-orphan" });
+    });
+
+    assert.match(output, /Recent events for session session-orphan:/);
+    assert.match(output, /2026-03-08T11:00:00.000Z\tstop.completed\tagent-orphan\tsession-orphan\toutcome=stopped/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createInitializedRepo(): Promise<string> {
   const repoDir = await createTempGitRepo("switchyard-events-command-test-");
   await bootstrapSwitchyardLayout(repoDir);

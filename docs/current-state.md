@@ -95,3 +95,5 @@ Update this document whenever one of these changes:
 - a new subsystem starts owning persistent state
 - an important architectural assumption is changed
 - the recommended next task changes
+
+For scope control across sessions, keep `docs/focus-tracker.md` aligned with the real implementation state.
