@@ -14,7 +14,7 @@ Switchyard now supports the core repo-local operator loop:
 That made the next lifecycle gap explicit: there was still no defined answer for how useful work on an agent branch returns to the canonical branch.
 
 Two risks followed from that gap:
-- cleanup remained ambiguous because `sy stop --cleanup` deletes the branch and worktree that would otherwise be merged
+- cleanup remained ambiguous because `sy stop --cleanup` could delete the branch and worktree that would otherwise be merged
 - any future merge command would be forced to invent operator rules that had not been written down yet
 
 ## Decision

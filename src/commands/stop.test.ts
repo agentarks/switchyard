@@ -373,6 +373,131 @@ test("stopCommand refuses cleanup for an unmerged stopped session without explic
   assert.equal(writes.join(""), "");
 });
 
+test("stopCommand still stops an active unmerged session when cleanup is refused", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-active-unmerged");
+
+  try {
+    await slingCommand({
+      agentName: "Agent Active Unmerged",
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 4141,
+          command: {
+            command: "codex",
+            args: []
+          },
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    await git(worktreePath, ["config", "user.name", "Switchyard Test"]);
+    await git(worktreePath, ["config", "user.email", "switchyard@example.com"]);
+    await git(worktreePath, ["switch", "agents/agent-active-unmerged"]);
+    await git(worktreePath, ["commit", "--allow-empty", "-m", "Agent active unmerged change"]);
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await stopCommand({
+      selector: "agent-active-unmerged",
+      cleanup: true,
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 4141,
+      stopRuntime: async (pid) => {
+        assert.equal(pid, 4141);
+        return true;
+      }
+    });
+
+    await access(worktreePath);
+    await git(repoDir, ["rev-parse", "--verify", "agents/agent-active-unmerged"]);
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "stopped");
+    assert.equal(sessions[0]?.runtimePid, null);
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+    assert.equal(events.length, 2);
+    assert.equal(events[1]?.eventType, "stop.completed");
+    assert.equal(events[1]?.payload.cleanupPerformed, false);
+    assert.equal(events[1]?.payload.cleanupReason, "not_merged");
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Stopped agent-active-unmerged/);
+  assert.match(output, /Cleanup skipped: Refusing cleanup for agent-active-unmerged: preserved branch 'agents\/agent-active-unmerged' is not merged into 'main'/);
+});
+
+test("stopCommand reports already-missing cleanup artifacts without claiming removal", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-missing-artifacts");
+
+  try {
+    await slingCommand({
+      agentName: "Agent Missing Artifacts",
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 5151,
+          command: {
+            command: "codex",
+            args: []
+          },
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    await stopCommand({
+      selector: "agent-missing-artifacts",
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 5151,
+      stopRuntime: async () => true
+    });
+
+    await git(repoDir, ["worktree", "remove", "--force", worktreePath]);
+    await git(repoDir, ["branch", "--delete", "--force", "agents/agent-missing-artifacts"]);
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await stopCommand({
+      selector: "agent-missing-artifacts",
+      cleanup: true,
+      startDir: repoDir
+    });
+
+    const sessions = await listSessions(repoDir);
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+    assert.equal(events.length, 3);
+    assert.equal(events[2]?.eventType, "stop.completed");
+    assert.equal(events[2]?.payload.cleanupPerformed, false);
+    assert.equal(events[2]?.payload.cleanupReason, "artifacts_missing");
+    assert.equal(events[2]?.payload.cleanupMode, undefined);
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Session agent-missing-artifacts is already stopped\./);
+  assert.match(output, /Cleanup: preserved worktree and branch were already absent\./);
+  assert.doesNotMatch(output, /removed worktree and branch/);
+});
+
 test("stopCommand removes the worktree and branch after confirmed merge cleanup", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];

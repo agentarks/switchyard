@@ -81,8 +81,10 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - resolves one session by id or normalized agent name
   - stops one active pid-backed runtime and updates durable session state
   - preserves the worktree by default so the operator can review or merge the branch later
+  - still stops active sessions when `--cleanup` is requested, even if cleanup is later refused
   - removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the configured canonical branch
   - requires `--cleanup --abandon` to discard preserved work that is not confirmed merged
+  - reports when preserved cleanup artifacts were already absent instead of claiming removal
 - `sy merge <session>`
   - resolves one session by id or normalized agent name
   - refuses active sessions so merge only runs against preserved work

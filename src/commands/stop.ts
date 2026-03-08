@@ -64,21 +64,15 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     throw new StopError("The '--abandon' flag requires '--cleanup'.");
   }
 
-  const cleanupMode = options.cleanup
-    ? await determineCleanupMode({
-      projectRoot: config.project.root,
-      canonicalBranch: config.project.canonicalBranch,
-      session,
-      abandon: options.abandon
-    })
-    : undefined;
-
   if (!isActiveSessionState(session.state)) {
     if (options.cleanup) {
-      await cleanupSessionArtifacts({
+      const cleanup = await resolveCleanupRequest({
         projectRoot: config.project.root,
         canonicalBranch: config.project.canonicalBranch,
         session,
+        cleanupRequested: options.cleanup,
+        abandon: options.abandon,
+        failOnBlocked: true,
         removeSessionWorktree
       });
       await recordEventWithFallback(recordEvent, config.project.root, {
@@ -90,12 +84,13 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
           nextState: session.state,
           outcome: "already_not_running",
           cleanupRequested: true,
-          cleanupPerformed: true,
-          ...(cleanupMode ? { cleanupMode } : {})
+          cleanupPerformed: cleanup.performed,
+          ...(cleanup.cleanupMode ? { cleanupMode: cleanup.cleanupMode } : {}),
+          ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {})
         }
       });
       process.stdout.write(`Session ${session.agentName} is already ${session.state}.\n`);
-      process.stdout.write(`${formatCleanupMessage(cleanupMode, config.project.canonicalBranch)}\n`);
+      process.stdout.write(`${cleanup.message}\n`);
       return;
     }
 
@@ -108,12 +103,13 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       state: "failed",
       runtimePid: null
     });
-    const cleanupPerformed = await maybeCleanupSessionArtifacts({
+    const cleanup = await resolveCleanupRequest({
       projectRoot: config.project.root,
       canonicalBranch: config.project.canonicalBranch,
       session,
       cleanupRequested: options.cleanup,
-      cleanupMode,
+      abandon: options.abandon,
+      failOnBlocked: false,
       removeSessionWorktree
     });
     await recordEventWithFallback(recordEvent, config.project.root, {
@@ -125,13 +121,14 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
         nextState: nextSession.state,
         outcome: "missing_runtime_pid",
         cleanupRequested: options.cleanup ? true : false,
-        cleanupPerformed,
-        ...(cleanupPerformed && cleanupMode ? { cleanupMode } : {})
+        cleanupPerformed: cleanup.performed,
+        ...(cleanup.cleanupMode ? { cleanupMode: cleanup.cleanupMode } : {}),
+        ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {})
       }
     });
     process.stdout.write(`Session ${session.agentName} has no recorded runtime pid. Marked failed.\n`);
-    if (cleanupPerformed) {
-      process.stdout.write(`${formatCleanupMessage(cleanupMode, config.project.canonicalBranch)}\n`);
+    if (cleanup.message) {
+      process.stdout.write(`${cleanup.message}\n`);
     } else {
       process.stdout.write(`Worktree preserved: ${formatRelativePath(config.project.root, session.worktreePath)}\n`);
     }
@@ -157,12 +154,13 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     runtimePid: null
   });
 
-  const cleanupPerformed = await maybeCleanupSessionArtifacts({
+  const cleanup = await resolveCleanupRequest({
     projectRoot: config.project.root,
     canonicalBranch: config.project.canonicalBranch,
     session,
     cleanupRequested: options.cleanup,
-    cleanupMode,
+    abandon: options.abandon,
+    failOnBlocked: false,
     removeSessionWorktree
   });
 
@@ -175,8 +173,9 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       nextState: nextSession.state,
       outcome: determineStopOutcome(wasAlive, stopped, nextState),
       cleanupRequested: options.cleanup ? true : false,
-      cleanupPerformed,
-      ...(cleanupPerformed && cleanupMode ? { cleanupMode } : {})
+      cleanupPerformed: cleanup.performed,
+      ...(cleanup.cleanupMode ? { cleanupMode: cleanup.cleanupMode } : {}),
+      ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {})
     }
   });
 
@@ -186,8 +185,8 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     process.stdout.write(`Stopped ${session.agentName}\n`);
   }
 
-  if (cleanupPerformed) {
-    process.stdout.write(`${formatCleanupMessage(cleanupMode, config.project.canonicalBranch)}\n`);
+  if (cleanup.message) {
+    process.stdout.write(`${cleanup.message}\n`);
   } else {
     process.stdout.write(`Worktree preserved: ${formatRelativePath(config.project.root, session.worktreePath)}\n`);
   }
@@ -222,20 +221,53 @@ async function cleanupSessionArtifacts(options: {
   }
 }
 
-async function maybeCleanupSessionArtifacts(options: {
+async function resolveCleanupRequest(options: {
   projectRoot: string;
   canonicalBranch: string;
   session: SessionRecord;
   cleanupRequested?: boolean;
-  cleanupMode?: CleanupMode;
+  abandon?: boolean;
+  failOnBlocked: boolean;
   removeSessionWorktree: typeof removeWorktree;
-}): Promise<boolean> {
+}): Promise<{
+  performed: boolean;
+  message?: string;
+  cleanupMode?: CleanupMode;
+  cleanupReason?: CleanupReason;
+}> {
   if (!options.cleanupRequested) {
-    return false;
+    return { performed: false };
+  }
+
+  const decision = await determineCleanupDecision(options);
+
+  if (decision.kind === "blocked") {
+    if (options.failOnBlocked) {
+      throw new StopError(decision.message);
+    }
+
+    return {
+      performed: false,
+      message: `Cleanup skipped: ${decision.message}`,
+      cleanupReason: decision.reason
+    };
+  }
+
+  if (decision.kind === "already_absent") {
+    return {
+      performed: false,
+      message: "Cleanup: preserved worktree and branch were already absent.",
+      cleanupReason: "artifacts_missing"
+    };
   }
 
   await cleanupSessionArtifacts(options);
-  return true;
+
+  return {
+    performed: true,
+    message: formatCleanupMessage(decision.mode, options.canonicalBranch),
+    cleanupMode: decision.mode
+  };
 }
 
 function determineStopOutcome(
@@ -259,46 +291,58 @@ function formatRelativePath(projectRoot: string, path: string): string {
   return relativePath.length > 0 ? relativePath : ".";
 }
 
-type CleanupMode = "abandoned" | "artifacts_missing" | "merged";
+type CleanupMode = "abandoned" | "merged";
 
-async function determineCleanupMode(options: {
+type CleanupReason = "artifacts_missing" | "branch_missing" | "missing_branch_metadata" | "not_merged";
+
+async function determineCleanupDecision(options: {
   projectRoot: string;
   canonicalBranch: string;
   session: SessionRecord;
   abandon?: boolean;
-}): Promise<CleanupMode> {
+}): Promise<
+  | { kind: "perform"; mode: CleanupMode }
+  | { kind: "blocked"; reason: CleanupReason; message: string }
+  | { kind: "already_absent" }
+> {
   if (options.abandon) {
-    return "abandoned";
+    return { kind: "perform", mode: "abandoned" };
   }
 
   const branch = options.session.branch.trim();
 
   if (branch.length === 0) {
-    throw new StopError(
-      `Refusing cleanup for ${options.session.agentName}: no preserved branch metadata is available. Rerun with '--cleanup --abandon' to discard the remaining artifacts explicitly.`
-    );
+    return {
+      kind: "blocked",
+      reason: "missing_branch_metadata",
+      message: `Refusing cleanup for ${options.session.agentName}: no preserved branch metadata is available. Rerun with '--cleanup --abandon' to discard the remaining artifacts explicitly.`
+    };
   }
 
   const branchExists = await localBranchExists(options.projectRoot, branch);
   const worktreeExists = await pathExists(options.session.worktreePath);
 
   if (!branchExists && !worktreeExists) {
-    return "artifacts_missing";
+    return { kind: "already_absent" };
   }
 
   if (!branchExists) {
-    throw new StopError(
-      `Refusing cleanup for ${options.session.agentName}: cannot confirm preserved branch '${branch}' is merged into '${options.canonicalBranch}'. Rerun without '--cleanup' to preserve the remaining artifacts, or pass '--cleanup --abandon' to discard them explicitly.`
-    );
+    return {
+      kind: "blocked",
+      reason: "branch_missing",
+      message: `Refusing cleanup for ${options.session.agentName}: cannot confirm preserved branch '${branch}' is merged into '${options.canonicalBranch}'. Rerun without '--cleanup' to preserve the remaining artifacts, or pass '--cleanup --abandon' to discard them explicitly.`
+    };
   }
 
   if (branch === options.canonicalBranch || await isBranchMergedIntoCanonical(options.projectRoot, branch, options.canonicalBranch)) {
-    return "merged";
+    return { kind: "perform", mode: "merged" };
   }
 
-  throw new StopError(
-    `Refusing cleanup for ${options.session.agentName}: preserved branch '${branch}' is not merged into '${options.canonicalBranch}'. Rerun without '--cleanup' to preserve it, or pass '--cleanup --abandon' to discard it explicitly.`
-  );
+  return {
+    kind: "blocked",
+    reason: "not_merged",
+    message: `Refusing cleanup for ${options.session.agentName}: preserved branch '${branch}' is not merged into '${options.canonicalBranch}'. Rerun without '--cleanup' to preserve it, or pass '--cleanup --abandon' to discard it explicitly.`
+  };
 }
 
 function formatCleanupMessage(cleanupMode: CleanupMode | undefined, canonicalBranch: string): string {
