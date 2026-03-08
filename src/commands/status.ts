@@ -23,7 +23,7 @@ export function createStatusCommand(): Command {
 
 export async function statusCommand(options: StatusOptions = {}): Promise<void> {
   const config = await loadConfig(options.startDir);
-  await reconcileRunningSessions(config.project.root, options.isRuntimeAlive ?? isProcessAlive);
+  const reconciledSessionIds = await reconcileRunningSessions(config.project.root, options.isRuntimeAlive ?? isProcessAlive);
   const sessions = await listSessions(config.project.root);
 
   if (sessions.length === 0) {
@@ -41,7 +41,9 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 
   for (const session of sessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
-    const recentEvent = formatRecentEventSummary(latestEventsBySession.get(session.id));
+    const recentEvent = reconciledSessionIds.has(session.id)
+      ? "-"
+      : formatRecentEventSummary(latestEventsBySession.get(session.id));
     process.stdout.write(
       `${session.state}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${recentEvent}\n`
     );
@@ -51,8 +53,9 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 async function reconcileRunningSessions(
   projectRoot: string,
   isRuntimeAlive: (pid: number) => boolean
-): Promise<void> {
+): Promise<Set<string>> {
   const sessions = await listSessions(projectRoot);
+  const reconciledSessionIds = new Set<string>();
 
   for (const session of sessions) {
     if (session.state !== "running") {
@@ -65,8 +68,11 @@ async function reconcileRunningSessions(
         state: "failed",
         runtimePid: null
       });
+      reconciledSessionIds.add(session.id);
     }
   }
+
+  return reconciledSessionIds;
 }
 
 function formatWorktreePath(projectRoot: string, worktreePath: string): string {
@@ -88,44 +94,16 @@ function formatRecentEventSummary(event?: EventRecord): string {
 }
 
 function formatRecentEventDetails(event: EventRecord): string {
-  const selectedKeys = selectRecentDetailKeys(event);
+  const selectedKeys = RECENT_EVENT_DETAIL_KEYS[event.eventType] ?? [];
 
   if (selectedKeys.length === 0) {
     return "";
   }
 
-  return selectedKeys.map((key) => `${key}=${formatPayloadValue(event.payload[key])}`).join(", ");
-}
-
-function selectRecentDetailKeys(event: EventRecord): string[] {
-  const keys = Object.keys(event.payload);
-
-  if (keys.length === 0) {
-    return [];
-  }
-
-  const priorityKeys = RECENT_EVENT_DETAIL_KEYS[event.eventType] ?? [];
-  const selectedKeys: string[] = [];
-
-  for (const key of priorityKeys) {
-    if (key in event.payload) {
-      selectedKeys.push(key);
-    }
-  }
-
-  for (const key of keys.sort()) {
-    if (selectedKeys.length >= 2) {
-      break;
-    }
-
-    if (selectedKeys.includes(key) || IGNORED_RECENT_EVENT_DETAIL_KEYS.has(key)) {
-      continue;
-    }
-
-    selectedKeys.push(key);
-  }
-
-  return selectedKeys.slice(0, 2);
+  return selectedKeys
+    .filter((key) => key in event.payload)
+    .map((key) => `${key}=${formatPayloadValue(event.payload[key])}`)
+    .join(", ");
 }
 
 function formatPayloadValue(value: EventPayloadValue | undefined): string {
@@ -135,16 +113,6 @@ function formatPayloadValue(value: EventPayloadValue | undefined): string {
 
   return String(value);
 }
-
-const IGNORED_RECENT_EVENT_DETAIL_KEYS = new Set([
-  "branch",
-  "cleanupRequested",
-  "mailId",
-  "previousState",
-  "recipient",
-  "runtimeCommand",
-  "worktreePath"
-]);
 
 const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "mail.checked": ["unreadCount"],

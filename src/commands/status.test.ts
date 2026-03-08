@@ -164,6 +164,56 @@ test("statusCommand prints the latest event summary for each session", async () 
   );
 });
 
+test("statusCommand does not leak unknown event payload fields into the recent summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-unknown",
+    agentName: "agent-unknown",
+    branch: "agents/agent-unknown",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-unknown"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T09:00:00.000Z",
+    updatedAt: "2026-03-08T09:00:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-unknown",
+    agentName: "agent-unknown",
+    eventType: "runtime.note",
+    payload: {
+      secret: "should-not-appear",
+      summary: "also-hidden"
+    },
+    createdAt: "2026-03-08T09:10:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => true
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(
+    output,
+    /stopped\tagent-unknown\tagents\/agent-unknown\t\.switchyard\/worktrees\/agent-unknown\t2026-03-08T09:00:00.000Z\t2026-03-08T09:10:00.000Z runtime\.note/
+  );
+  assert.doesNotMatch(output, /should-not-appear/);
+  assert.doesNotMatch(output, /also-hidden/);
+});
+
 test("statusCommand marks stale running sessions as failed", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
@@ -178,6 +228,15 @@ test("statusCommand marks stale running sessions as failed", async () => {
     runtimePid: 9090,
     createdAt: "2026-03-06T09:00:00.000Z",
     updatedAt: "2026-03-06T10:00:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "agent-stale",
+    agentName: "agent-stale",
+    eventType: "sling.completed",
+    payload: {
+      runtimePid: 9090
+    },
+    createdAt: "2026-03-06T09:30:00.000Z"
   });
 
   process.stdout.write = ((chunk: string | Uint8Array) => {
@@ -200,7 +259,8 @@ test("statusCommand marks stale running sessions as failed", async () => {
   }
 
   const output = writes.join("");
-  assert.match(output, /failed\tagent-stale\tagents\/agent-stale\t\.switchyard\/worktrees\/agent-stale\t/);
+  assert.match(output, /failed\tagent-stale\tagents\/agent-stale\t\.switchyard\/worktrees\/agent-stale\t[^\t]+\t-/);
+  assert.doesNotMatch(output, /sling\.completed/);
 });
 
 test("statusCommand marks legacy running sessions without a pid as failed", async () => {
