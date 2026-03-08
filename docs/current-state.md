@@ -9,6 +9,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - TypeScript Node CLI scaffold
 - `sy` entrypoint with command registration
 - implemented `sy init`
+- implemented `sy events`
 - implemented `sy status`
 - implemented `sy sling`
 - implemented `sy stop`
@@ -26,12 +27,12 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - narrow Codex runtime seam that builds and spawns one detached command
 - narrow process liveness and stop helpers for detached Codex sessions
 - durable lifecycle event appends around `sy sling`, `sy stop`, `sy mail send`, and `sy mail check`
+- first operator-facing event inspection path over `events.db`
 - regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
 
 ## What Does Not Exist Yet
 
 - tmux control
-- event inspection commands
 - merge workflow
 
 ## Current Command Surface
@@ -40,6 +41,11 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - works inside a git repository
   - writes `.switchyard/config.yaml`
   - creates the initial `.switchyard/` layout
+- `sy events [session]`
+  - loads config from the canonical repo root
+  - prints the recent durable event timeline from `events.db`
+  - optionally scopes the recent view to one resolved session
+  - prints an empty-state message when no events exist
 - `sy sling [args...]`
   - requires an agent name
   - creates one deterministic branch under `agents/`
@@ -75,12 +81,12 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## Recommended Next Task
 
-Expose the first operator-facing event read path:
-- add one narrow CLI inspection view over recent durable lifecycle events
-- keep the event model and output intentionally small
-- improve diagnosis without broadening runtime control yet
+Improve status and inspection output with event context:
+- connect session state and recent events more directly
+- keep the output concise and operator-readable
+- avoid broad filtering or analytics work until usage demands it
 
-That would let operators answer "what just happened?" from the CLI instead of reading SQLite state directly.
+That should make it easier to answer "why is this session in this state?" without manually correlating tables.
 
 ## How To Use This File
 

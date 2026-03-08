@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { createEventsCommand } from "./commands/events.js";
 import { createInitCommand } from "./commands/init.js";
 import { createMailCommand } from "./commands/mail.js";
 import { createSlingCommand } from "./commands/sling.js";
@@ -17,6 +18,7 @@ async function main(): Promise<void> {
     .version("0.1.0");
 
   program.addCommand(createInitCommand());
+  program.addCommand(createEventsCommand());
   program.addCommand(createSlingCommand());
   program.addCommand(createStatusCommand());
   program.addCommand(createStopCommand());

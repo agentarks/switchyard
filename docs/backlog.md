@@ -4,24 +4,23 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Add one operator-facing read path for durable events
-2. Improve status and inspection output with event context
-3. Decide whether tmux should replace or augment pid-based stop control
+1. Improve status and inspection output with event context
+2. Decide whether tmux should replace or augment pid-based stop control
+3. Define readiness and failure handling for the first spawned session
 
 ## Next
 
-4. Define readiness and failure handling for the first spawned session
-5. Add richer session metadata only if lifecycle control needs it
-6. Define merge and reintegration workflow
+4. Add richer session metadata only if lifecycle control needs it
+5. Define merge and reintegration workflow
 
 ## After That
 
-7. Expand mail semantics beyond the first durable path
-8. Add background diagnostics only if operator workflows require it
+6. Expand mail semantics beyond the first durable path
+7. Add background diagnostics only if operator workflows require it
 
 ## Then
 
-9. Dashboard or TUI work, if still justified
+8. Dashboard or TUI work, if still justified
 
 ## Later
 

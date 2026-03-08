@@ -65,6 +65,19 @@ Current contract:
 Future target:
 - show concise operator-friendly status for active and recent sessions
 
+## `sy events [session]`
+
+Current contract:
+- command exists and accepts one optional session id or agent name selector
+- without a selector, command reads the recent durable event timeline from `events.db`
+- with a selector, command resolves one session and reads recent events for that session
+- when no events exist globally, print `No Switchyard events recorded yet.`
+- when events exist, print a concise tab-separated table ordered chronologically across the recent window
+
+Future target:
+- add richer inspection output only if the narrow event timeline proves insufficient
+- avoid broad filtering until operator workflows demand it
+
 ## `sy stop <session>`
 
 Current contract:
