@@ -4,37 +4,37 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Validate whether merge or recovery work actually needs richer session metadata.
+Expand mail semantics beyond the first durable unread-only path.
 
 Target outcome:
-- the repo stays on the current session schema unless a concrete operator workflow proves it is too thin
-- any metadata broadening is justified by one real merge or recovery gap, not by speculation
-- docs state clearly whether the current branch/worktree/state fields are sufficient for the current loop
+- the repo keeps mail operator-readable and durable while reducing friction in common follow-up checks
+- any broader mail behavior is justified by current operator usage, not by speculative messaging features
+- docs state clearly what mail reads, writes, and state transitions now mean
 
 ## Why This Is Next
 
-The narrow merge command is now real, which means the repo can stop theorizing about session metadata and start judging it against actual operator behavior.
+The reintegration path now has both a narrow merge command and a cleanup guard, so the next useful gap is the still-minimal mail surface.
 
-Right now the important question is not "what else could we store?" It is "what real task is still blocked or ambiguous with the current fields?"
+Mail already works durably, but it is intentionally thin. If operators need anything more, the next step should be a small usability expansion inside that existing path rather than more merge machinery.
 
 Without that discipline:
-- the repo risks adding state that does not improve the current operator loop
-- recovery code will drift into hypothetical cases instead of real operator pain
-- the core lifecycle becomes harder to reason about without reducing concrete risk
+- the repo risks broadening recovery state even though the current merge and cleanup fields are sufficient
+- operator messaging stays awkward longer than necessary
+- the CLI accumulates more lifecycle policy before the basic communication loop is comfortable
 
 ## Exact Order
 
-1. Audit the current post-work artifacts
-   - confirm exactly which stored fields and files merge and cleanup rely on today: branch, worktree, session state, config, and events
+1. Audit the current mail path
+   - confirm exactly which operator actions feel awkward today: unread-only reads, sender semantics, output shape, and event details
    - stay grounded in the current single-repo Codex workflow
 
-2. Only add metadata if a concrete gap appears
-   - prefer one small field or one clarified contract over a broad session-model redesign
-   - keep recovery and merge behavior explicit and operator-readable
+2. Implement one narrow mail improvement
+   - prefer one explicit operator-readable behavior over a broader messaging system
+   - keep read/write side effects clear in both output and docs
 
 3. Keep the scope narrow
-   - do not redesign merge now that the first path exists
-   - keep cleanup explicit unless real usage shows a safer default is necessary
+   - do not add broad coordination or workflow automation
+   - avoid turning mail into a general chat subsystem
 
 4. Update docs
    - `docs/current-state.md`
@@ -55,15 +55,15 @@ Do not build these in the same slice unless the implementation forces it:
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- the repo only carries session metadata that serves a real operator workflow
-- any metadata change is covered by tests and reflected in the docs
+- the repo has one concrete mail improvement that reduces operator friction
+- tests and docs reflect the new mail behavior
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- prefer one explicit operator-readable field or contract clarification over speculative storage
-- defer metadata changes entirely if the current merge and recovery paths are already sufficient
+- prefer one explicit operator-readable mail behavior over a broader messaging system
+- defer bigger message semantics unless the current narrow path proves insufficient
 - keep targeting one repo-local Codex lifecycle
 
-The point of this slice is to prove whether the current stored state is enough, not to build a broader recovery system just because the merge command now exists.
+The point of this slice is to make the existing mail path more usable, not to invent a broader coordination layer.
