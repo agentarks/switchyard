@@ -13,8 +13,8 @@ Current status:
 - `sy sling` creates one worktree-backed Codex session and persists it
 - `sy status` is implemented with SQLite-backed session state and narrow liveness checks
 - `sy stop` stops one tracked session and supports optional `--cleanup`
-- `sy mail` is still a placeholder
-- config, worktree, session-store, sling, status, and stop regression tests are in place
+- `sy mail send` and `sy mail check` now provide one durable session-targeted mail path
+- config, worktree, session-store, mail-store, sling, status, stop, and mail regression tests are in place
 
 Development:
 - `npm run build`

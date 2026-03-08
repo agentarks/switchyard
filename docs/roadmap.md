@@ -2,11 +2,13 @@
 
 ## Current Milestone
 
-Switchyard is in early scaffold/bootstrap territory:
+Switchyard is through the first operator-loop milestones:
 - M1 scaffold is effectively present
 - M2 repo bootstrap is effectively complete
 - M3 session persistence is effectively complete
 - M4 agent spawn is now minimally real for one Codex session
+- M5 lifecycle control is minimally real
+- M6 messaging is now minimally real
 - later milestones remain design targets, not implementation commitments
 
 ## Near-Term Rule
@@ -17,27 +19,28 @@ The next sessions should optimize for a single reliable operator workflow:
 3. track it durably
 4. inspect status
 5. stop it cleanly
+6. exchange one durable mail message
 
 If a change does not move that workflow forward or reduce meaningful risk inside it, it is probably too early.
 
 ## Recommended Next Slice
 
-Implement the first real mail path:
-- add schema ownership and helpers for `mail.db`
-- replace the `mail` placeholder with one narrow send/check flow
-- keep the surface small enough to revise after operator usage
+Implement the first real event path:
+- add schema ownership and helpers for `events.db`
+- append lifecycle events from sling, stop, and mail
+- expose one narrow operator-facing inspection path
 
 Why this is next:
-- the repo can now initialize, spawn one session, inspect it, and stop it cleanly
-- `sy mail` is now the next missing MVP primitive
-- mail can advance operator usefulness without dragging runtime control into a larger redesign
+- the repo can now initialize, spawn one session, inspect it, stop it, and exchange basic durable mail
+- event history is now the next missing operator-confidence primitive
+- observability can advance diagnosis without dragging runtime control into a larger redesign
 
 ## Order After That
 
-1. mail store and basic operator messaging
-2. events and richer inspection
-3. tmux or richer runtime metadata only if the pid-based stop path proves too narrow
-4. merge and reintegration workflow
+1. events and richer inspection
+2. tmux or richer runtime metadata only if the pid-based stop path proves too narrow
+3. merge and reintegration workflow
+4. broader mail semantics only if operator usage demands them
 
 ## Explicitly Deferred
 
@@ -55,5 +58,4 @@ Do not prioritize these yet:
 Before moving past the core lifecycle, resolve these with code or an ADR:
 - whether Node built-ins remain sufficient for SQLite
 - whether tmux is a hard dependency for v1
-- whether mail truly belongs in MVP or should follow spawn/status/stop
 - whether the pid-based stop path is sufficient before tmux-backed control is added

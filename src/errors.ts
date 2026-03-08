@@ -43,3 +43,9 @@ export class StopError extends SwitchyardError {
     super(message, "STOP_ERROR");
   }
 }
+
+export class MailError extends SwitchyardError {
+  constructor(message: string) {
+    super(message, "MAIL_ERROR");
+  }
+}
