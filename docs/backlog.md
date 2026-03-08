@@ -4,13 +4,13 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Define merge and reintegration workflow
+1. Implement the smallest merge path that matches the documented workflow
 2. Add richer session metadata only if merge or recovery work needs it
 
 ## Next
 
-3. Implement the smallest merge path that matches the documented workflow
-4. Expand mail semantics beyond the first durable path
+3. Expand mail semantics beyond the first durable path
+4. Improve merge cleanup ergonomics only if the first merge path exposes a real operator risk
 
 ## After That
 

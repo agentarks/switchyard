@@ -28,21 +28,21 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Define the first merge and reintegration workflow:
-- evaluate how the current branch, worktree, status, and stop behavior should lead into a merge step
-- make the workflow explicit in docs and the CLI contract
-- keep the first answer narrow, manual-first, and grounded in one repo-local Codex workflow
+Implement the smallest merge path that matches the documented workflow:
+- resolve one session to its preserved branch and configured canonical branch
+- add the narrowest safe command surface for the current repo-local Codex loop
+- keep review and conflict handling explicit instead of broadening automation
 
 Why this is next:
-- runtime control is now explicit enough for v0, so the next missing operator step is reintegration
-- agent branches and worktrees now exist durably, but the repo still lacks a defined path for bringing useful work back
-- resolving that workflow reduces risk before later merge automation adds more surface area
+- the merge contract is now explicit, so the next gap is executing it safely from the CLI
+- agent branches and worktrees already exist durably, which gives `sy merge` enough state to start small
+- implementing the narrow path should reveal whether richer metadata is actually needed or just theoretical
 
 ## Order After That
 
-1. implement the smallest merge path that matches the documented workflow
-2. add richer session metadata only if merge or recovery work truly needs it
-3. broader mail semantics only if operator usage demands them
+1. add richer session metadata only if merge or recovery work truly needs it
+2. broader mail semantics only if operator usage demands them
+3. improve merge cleanup ergonomics only if the first merge path exposes a real operator problem
 
 ## Explicitly Deferred
 
@@ -59,5 +59,4 @@ Do not prioritize these yet:
 
 Before moving past the core lifecycle, resolve these with code or an ADR:
 - whether Node built-ins remain sufficient for SQLite
-- what the first operator-readable merge workflow is
 - whether merge or recovery work truly needs richer session metadata
