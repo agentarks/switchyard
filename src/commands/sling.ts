@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { relative } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
@@ -8,7 +9,7 @@ import {
   type SpawnedRuntimeSession,
   spawnCodexSession
 } from "../runtimes/codex/index.js";
-import { createWorktree } from "../worktrees/manager.js";
+import { createWorktree, type ManagedWorktree, removeWorktree } from "../worktrees/manager.js";
 
 interface SlingOptions {
   agentName: string;
@@ -40,6 +41,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   });
   const runtimeArgs = options.runtimeArgs ?? [];
   const createdAt = new Date().toISOString();
+  const sessionId = randomUUID();
   let runtimeSession: SpawnedRuntimeSession;
 
   try {
@@ -49,8 +51,10 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       worktreePath: managedWorktree.path
     });
   } catch (error) {
+    const cleanupError = await cleanupFailedLaunch(config.project.root, managedWorktree);
+
     await createSession(config.project.root, {
-      id: managedWorktree.agentName,
+      id: sessionId,
       agentName: managedWorktree.agentName,
       branch: managedWorktree.branch,
       worktreePath: managedWorktree.path,
@@ -59,11 +63,15 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       updatedAt: createdAt
     });
 
+    if (cleanupError) {
+      throw new SlingError(`${formatErrorMessage(error)} Cleanup also failed: ${cleanupError.message}`);
+    }
+
     throw error;
   }
 
   await createSession(config.project.root, {
-    id: managedWorktree.agentName,
+    id: sessionId,
     agentName: managedWorktree.agentName,
     branch: managedWorktree.branch,
     worktreePath: managedWorktree.path,
@@ -86,4 +94,17 @@ function formatRelativePath(projectRoot: string, path: string): string {
 function formatRuntimeCommand(runtimeSession: SpawnedRuntimeSession): string {
   const parts = [runtimeSession.command.command, ...runtimeSession.command.args];
   return parts.join(" ");
+}
+
+async function cleanupFailedLaunch(projectRoot: string, worktree: ManagedWorktree): Promise<Error | undefined> {
+  try {
+    await removeWorktree(projectRoot, worktree);
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

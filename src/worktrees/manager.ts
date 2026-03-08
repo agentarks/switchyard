@@ -38,6 +38,21 @@ export async function createWorktree(config: SwitchyardConfig, requestedAgentNam
   };
 }
 
+export async function removeWorktree(projectRoot: string, worktree: ManagedWorktree): Promise<void> {
+  try {
+    if (await pathExists(worktree.path)) {
+      await runGit(projectRoot, ["worktree", "remove", "--force", worktree.path]);
+    }
+
+    if (await localBranchExists(projectRoot, worktree.branch)) {
+      await runGit(projectRoot, ["branch", "--delete", "--force", worktree.branch]);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new WorktreeError(`Failed to remove worktree for ${worktree.agentName}: ${message}`);
+  }
+}
+
 async function ensureWorktreeTargetAvailable(projectRoot: string, branch: string, path: string): Promise<void> {
   if (await pathExists(path)) {
     throw new WorktreeError(`Worktree path already exists: ${path}`);
