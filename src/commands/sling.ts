@@ -3,7 +3,7 @@ import { relative } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
-import { createEvent } from "../events/store.js";
+import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { SlingError } from "../errors.js";
 import { createSession } from "../sessions/store.js";
 import {
@@ -17,6 +17,7 @@ interface SlingOptions {
   runtimeArgs?: string[];
   startDir?: string;
   spawnRuntime?: (options: { agentName: string; runtimeArgs: string[]; worktreePath: string }) => Promise<SpawnedRuntimeSession>;
+  recordEvent?: EventRecorder;
 }
 
 export function createSlingCommand(): Command {
@@ -31,6 +32,7 @@ export function createSlingCommand(): Command {
 
 export async function slingCommand(options: SlingOptions): Promise<void> {
   const config = await loadConfig(options.startDir);
+  const recordEvent = options.recordEvent ?? recordEventBestEffort;
 
   if (config.runtime.default !== "codex") {
     throw new SlingError(`Unsupported runtime '${config.runtime.default}'. Only 'codex' is implemented.`);
@@ -64,7 +66,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       updatedAt: createdAt
     });
 
-    await createEvent(config.project.root, {
+    await recordEventWithFallback(recordEvent, config.project.root, {
       sessionId,
       agentName: managedWorktree.agentName,
       eventType: "sling.failed",
@@ -95,7 +97,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     updatedAt: createdAt
   });
 
-  await createEvent(config.project.root, {
+  await recordEventWithFallback(recordEvent, config.project.root, {
     sessionId,
     agentName: managedWorktree.agentName,
     eventType: "sling.completed",

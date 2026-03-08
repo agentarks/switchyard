@@ -332,6 +332,45 @@ test("stopCommand treats an exit during shutdown as stopped instead of failed", 
   }
 });
 
+test("stopCommand keeps the stop result when event persistence fails", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await slingCommand({
+      agentName: "Agent Event Failure",
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 9191,
+          command: {
+            command: "codex",
+            args: []
+          }
+        };
+      }
+    });
+
+    await stopCommand({
+      selector: "agent-event-failure",
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 9191,
+      stopRuntime: async () => true,
+      recordEvent: async () => {
+        throw new Error("events unavailable");
+      }
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "stopped");
+    assert.equal(sessions[0]?.runtimePid, null);
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "sling.completed");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createInitializedRepo(): Promise<string> {
   const repoDir = await createTempGitRepo("switchyard-stop-command-test-");
   await bootstrapSwitchyardLayout(repoDir);

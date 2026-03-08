@@ -120,6 +120,80 @@ test("mailCheckCommand prints unread mail and marks it read", async () => {
   assert.match(writes.join(""), /No unread mail for agent-two\./);
 });
 
+test("mailSendCommand keeps queued mail when event persistence fails", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    const session = await createSession(repoDir, {
+      id: "session-agent-three",
+      agentName: "agent-three",
+      branch: "agents/agent-three",
+      worktreePath: `${repoDir}/.switchyard/worktrees/agent-three`,
+      state: "running",
+      runtimePid: 3333,
+      createdAt: "2026-03-06T11:00:00.000Z",
+      updatedAt: "2026-03-06T11:00:00.000Z"
+    });
+
+    await mailSendCommand({
+      selector: session.id,
+      body: "Event writes should not block mail.",
+      startDir: repoDir,
+      recordEvent: async () => {
+        throw new Error("events unavailable");
+      }
+    });
+
+    const mail = await listMailForSession(repoDir, session.id);
+    assert.equal(mail.length, 1);
+    assert.equal(mail[0]?.body, "Event writes should not block mail.");
+    const events = await listEvents(repoDir, { sessionId: session.id });
+    assert.deepEqual(events, []);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("mailCheckCommand still marks mail read when event persistence fails", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    const session = await createSession(repoDir, {
+      id: "session-agent-four",
+      agentName: "agent-four",
+      branch: "agents/agent-four",
+      worktreePath: `${repoDir}/.switchyard/worktrees/agent-four`,
+      state: "running",
+      runtimePid: 4444,
+      createdAt: "2026-03-06T12:00:00.000Z",
+      updatedAt: "2026-03-06T12:00:00.000Z"
+    });
+
+    await mailSendCommand({
+      selector: session.id,
+      body: "Read path should still succeed.",
+      startDir: repoDir
+    });
+
+    await mailCheckCommand({
+      selector: session.id,
+      startDir: repoDir,
+      recordEvent: async () => {
+        throw new Error("events unavailable");
+      }
+    });
+
+    const mail = await listMailForSession(repoDir, session.id);
+    assert.equal(mail.length, 1);
+    assert.ok(mail[0]?.readAt);
+    const events = await listEvents(repoDir, { sessionId: session.id });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "mail.sent");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createInitializedRepo(): Promise<string> {
   const repoDir = await createTempGitRepo("switchyard-mail-command-test-");
   await bootstrapSwitchyardLayout(repoDir);

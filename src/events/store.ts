@@ -1,8 +1,11 @@
+import process from "node:process";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { importSqlite } from "../storage/sqlite.js";
 import type { CreateEventInput, EventPayload, EventRecord } from "./types.js";
+
+export type EventRecorder = (projectRoot: string, input: CreateEventInput) => Promise<unknown>;
 
 const CREATE_EVENTS_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS events (
@@ -75,6 +78,24 @@ export async function createEvent(projectRoot: string, input: CreateEventInput):
   };
 }
 
+export async function recordEventBestEffort(projectRoot: string, input: CreateEventInput): Promise<void> {
+  await recordEventWithFallback(createEvent, projectRoot, input);
+}
+
+export async function recordEventWithFallback(
+  recordEvent: EventRecorder,
+  projectRoot: string,
+  input: CreateEventInput
+): Promise<void> {
+  try {
+    await recordEvent(projectRoot, input);
+  } catch (error) {
+    process.stderr.write(
+      `WARN: failed to persist event '${input.eventType}': ${formatErrorMessage(error)}\n`
+    );
+  }
+}
+
 export async function listEvents(projectRoot: string, options: ListEventsOptions = {}): Promise<EventRecord[]> {
   return await withEventDatabase(projectRoot, (db) => {
     const clauses: string[] = [];
@@ -97,15 +118,20 @@ export async function listEvents(projectRoot: string, options: ListEventsOptions
       values.push(options.limit);
     }
 
+    const orderByClause = typeof options.limit === "number"
+      ? "ORDER BY created_at DESC, id DESC"
+      : "ORDER BY created_at ASC, id ASC";
+
     const rows = db.prepare(`
       SELECT id, session_id, agent_name, event_type, payload_json, created_at
       FROM events
       ${whereClause}
-      ORDER BY created_at ASC, id ASC
+      ${orderByClause}
       ${limitClause}
     `).all(...values) as unknown as EventRow[];
 
-    return rows.map(mapEventRow);
+    const mappedRows = rows.map(mapEventRow);
+    return typeof options.limit === "number" ? mappedRows.reverse() : mappedRows;
   });
 }
 
@@ -148,4 +174,8 @@ function parsePayload(value: string): EventPayload {
   }
 
   return parsed as EventPayload;
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

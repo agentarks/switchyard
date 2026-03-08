@@ -69,9 +69,10 @@ test("listEvents returns inserted events in creation order with parsed payloads"
       createdAt: "2026-03-08T09:00:00.000Z"
     });
 
-    const recentEvent = await listEvents(repoDir, { agentName: "agent-two", limit: 1 });
-    assert.equal(recentEvent.length, 1);
-    assert.equal(recentEvent[0]?.eventType, "stop.completed");
+    const recentEvents = await listEvents(repoDir, { limit: 2 });
+    assert.equal(recentEvents.length, 2);
+    assert.equal(recentEvents[0]?.eventType, "mail.sent");
+    assert.equal(recentEvents[1]?.eventType, "stop.completed");
   } finally {
     await removeTempDir(repoDir);
   }

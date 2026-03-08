@@ -2,7 +2,7 @@ import { relative } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
-import { createEvent } from "../events/store.js";
+import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { StopError } from "../errors.js";
 import { stopProcess, isProcessAlive } from "../runtimes/process.js";
 import {
@@ -25,6 +25,7 @@ interface StopCommandOptions {
   isRuntimeAlive?: (pid: number) => boolean;
   stopRuntime?: (pid: number) => Promise<boolean>;
   removeSessionWorktree?: typeof removeWorktree;
+  recordEvent?: EventRecorder;
 }
 
 export function createStopCommand(): Command {
@@ -44,6 +45,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
   const config = await loadConfig(options.startDir);
   const session = await resolveSession(config.project.root, options.selector);
   const removeSessionWorktree = options.removeSessionWorktree ?? removeWorktree;
+  const recordEvent = options.recordEvent ?? recordEventBestEffort;
 
   if (!session) {
     throw new StopError(`No session found for '${options.selector}'.`);
@@ -57,7 +59,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
         session,
         removeSessionWorktree
       });
-      await createEvent(config.project.root, {
+      await recordEventWithFallback(recordEvent, config.project.root, {
         sessionId: session.id,
         agentName: session.agentName,
         eventType: "stop.completed",
@@ -90,7 +92,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       cleanupRequested: options.cleanup,
       removeSessionWorktree
     });
-    await createEvent(config.project.root, {
+    await recordEventWithFallback(recordEvent, config.project.root, {
       sessionId: nextSession.id,
       agentName: nextSession.agentName,
       eventType: "stop.completed",
@@ -138,7 +140,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     removeSessionWorktree
   });
 
-  await createEvent(config.project.root, {
+  await recordEventWithFallback(recordEvent, config.project.root, {
     sessionId: nextSession.id,
     agentName: nextSession.agentName,
     eventType: "stop.completed",

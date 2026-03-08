@@ -184,6 +184,38 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
   }
 });
 
+test("slingCommand keeps a running session when event persistence fails", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await slingCommand({
+      agentName: "Agent Four",
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 4040,
+          command: {
+            command: "codex",
+            args: []
+          }
+        };
+      },
+      recordEvent: async () => {
+        throw new Error("events unavailable");
+      }
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0]?.state, "running");
+    assert.equal(sessions[0]?.runtimePid, 4040);
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+    assert.deepEqual(events, []);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createInitializedRepo(): Promise<string> {
   const repoDir = await createTempGitRepo("switchyard-sling-command-test-");
   await bootstrapSwitchyardLayout(repoDir);
