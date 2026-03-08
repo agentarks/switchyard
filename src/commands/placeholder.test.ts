@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createPlaceholderCommand } from "./placeholder.js";
 
 test("placeholder commands accept positional arguments without throwing", async () => {
-  const command = createPlaceholderCommand("sling", "placeholder");
+  const command = createPlaceholderCommand("stop", "placeholder");
   const writes: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
 
@@ -13,10 +13,10 @@ test("placeholder commands accept positional arguments without throwing", async 
   }) as typeof process.stdout.write;
 
   try {
-    await command.parseAsync(["sling", "demo-task"], { from: "user" });
+    await command.parseAsync(["stop", "demo-task"], { from: "user" });
   } finally {
     process.stdout.write = originalWrite;
   }
 
-  assert.match(writes.join(""), /sling is planned but not implemented yet\./);
+  assert.match(writes.join(""), /stop is planned but not implemented yet\./);
 });

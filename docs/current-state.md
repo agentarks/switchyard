@@ -10,19 +10,20 @@ This repository is still in the setup phase. The codebase has enough structure t
 - `sy` entrypoint with command registration
 - implemented `sy init`
 - implemented `sy status`
-- placeholder `sy sling`, `sy stop`, and `sy mail`
+- implemented `sy sling`
+- placeholder `sy stop` and `sy mail`
 - repo root detection that handles nested directories and git worktrees
 - canonical branch detection that prefers `origin/HEAD`
 - config loading that normalizes `project.root` to the canonical repo root
 - `.switchyard/` bootstrap for directories and placeholder database files
 - session store with schema ownership for `sessions.db`
-- regression tests around config/root behavior, session persistence, and command parsing
+- worktree manager with deterministic branch and path naming
+- narrow Codex runtime seam that builds and spawns one detached command
+- regression tests around config/root behavior, worktree creation, session persistence, and command parsing
 
 ## What Does Not Exist Yet
 
-- worktree manager
-- Codex runtime adapter
-- process spawning and tmux control
+- tmux control
 - real `stop` or `mail` behavior
 - event storage or inspection commands
 - merge workflow
@@ -34,7 +35,11 @@ This repository is still in the setup phase. The codebase has enough structure t
   - writes `.switchyard/config.yaml`
   - creates the initial `.switchyard/` layout
 - `sy sling [args...]`
-  - placeholder only
+  - requires an agent name
+  - creates one deterministic branch under `agents/`
+  - creates one worktree under `.switchyard/worktrees/`
+  - spawns one Codex process from that worktree
+  - persists one session record as `running`
 - `sy status [args...]`
   - loads config and session state
   - prints an empty-state message when no sessions exist
@@ -46,20 +51,20 @@ This repository is still in the setup phase. The codebase has enough structure t
 
 ## Current Risks
 
-- `src/config.ts` is carrying both config logic and git root-resolution behavior; that should eventually split once worktree/runtime code arrives.
+- `src/config.ts` is carrying both config logic and git root-resolution behavior; that should eventually split once lifecycle code grows further.
 - `node:sqlite` is still experimental in Node 25, so the SQLite choice may need revision if core API churn becomes painful.
 - there is no end-to-end test around `sy init`.
-- runtime/process decisions are still mostly architectural intent rather than code.
+- the session schema does not yet record pid or tmux metadata, which may force changes during `sy stop`.
+- `sy sling` creates detached runtime state, but `sy status` does not verify liveness yet.
 
 ## Recommended Next Task
 
-Implement the first real worktree path:
-- create a worktree manager module
-- define deterministic branch and worktree naming rules
-- start wiring the first real `sy sling`
-- persist one created session from `sy sling`
+Implement the first real stop path:
+- add liveness lookup for the spawned runtime
+- replace the `sy stop` placeholder
+- define cleanup behavior for stopped worktrees
 
-That keeps momentum on the first end-to-end operator loop instead of adding more passive storage work.
+That closes the core lifecycle loop instead of adding more passive storage work.
 
 ## How To Use This File
 

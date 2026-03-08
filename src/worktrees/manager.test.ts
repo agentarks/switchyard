@@ -1,0 +1,78 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { buildDefaultConfig, loadConfig, writeConfig } from "../config.js";
+import { WorktreeError } from "../errors.js";
+import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
+import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
+import { createWorktree } from "./manager.js";
+
+test("createWorktree creates a deterministic branch and path from the repo root", async () => {
+  const repoDir = await createInitializedRepo("switchyard-worktree-test-");
+
+  try {
+    const config = await loadConfig(repoDir);
+    const worktree = await createWorktree(config, "Agent One");
+
+    assert.equal(worktree.agentName, "agent-one");
+    assert.equal(worktree.branch, "agents/agent-one");
+    assert.equal(worktree.path, join(repoDir, ".switchyard", "worktrees", "agent-one"));
+
+    const listedPaths = await git(repoDir, ["worktree", "list", "--porcelain"]);
+    assert.match(listedPaths, new RegExp(escapeRegExp(worktree.path)));
+
+    const branchCommit = await git(repoDir, ["rev-parse", worktree.branch]);
+    const baseCommit = await git(repoDir, ["rev-parse", "main"]);
+    assert.equal(branchCommit, baseCommit);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("createWorktree uses the canonical repo root even when config is loaded from a nested directory", async () => {
+  const repoDir = await createInitializedRepo("switchyard-worktree-test-");
+
+  try {
+    const nestedDir = join(repoDir, "packages", "feature");
+    await mkdir(nestedDir, { recursive: true });
+
+    const config = await loadConfig(nestedDir);
+    const worktree = await createWorktree(config, "Nested Agent");
+
+    assert.equal(worktree.path, join(repoDir, ".switchyard", "worktrees", "nested-agent"));
+    assert.equal(await git(worktree.path, ["rev-parse", "--show-toplevel"]), worktree.path);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("createWorktree rejects deterministic name collisions", async () => {
+  const repoDir = await createInitializedRepo("switchyard-worktree-test-");
+
+  try {
+    const config = await loadConfig(repoDir);
+    await createWorktree(config, "Agent One");
+
+    await assert.rejects(async () => {
+      await createWorktree(config, "agent-one");
+    }, (error: unknown) => {
+      assert.ok(error instanceof WorktreeError);
+      assert.match(error.message, /already exists/);
+      return true;
+    });
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+async function createInitializedRepo(prefix: string): Promise<string> {
+  const repoDir = await createTempGitRepo(prefix);
+  await bootstrapSwitchyardLayout(repoDir);
+  await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "main"));
+  return repoDir;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

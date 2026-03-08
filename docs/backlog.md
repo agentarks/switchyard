@@ -4,15 +4,15 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Implement a worktree manager under `src/worktrees/`
-2. Define deterministic branch and worktree naming rules
-3. Add tests for worktree creation and cleanup edge cases
+1. Define liveness lookup for one spawned Codex session
+2. Implement the first real `sy stop`
+3. Add tests for stop state transitions and worktree cleanup rules
 
 ## Next
 
-4. Add a narrow Codex runtime seam under `src/runtimes/codex/`
-5. Implement the first real `sy sling`
-6. Persist a created session from `sy sling`
+4. Decide whether pid or tmux metadata belongs in the session store
+5. Implement worktree cleanup semantics
+6. Add minimal operator messaging via `sy mail`
 
 ## After That
 
