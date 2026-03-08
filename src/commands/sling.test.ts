@@ -315,6 +315,70 @@ test("slingCommand records an early readiness failure after launch", async () =>
   }
 });
 
+test("slingCommand stops the launched runtime and cleans up when session persistence fails after spawn", async () => {
+  const repoDir = await createInitializedRepo();
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-persist-fail");
+  const branchName = "agents/agent-persist-fail";
+  const stoppedPids: number[] = [];
+
+  try {
+    await assert.rejects(async () => {
+      await slingCommand({
+        agentName: "Agent Persist Fail",
+        startDir: repoDir,
+        spawnRuntime: async ({ onSpawned }) => {
+          const runtime = {
+            pid: 5151,
+            command: {
+              command: "codex",
+              args: []
+            }
+          };
+
+          await onSpawned?.(runtime);
+
+          return {
+            ...runtime,
+            readyAfterMs: 500
+          };
+        },
+        createSessionRecord: async (_projectRoot, input) => {
+          if (input.state === "starting") {
+            throw new Error("sessions unavailable");
+          }
+
+          return input;
+        },
+        stopRuntime: async (pid) => {
+          stoppedPids.push(pid);
+          return true;
+        }
+      });
+    }, /Failed to persist session after runtime launch: sessions unavailable/);
+
+    const sessions = await listSessions(repoDir);
+    assert.deepEqual(sessions, []);
+
+    const events = await listEvents(repoDir, { agentName: "agent-persist-fail" });
+    assert.equal(events.length, 2);
+    assert.equal(events[0]?.eventType, "sling.spawned");
+    assert.equal(events[1]?.eventType, "sling.failed");
+    assert.equal(events[1]?.payload.runtimePid, 5151);
+    assert.equal(events[1]?.payload.runtimeStopped, true);
+    assert.equal(events[1]?.payload.cleanupSucceeded, true);
+    assert.deepEqual(stoppedPids, [5151]);
+
+    await assert.rejects(async () => {
+      await access(worktreePath);
+    });
+    await assert.rejects(async () => {
+      await git(repoDir, ["rev-parse", "--verify", branchName]);
+    }, /Needed a single revision/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createInitializedRepo(): Promise<string> {
   const repoDir = await createTempGitRepo("switchyard-sling-command-test-");
   await bootstrapSwitchyardLayout(repoDir);
