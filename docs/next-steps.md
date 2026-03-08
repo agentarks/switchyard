@@ -4,35 +4,35 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Improve status and inspection output with event context so operators can connect session state to the new durable timeline more quickly.
+Define readiness and failure handling for the first spawned session so operators can tell whether a launched runtime became usable or failed early.
 
 Target outcome:
-- operators can understand recent state changes without manually correlating tables
-- the output stays narrow enough to revise later
-- the existing `sy events` path remains the durable foundation for later inspection work
+- operators can distinguish "process started" from "session is ready enough to use"
+- early runtime failures become visible and understandable from the existing operator loop
+- the implementation stays narrow enough to revise later without committing to tmux first
 
 ## Why This Is Next
 
-The core lifecycle loop now includes a narrow event read path. The next smallest missing operator capability is joining that timeline back to session inspection.
+Status now includes concise recent event context. The next smallest missing operator capability is clarifying the post-launch window between spawn and usable session readiness.
 
-Without event context in inspection:
-- failures and operator actions still require hopping between views
-- operators can answer "what just happened?" but not yet "why does status look like this?" quickly
-- the event store is usable, but not yet integrated into the main inspection loop
+Without tighter readiness and failure handling:
+- `running` still overstates confidence immediately after spawn
+- early runtime exits are not modeled clearly enough for operators
+- the main lifecycle loop remains weakest at its first transition point
 
 ## Exact Order
 
-1. Pick one status-adjacent CLI improvement
-   - extend `sy status` with a small recent-event summary, or tighten `sy events` around session context
+1. Pick one narrow readiness signal
+   - detect one concrete condition that means a session is ready, or one concrete early-failure condition worth recording
    - keep the choice narrow and operator-oriented
 
-2. Reuse the existing event store and session state
-   - read only the recent timeline needed to explain state
-   - avoid broad filtering or analytics features
+2. Reuse the existing session and event seams
+   - avoid new supervisors, daemons, or broad state machines
+   - prefer one additional durable fact over speculative abstractions
 
 3. Add focused tests
-   - cover the new status or inspection output
-   - preserve the current narrow `sy events` behavior
+   - cover the new readiness or early-failure behavior
+   - preserve the current narrow operator loop
 
 4. Update docs
    - `docs/current-state.md`
@@ -41,24 +41,24 @@ Without event context in inspection:
 ## What To Keep Small
 
 Do not build these in the same slice unless the implementation forces it:
-- rich filtering UIs or dashboards
-- attachments or richer mail payload formats
-- background delivery loops
-- watchdog automation
+- tmux integration
+- background watchdogs or daemons
+- broad session state machines
+- richer runtime matrices
 
 ## Definition Of Done
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- status or inspection output carries concise event context
-- tests cover the new operator-facing explanation path
+- the first spawned-session lifecycle is clearer at the ready-or-failed boundary
+- tests cover the new operator-facing readiness or failure path
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- show fewer event facts
-- prefer a concise recent summary over new filters
-- keep targeting one repo-local durable timeline
+- model one readiness fact instead of many
+- prefer one durable failure explanation over a larger control system
+- keep targeting one repo-local Codex lifecycle
 
-The point of this slice is to make the stored timeline easier to use in the operator loop, not to design the final diagnostics system.
+The point of this slice is to make the earliest part of the session lifecycle more trustworthy, not to design the final runtime supervisor.

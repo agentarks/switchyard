@@ -27,19 +27,19 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Improve status and inspection output with event context:
-- connect the session table to the new event timeline
-- keep output focused on the core operator loop
-- use the existing event writes from sling, stop, and mail to explain state changes
+Define readiness and failure handling for the first spawned session:
+- distinguish launch success from usable session readiness
+- make early runtime failure states easier to understand from the operator loop
+- keep the implementation narrow to one repo-local Codex session
 
 Why this is next:
-- the repo now has a narrow CLI view over the durable event timeline
-- status and inspection are still split across separate mental models
-- the next operator-confidence gain is explaining recent state through event context without expanding runtime control
+- status now carries concise recent event context from the durable timeline
+- the remaining unclear operator moment is immediately after spawn, where `running` does not yet mean "ready"
+- tightening readiness and early-failure behavior improves confidence without expanding runtime control or adding tmux yet
 
 ## Order After That
 
-1. tmux or richer runtime metadata only if the pid-based stop path proves too narrow
+1. decide whether tmux or richer runtime metadata is necessary beyond the pid-based stop path
 2. merge and reintegration workflow
 3. broader mail semantics only if operator usage demands them
 

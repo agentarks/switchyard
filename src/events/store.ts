@@ -135,6 +135,37 @@ export async function listEvents(projectRoot: string, options: ListEventsOptions
   });
 }
 
+export async function listLatestEventsBySession(
+  projectRoot: string,
+  sessionIds: string[]
+): Promise<Map<string, EventRecord>> {
+  if (sessionIds.length === 0) {
+    return new Map();
+  }
+
+  return await withEventDatabase(projectRoot, (db) => {
+    const placeholders = sessionIds.map(() => "?").join(", ");
+    const rows = db.prepare(`
+      SELECT id, session_id, agent_name, event_type, payload_json, created_at
+      FROM events
+      WHERE session_id IN (${placeholders})
+      ORDER BY created_at DESC, id DESC
+    `).all(...sessionIds) as unknown as EventRow[];
+
+    const latestEvents = new Map<string, EventRecord>();
+
+    for (const row of rows) {
+      if (!row.session_id || latestEvents.has(row.session_id)) {
+        continue;
+      }
+
+      latestEvents.set(row.session_id, mapEventRow(row));
+    }
+
+    return latestEvents;
+  });
+}
+
 async function withEventDatabase<T>(projectRoot: string, operation: (db: DatabaseSync) => T): Promise<T> {
   const { DatabaseSync } = await importSqlite();
   const dbPath = join(projectRoot, ".switchyard", "events.db");

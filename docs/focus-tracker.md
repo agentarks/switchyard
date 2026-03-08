@@ -29,7 +29,6 @@ Completed enough to count as minimally real:
 - M7 first event inspection path
 
 Not complete yet:
-- status and inspection with stronger event context
 - readiness and failure handling for the first spawned session
 - decision on whether pid-only stop is enough or tmux is required
 - merge and reintegration workflow
@@ -37,7 +36,6 @@ Not complete yet:
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- make `status` and `events` explain state changes more clearly
 - tighten failure handling in the first spawn lifecycle
 - improve lifecycle control only where the current operator loop is weak
 - add tests that reduce risk in the core operator loop
