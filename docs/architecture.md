@@ -23,10 +23,10 @@ Main responsibilities:
 
 Define a small runtime interface that covers:
 - instruction file path
-- interactive spawn command
-- optional non-interactive print command
+- spawn command and working directory
+- detached-process metadata for lifecycle control
 - readiness detection
-- transcript discovery/parsing
+- optional transcript discovery/parsing later if operator workflows require it
 
 This keeps runtime-specific behavior out of orchestration code.
 
@@ -87,7 +87,7 @@ Responsible for:
 
 Responsible for:
 - tracking agent identity and state
-- storing PID and tmux session name
+- storing runtime pid and other minimal launch metadata
 - tracking parent/child relationships later
 - supporting active and historical queries
 
@@ -101,7 +101,7 @@ Initial session states:
 ### Process Manager
 
 Responsible for:
-- tmux session creation
+- detached process spawn
 - readiness waiting
 - signal delivery
 - liveness checks
@@ -138,8 +138,7 @@ Suggested fields:
 - `taskId`
 - `branchName`
 - `worktreePath`
-- `tmuxSession`
-- `pid`
+- `runtimePid`
 - `state`
 - `startedAt`
 - `lastActivity`
@@ -207,7 +206,7 @@ Should:
 
 Should:
 - find the session
-- stop tmux/process
+- stop the pid-backed runtime
 - update session state
 - optionally clean worktree later
 
@@ -215,7 +214,7 @@ Should:
 
 Important risks to design around:
 - shell/runtime startup races
-- stale tmux sessions vs stale DB state
+- stale runtime pids vs stale DB state
 - branch naming collisions
 - hidden runtime-specific assumptions leaking into generic code
 - overbuilding automation before the basic operator loop is stable

@@ -4,12 +4,12 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Decide whether tmux should replace or augment pid-based stop control
-2. Add richer session metadata only if lifecycle control needs it
+1. Define merge and reintegration workflow
+2. Add richer session metadata only if merge or recovery work needs it
 
 ## Next
 
-3. Define merge and reintegration workflow
+3. Implement the smallest merge path that matches the documented workflow
 4. Expand mail semantics beyond the first durable path
 
 ## After That

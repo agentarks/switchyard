@@ -34,11 +34,12 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - first operator-facing event inspection path over `events.db`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
 - first-readiness reconciliation in `sy status` that promotes launched sessions to `running` or marks them failed with a durable reason
+- explicit v0 decision to keep runtime control pid-backed and defer tmux unless operator workflows require attach or transcript handling
 - regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
 
 ## What Does Not Exist Yet
 
-- tmux control
+- interactive runtime attach or transcript capture
 - merge workflow
 
 ## Current Command Surface
@@ -90,19 +91,19 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `node:sqlite` is still experimental in Node 25, so the SQLite choice may need revision if core API churn becomes painful.
 - there is no end-to-end test around `sy init`.
 - the current readiness model is intentionally narrow: `sy sling` only proves the process survived a short launch window, and `sy status` promotes the session to `running` on the first later successful pid liveness check.
-- the current stop path is pid-based only; tmux-backed control is still deferred.
+- the current runtime-control model intentionally omits live attach and transcript capture, so debugging still relies on durable events and external process inspection.
 - the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.
 - older pre-pid session rows cannot be liveness-checked automatically.
 - `sy events <selector>` currently resolves in this order: exact session row by id, orphaned events by raw `session_id`, then latest session by normalized agent name. That preserves orphaned event readability, but it means a raw selector that could plausibly match both an orphaned session id and an agent name will prefer the orphaned session-id path until the CLI grows explicit selector disambiguation.
 
 ## Recommended Next Task
 
-Decide whether pid-only lifecycle control is sufficient for v0 or whether tmux needs to land next:
-- compare the current pid-based spawn/status/stop loop against the concrete operator failure cases
-- make the decision explicit in docs or an ADR instead of leaving tmux as an unresolved assumption
-- keep the scope narrow to the current single-repo Codex workflow
+Define the first merge and reintegration workflow:
+- decide how an operator should move completed work from an `agents/*` branch back to the canonical branch
+- keep the first contract manual and operator-readable instead of jumping to automation
+- update the docs and CLI contract before broadening session metadata or merge automation
 
-That is the next highest-risk ambiguity in the operator loop now that the first launch boundary is clearer.
+That is the next biggest missing piece in the repo-local lifecycle now that runtime control is explicit enough for v0.
 
 ## How To Use This File
 

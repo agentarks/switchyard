@@ -9,7 +9,7 @@ Deliverables:
 
 Questions to resolve:
 - SQLite implementation choice
-- tmux requirement
+- runtime control model for v0
 - MVP mail scope
 
 ## M1: Project Scaffold
@@ -51,7 +51,7 @@ Definition of done:
 
 Deliverables:
 - worktree manager
-- tmux session creation
+- pid-backed detached runtime spawn
 - runtime adapter skeleton
 - `sy sling`
 
