@@ -27,15 +27,15 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Define readiness and failure handling for the first spawned session:
-- distinguish launch success from usable session readiness
-- make early runtime failure states easier to understand from the operator loop
-- keep the implementation narrow to one repo-local Codex session
+Decide whether pid-only lifecycle control is sufficient for v0 or whether tmux needs to land next:
+- evaluate the current spawn/status/stop guarantees against concrete operator needs
+- make the decision explicit in docs or an ADR
+- keep the scope narrow to one repo-local Codex workflow
 
 Why this is next:
-- status now carries concise recent event context from the durable timeline
-- the remaining unclear operator moment is immediately after spawn, where `running` does not yet mean "ready"
-- tightening readiness and early-failure behavior improves confidence without expanding runtime control or adding tmux yet
+- the launch boundary is now clearer, so the biggest unresolved lifecycle assumption is runtime control
+- the current stop path is still pid-based only, but tmux remains an open decision rather than an explicit choice
+- resolving that decision reduces risk before merge or broader lifecycle work adds more surface area
 
 ## Order After That
 

@@ -29,14 +29,13 @@ Completed enough to count as minimally real:
 - M7 first event inspection path
 
 Not complete yet:
-- readiness and failure handling for the first spawned session
 - decision on whether pid-only stop is enough or tmux is required
 - merge and reintegration workflow
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- tighten failure handling in the first spawn lifecycle
+- decide whether the current pid-based control path is sufficient for the operator loop
 - improve lifecycle control only where the current operator loop is weak
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes

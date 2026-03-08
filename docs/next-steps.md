@@ -4,35 +4,35 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Define readiness and failure handling for the first spawned session so operators can tell whether a launched runtime became usable or failed early.
+Decide whether pid-only lifecycle control is sufficient for v0 or whether tmux-backed control needs to land next.
 
 Target outcome:
-- operators can distinguish "process started" from "session is ready enough to use"
-- early runtime failures become visible and understandable from the existing operator loop
-- the implementation stays narrow enough to revise later without committing to tmux first
+- the repo has an explicit answer for whether tmux is required for the first reliable operator loop
+- the answer is grounded in the current `sy sling` / `sy status` / `sy stop` behavior, not general preference
+- the next implementation step is clearer whether the decision is "stay pid-only for now" or "add the smallest tmux slice"
 
 ## Why This Is Next
 
-Status now includes concise recent event context. The next smallest missing operator capability is clarifying the post-launch window between spawn and usable session readiness.
+The launch boundary is now narrower and more trustworthy. The next unresolved operator-risk question is whether pid-only control is enough to keep the lifecycle understandable and stoppable, or whether tmux is necessary sooner.
 
-Without tighter readiness and failure handling:
-- `running` still overstates confidence immediately after spawn
-- early runtime exits are not modeled clearly enough for operators
-- the main lifecycle loop remains weakest at its first transition point
+Without an explicit tmux decision:
+- the project keeps carrying an unresolved runtime-control assumption
+- it is unclear whether current pid-only stop behavior is acceptable for the intended workflow
+- merge and broader lifecycle work risk building on top of an unstable control model
 
 ## Exact Order
 
-1. Pick one narrow readiness signal
-   - detect one concrete condition that means a session is ready, or one concrete early-failure condition worth recording
-   - keep the choice narrow and operator-oriented
+1. Audit the current control path
+   - review the concrete guarantees from the existing pid-based spawn, status, and stop flow
+   - stay focused on real operator tasks, not future runtime breadth
 
-2. Reuse the existing session and event seams
-   - avoid new supervisors, daemons, or broad state machines
-   - prefer one additional durable fact over speculative abstractions
+2. Identify the smallest missing guarantee
+   - decide whether the real gap is interactive control, launch inspection, cleanup reliability, or something else
+   - avoid jumping straight to tmux unless the current failure mode actually requires it
 
-3. Add focused tests
-   - cover the new readiness or early-failure behavior
-   - preserve the current narrow operator loop
+3. Record the decision explicitly
+   - update the source-of-truth docs and add an ADR if the tradeoff needs a durable rationale
+   - if tmux is required, define the smallest next vertical slice instead of broad integration
 
 4. Update docs
    - `docs/current-state.md`
@@ -41,24 +41,24 @@ Without tighter readiness and failure handling:
 ## What To Keep Small
 
 Do not build these in the same slice unless the implementation forces it:
-- tmux integration
 - background watchdogs or daemons
 - broad session state machines
 - richer runtime matrices
+- full tmux integration before the specific requirement is clear
 
 ## Definition Of Done
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- the first spawned-session lifecycle is clearer at the ready-or-failed boundary
-- tests cover the new operator-facing readiness or failure path
+- the repo has an explicit decision on pid-only control versus tmux for the current loop
+- the rationale points to concrete operator behavior instead of general preference
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- model one readiness fact instead of many
-- prefer one durable failure explanation over a larger control system
+- answer the tmux question for the current workflow, not for every future runtime
+- prefer one explicit decision over exploratory implementation
 - keep targeting one repo-local Codex lifecycle
 
-The point of this slice is to make the earliest part of the session lifecycle more trustworthy, not to design the final runtime supervisor.
+The point of this slice is to remove the biggest remaining control-model ambiguity, not to design the final runtime supervisor.

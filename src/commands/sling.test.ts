@@ -28,14 +28,21 @@ test("slingCommand creates a worktree and persists a running session", async () 
       agentName: "Agent One",
       runtimeArgs: ["--model", "gpt-5"],
       startDir: nestedDir,
-      spawnRuntime: async ({ runtimeArgs }) => {
+      spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
         assert.deepEqual(runtimeArgs, ["--model", "gpt-5"]);
-        return {
+        const runtime = {
           pid: 4242,
           command: {
             command: "codex",
             args: runtimeArgs
           }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
+          readyAfterMs: 500
         };
       }
     });
@@ -54,13 +61,24 @@ test("slingCommand creates a worktree and persists a running session", async () 
   assert.equal(sessions[0]?.branch, "agents/agent-one");
   assert.equal(sessions[0]?.worktreePath, join(repoDir, ".switchyard", "worktrees", "agent-one"));
   const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
-  assert.equal(events.length, 1);
-  assert.equal(events[0]?.eventType, "sling.completed");
-  assert.equal(events[0]?.agentName, "agent-one");
-  assert.equal(events[0]?.payload.runtimePid, 4242);
-  assert.equal(events[0]?.payload.branch, "agents/agent-one");
+  assert.equal(events.length, 2);
+  const spawnedEvent = events.find((event) => event.eventType === "sling.spawned");
+  const completedEvent = events.find((event) => event.eventType === "sling.completed");
+  assert.equal(spawnedEvent?.agentName, "agent-one");
+  assert.equal(spawnedEvent?.payload.runtimePid, 4242);
+  assert.equal(spawnedEvent?.payload.branch, "agents/agent-one");
+  assert.equal(completedEvent?.agentName, "agent-one");
+  assert.equal(completedEvent?.payload.runtimePid, 4242);
+  assert.equal(completedEvent?.payload.branch, "agents/agent-one");
+  assert.equal(completedEvent?.payload.readyAfterMs, 500);
+  assert.ok(
+    typeof spawnedEvent?.createdAt === "string"
+    && typeof completedEvent?.createdAt === "string"
+    && spawnedEvent.createdAt < completedEvent.createdAt
+  );
   assert.match(writes.join(""), /Spawned agent-one/);
   assert.match(writes.join(""), /Runtime: codex --model gpt-5/);
+  assert.match(writes.join(""), /Ready: initial launch check passed after 500ms/);
 
   await removeTempDir(repoDir);
 });
@@ -85,7 +103,8 @@ test("statusCommand shows a session created by slingCommand", async () => {
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -102,6 +121,8 @@ test("statusCommand shows a session created by slingCommand", async () => {
 
   const output = writes.join("");
   assert.match(output, /running\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t/);
+  assert.match(output, /sling\.completed/);
+  assert.doesNotMatch(output, /sling\.spawned/);
 });
 
 test("slingCommand cleans up failed worktrees and allows retrying the same agent", async () => {
@@ -133,7 +154,8 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
             command: {
               command: "codex",
               args: []
-            }
+            },
+            readyAfterMs: 500
           };
         }
       });
@@ -150,14 +172,21 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
     await slingCommand({
       agentName: "Agent Three",
       startDir: repoDir,
-      spawnRuntime: async () => {
+      spawnRuntime: async ({ onSpawned }) => {
         attempts += 1;
-        return {
+        const runtime = {
           pid: 2027,
           command: {
             command: "codex",
             args: []
           }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
+          readyAfterMs: 500
         };
       }
     });
@@ -173,10 +202,11 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
     assert.equal(agentThreeSessions[1]?.state, "failed");
     assert.equal(agentThreeSessions[1]?.runtimePid, null);
     assert.notEqual(agentThreeSessions[0]?.id, agentThreeSessions[1]?.id);
-    assert.equal(events.length, 2);
-    assert.equal(events[0]?.eventType, "sling.failed");
-    assert.equal(events[0]?.payload.cleanupSucceeded, true);
-    assert.equal(events[1]?.eventType, "sling.completed");
+    assert.equal(events.length, 3);
+    assert.equal(events.filter((event) => event.eventType === "sling.failed").length, 1);
+    assert.equal(events.find((event) => event.eventType === "sling.failed")?.payload.cleanupSucceeded, true);
+    assert.equal(events.filter((event) => event.eventType === "sling.spawned").length, 1);
+    assert.equal(events.filter((event) => event.eventType === "sling.completed").length, 1);
     assert.match(writes.join(""), /Spawned agent-three/);
   } finally {
     process.stdout.write = originalWrite;
@@ -197,7 +227,8 @@ test("slingCommand keeps a running session when event persistence fails", async 
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       },
       recordEvent: async () => {
@@ -211,6 +242,53 @@ test("slingCommand keeps a running session when event persistence fails", async 
     assert.equal(sessions[0]?.runtimePid, 4040);
     const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
     assert.deepEqual(events, []);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("slingCommand records an early readiness failure after launch", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(async () => {
+      await slingCommand({
+        agentName: "Agent Crash",
+        startDir: repoDir,
+        spawnRuntime: async ({ onSpawned }) => {
+          const runtime = {
+            pid: 9001,
+            command: {
+              command: "codex",
+              args: []
+            }
+          };
+
+          await onSpawned?.(runtime);
+          throw new Error("Codex exited before Switchyard marked the session ready (exit code 1).");
+        }
+      });
+    }, /Codex exited before Switchyard marked the session ready/);
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(sessions[0]?.runtimePid, null);
+
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+    assert.equal(events.length, 2);
+    const spawnedEvent = events.find((event) => event.eventType === "sling.spawned");
+    const failedEvent = events.find((event) => event.eventType === "sling.failed");
+    assert.equal(spawnedEvent?.payload.runtimePid, 9001);
+    assert.match(
+      String(failedEvent?.payload.errorMessage),
+      /marked the session ready/
+    );
+    assert.ok(
+      typeof spawnedEvent?.createdAt === "string"
+      && typeof failedEvent?.createdAt === "string"
+      && spawnedEvent.createdAt < failedEvent.createdAt
+    );
   } finally {
     await removeTempDir(repoDir);
   }

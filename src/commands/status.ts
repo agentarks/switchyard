@@ -117,7 +117,8 @@ function formatPayloadValue(value: EventPayloadValue | undefined): string {
 const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "mail.checked": ["unreadCount"],
   "mail.sent": ["sender", "bodyLength"],
-  "sling.completed": ["runtimePid"],
+  "sling.completed": ["runtimePid", "readyAfterMs"],
+  "sling.spawned": ["runtimePid"],
   "sling.failed": ["errorMessage", "cleanupSucceeded"],
   "stop.completed": ["outcome", "cleanupPerformed"]
 };
