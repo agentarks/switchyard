@@ -28,6 +28,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - narrow process liveness and stop helpers for detached Codex sessions
 - durable lifecycle event appends around `sy sling`, `sy stop`, `sy mail send`, and `sy mail check`
 - first operator-facing event inspection path over `events.db`
+- status output that now joins each session to its latest durable event context
 - regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
 
 ## What Does Not Exist Yet
@@ -57,6 +58,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - marks obviously stale `running` pid-backed sessions as `failed`
   - prints an empty-state message when no sessions exist
   - prints a tab-separated session table ordered by most recent update
+  - includes one concise recent-event summary per session when event history exists
 - `sy stop <session>`
   - resolves one session by id or normalized agent name
   - stops one pid-backed runtime and updates durable session state
@@ -82,12 +84,12 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## Recommended Next Task
 
-Improve status and inspection output with event context:
-- connect session state and recent events more directly
-- keep the output concise and operator-readable
-- avoid broad filtering or analytics work until usage demands it
+Define readiness and failure handling for the first spawned session:
+- distinguish process launch from a usable agent session
+- make early runtime failure states clearer in the operator loop
+- keep the implementation narrow and grounded in the existing Codex runtime seam
 
-That should make it easier to answer "why is this session in this state?" without manually correlating tables.
+That should tighten the weakest remaining part of the first operator loop: the moments right after `sy sling` succeeds but before the session is clearly usable or clearly failed.
 
 ## How To Use This File
 
