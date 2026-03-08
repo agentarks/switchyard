@@ -3,6 +3,7 @@ import { relative } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
+import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { SlingError } from "../errors.js";
 import { createSession } from "../sessions/store.js";
 import {
@@ -16,6 +17,7 @@ interface SlingOptions {
   runtimeArgs?: string[];
   startDir?: string;
   spawnRuntime?: (options: { agentName: string; runtimeArgs: string[]; worktreePath: string }) => Promise<SpawnedRuntimeSession>;
+  recordEvent?: EventRecorder;
 }
 
 export function createSlingCommand(): Command {
@@ -30,6 +32,7 @@ export function createSlingCommand(): Command {
 
 export async function slingCommand(options: SlingOptions): Promise<void> {
   const config = await loadConfig(options.startDir);
+  const recordEvent = options.recordEvent ?? recordEventBestEffort;
 
   if (config.runtime.default !== "codex") {
     throw new SlingError(`Unsupported runtime '${config.runtime.default}'. Only 'codex' is implemented.`);
@@ -63,6 +66,19 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       updatedAt: createdAt
     });
 
+    await recordEventWithFallback(recordEvent, config.project.root, {
+      sessionId,
+      agentName: managedWorktree.agentName,
+      eventType: "sling.failed",
+      createdAt,
+      payload: {
+        branch: managedWorktree.branch,
+        worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
+        errorMessage: formatErrorMessage(error),
+        cleanupSucceeded: cleanupError ? false : true
+      }
+    });
+
     if (cleanupError) {
       throw new SlingError(`${formatErrorMessage(error)} Cleanup also failed: ${cleanupError.message}`);
     }
@@ -79,6 +95,19 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     runtimePid: runtimeSession.pid,
     createdAt,
     updatedAt: createdAt
+  });
+
+  await recordEventWithFallback(recordEvent, config.project.root, {
+    sessionId,
+    agentName: managedWorktree.agentName,
+    eventType: "sling.completed",
+    createdAt,
+    payload: {
+      branch: managedWorktree.branch,
+      worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
+      runtimePid: runtimeSession.pid,
+      runtimeCommand: formatRuntimeCommand(runtimeSession)
+    }
   });
 
   process.stdout.write(`Spawned ${managedWorktree.agentName}\n`);
