@@ -25,6 +25,8 @@ interface SessionRow {
   updated_at: string;
 }
 
+let sqliteModulePromise: Promise<typeof import("node:sqlite")> | undefined;
+
 export async function initializeSessionStore(projectRoot: string): Promise<void> {
   await withSessionDatabase(projectRoot, () => {
     // Schema creation happens in the shared database helper.
@@ -79,6 +81,17 @@ async function withSessionDatabase<T>(projectRoot: string, operation: (db: Datab
 }
 
 async function importSqlite(): Promise<typeof import("node:sqlite")> {
+  if (!sqliteModulePromise) {
+    sqliteModulePromise = importSqliteOnce().catch((error: unknown) => {
+      sqliteModulePromise = undefined;
+      throw error;
+    });
+  }
+
+  return await sqliteModulePromise;
+}
+
+async function importSqliteOnce(): Promise<typeof import("node:sqlite")> {
   const originalEmitWarning = process.emitWarning;
 
   process.emitWarning = ((warning: string | Error, ...args: unknown[]) => {
