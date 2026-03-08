@@ -103,6 +103,7 @@ Future target:
 Current contract:
 - command resolves one session by id or normalized agent name
 - command refuses active sessions and only merges preserved work
+- command verifies that the preserved worktree path still resolves to the expected git worktree root
 - command refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
 - command requires the canonical repo-root worktree to be clean before it switches branches
 - command verifies the preserved local branch still exists

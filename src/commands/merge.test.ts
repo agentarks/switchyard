@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
@@ -12,6 +12,7 @@ import { mergeCommand } from "./merge.js";
 test("mergeCommand merges a stopped session branch into the canonical branch", async () => {
   const repoDir = await createInitializedRepo();
   const notesPath = join(repoDir, "notes.txt");
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-one");
 
   try {
     await writeFile(notesPath, "base\n", "utf8");
@@ -23,12 +24,13 @@ test("mergeCommand merges a stopped session branch into the canonical branch", a
     await git(repoDir, ["commit", "-m", "Agent branch change"]);
     await git(repoDir, ["switch", "main"]);
     await git(repoDir, ["switch", "--detach"]);
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-one"]);
 
     await createSession(repoDir, {
       id: "session-agent-one",
       agentName: "agent-one",
       branch: "agents/agent-one",
-      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-one"),
+      worktreePath,
       state: "stopped",
       runtimePid: null,
       createdAt: "2026-03-08T09:00:00.000Z",
@@ -90,14 +92,16 @@ test("mergeCommand refuses to merge an active session", async () => {
 
 test("mergeCommand refuses to run when the canonical worktree is dirty", async () => {
   const repoDir = await createInitializedRepo();
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-dirty");
 
   try {
     await createBranchFromMain(repoDir, "agents/agent-dirty", "dirty.txt", "agent branch\n", "Agent dirty branch");
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-dirty"]);
     await createSession(repoDir, {
       id: "session-dirty",
       agentName: "agent-dirty",
       branch: "agents/agent-dirty",
-      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-dirty"),
+      worktreePath,
       state: "stopped",
       runtimePid: null,
       createdAt: "2026-03-08T09:00:00.000Z",
@@ -153,9 +157,47 @@ test("mergeCommand refuses to merge when the preserved worktree has uncommitted 
   }
 });
 
+test("mergeCommand refuses to merge when session.worktreePath is not an actual git worktree", async () => {
+  const repoDir = await createInitializedRepo();
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-replaced-worktree");
+
+  try {
+    await createBranchFromMain(
+      repoDir,
+      "agents/agent-replaced-worktree",
+      "feature.txt",
+      "agent branch\n",
+      "Agent replaced worktree branch"
+    );
+    await mkdir(worktreePath, { recursive: true });
+    await writeFile(join(worktreePath, "draft.txt"), "plain directory\n", "utf8");
+
+    await createSession(repoDir, {
+      id: "session-replaced-worktree",
+      agentName: "agent-replaced-worktree",
+      branch: "agents/agent-replaced-worktree",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:18:00.000Z"
+    });
+
+    await assert.rejects(async () => {
+      await mergeCommand({
+        selector: "agent-replaced-worktree",
+        startDir: repoDir
+      });
+    }, /not a git worktree rooted at/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("mergeCommand surfaces merge conflicts and records a failed merge event", async () => {
   const repoDir = await createInitializedRepo();
   const conflictPath = join(repoDir, "conflict.txt");
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-conflict");
 
   try {
     await writeFile(conflictPath, "shared\n", "utf8");
@@ -169,12 +211,13 @@ test("mergeCommand surfaces merge conflicts and records a failed merge event", a
     await writeFile(conflictPath, "main version\n", "utf8");
     await git(repoDir, ["add", "conflict.txt"]);
     await git(repoDir, ["commit", "-m", "Main conflict change"]);
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-conflict"]);
 
     await createSession(repoDir, {
       id: "session-conflict",
       agentName: "agent-conflict",
       branch: "agents/agent-conflict",
-      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-conflict"),
+      worktreePath,
       state: "stopped",
       runtimePid: null,
       createdAt: "2026-03-08T09:00:00.000Z",
@@ -203,6 +246,7 @@ test("mergeCommand surfaces merge conflicts and records a failed merge event", a
 test("mergeCommand reports already-integrated branches without recording merge.completed", async () => {
   const repoDir = await createInitializedRepo();
   const notesPath = join(repoDir, "notes.txt");
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-repeat");
 
   try {
     await writeFile(notesPath, "base\n", "utf8");
@@ -213,12 +257,13 @@ test("mergeCommand reports already-integrated branches without recording merge.c
     await git(repoDir, ["add", "notes.txt"]);
     await git(repoDir, ["commit", "-m", "Agent repeat change"]);
     await git(repoDir, ["switch", "main"]);
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-repeat"]);
 
     await createSession(repoDir, {
       id: "session-repeat",
       agentName: "agent-repeat",
       branch: "agents/agent-repeat",
-      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-repeat"),
+      worktreePath,
       state: "stopped",
       runtimePid: null,
       createdAt: "2026-03-08T09:00:00.000Z",

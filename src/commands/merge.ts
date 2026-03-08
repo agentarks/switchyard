@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { access } from "node:fs/promises";
+import { access, realpath } from "node:fs/promises";
 import { relative } from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
@@ -151,7 +151,19 @@ async function ensureProjectRootIsClean(projectRoot: string): Promise<void> {
 
 async function ensurePreservedWorktreeIsClean(projectRoot: string, session: SessionRecord): Promise<void> {
   if (!(await pathExists(session.worktreePath))) {
-    return;
+    throw new MergeError(
+      `Preserved worktree for ${session.agentName} is missing (${formatRelativePath(projectRoot, session.worktreePath)}).`
+    );
+  }
+
+  const resolvedExpectedPath = await resolveExistingPath(session.worktreePath);
+  const worktreeRoot = await getGitWorktreeRoot(projectRoot, session);
+  const resolvedWorktreeRoot = await resolveExistingPath(worktreeRoot);
+
+  if (resolvedExpectedPath !== resolvedWorktreeRoot) {
+    throw new MergeError(
+      `Preserved worktree for ${session.agentName} is not a git worktree rooted at ${formatRelativePath(projectRoot, session.worktreePath)}.`
+    );
   }
 
   const { stdout } = await runGit(session.worktreePath, ["status", "--porcelain", "--untracked-files=all"]);
@@ -164,6 +176,17 @@ async function ensurePreservedWorktreeIsClean(projectRoot: string, session: Sess
   if (dirtyEntries.length > 0) {
     throw new MergeError(
       `Preserved worktree for ${session.agentName} is not clean (${formatRelativePath(projectRoot, session.worktreePath)}). Commit, stash, or discard changes there before merging.`
+    );
+  }
+}
+
+async function getGitWorktreeRoot(projectRoot: string, session: SessionRecord): Promise<string> {
+  try {
+    const { stdout } = await runGit(session.worktreePath, ["rev-parse", "--show-toplevel"]);
+    return stdout.trim();
+  } catch {
+    throw new MergeError(
+      `Preserved worktree for ${session.agentName} is not a usable git worktree (${formatRelativePath(projectRoot, session.worktreePath)}).`
     );
   }
 }
@@ -268,4 +291,8 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function resolveExistingPath(path: string): Promise<string> {
+  return await realpath(path);
 }

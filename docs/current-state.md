@@ -84,6 +84,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `sy merge <session>`
   - resolves one session by id or normalized agent name
   - refuses active sessions so merge only runs against preserved work
+  - verifies the preserved worktree path still resolves to the expected git worktree root
   - refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
   - requires the repo root worktree to be clean before it switches to the configured canonical branch
   - verifies the preserved local `agents/*` branch still exists
