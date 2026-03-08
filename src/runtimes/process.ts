@@ -42,16 +42,18 @@ export async function stopProcess(pid: number, options: StopProcessOptions = {})
     return false;
   }
 
-  if (!trySignal(signalProcess, pid, "SIGTERM")) {
-    return false;
+  const sigtermResult = trySignal(signalProcess, pid, "SIGTERM");
+  if (sigtermResult === "gone") {
+    return true;
   }
 
   if (await waitForExit(pid, isAlive, timeoutMs, pollIntervalMs)) {
     return true;
   }
 
-  if (!trySignal(signalProcess, pid, "SIGKILL")) {
-    return false;
+  const sigkillResult = trySignal(signalProcess, pid, "SIGKILL");
+  if (sigkillResult === "gone") {
+    return true;
   }
 
   if (await waitForExit(pid, isAlive, timeoutMs, pollIntervalMs)) {
@@ -80,13 +82,13 @@ async function waitForExit(
   return !isAlive(pid);
 }
 
-function trySignal(signalProcess: SignalProcess, pid: number, signal: NodeJS.Signals): boolean {
+function trySignal(signalProcess: SignalProcess, pid: number, signal: NodeJS.Signals): "sent" | "gone" {
   try {
     signalProcess(pid, signal);
-    return true;
+    return "sent";
   } catch (error) {
     if (isMissingProcessError(error)) {
-      return false;
+      return "gone";
     }
 
     throw toRuntimeError(error, `Failed to send ${signal} to process ${pid}`);

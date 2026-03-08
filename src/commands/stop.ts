@@ -52,20 +52,27 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
   }
 
   if (typeof session.runtimePid !== "number") {
-    throw new StopError(`Session '${options.selector}' has no recorded runtime pid.`);
+    await updateSessionState(config.project.root, {
+      id: session.id,
+      state: "failed",
+      runtimePid: null
+    });
+    process.stdout.write(`Session ${session.agentName} has no recorded runtime pid. Marked failed.\n`);
+    process.stdout.write(`Worktree preserved: ${formatRelativePath(config.project.root, session.worktreePath)}\n`);
+    return;
   }
 
   const isRuntimeAlive = options.isRuntimeAlive ?? isProcessAlive;
   const stopRuntime = options.stopRuntime ?? stopProcess;
   let nextState: SessionRecord["state"] = "stopped";
 
-  if (isRuntimeAlive(session.runtimePid)) {
-    const stopped = await stopRuntime(session.runtimePid);
-    if (!stopped) {
-      nextState = "failed";
-    }
-  } else {
+  const wasAlive = isRuntimeAlive(session.runtimePid);
+  const stopped = await stopRuntime(session.runtimePid);
+
+  if (!wasAlive) {
     nextState = "failed";
+  } else if (!stopped) {
+    nextState = "stopped";
   }
 
   await updateSessionState(config.project.root, {

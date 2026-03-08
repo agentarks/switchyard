@@ -118,6 +118,45 @@ test("statusCommand marks stale running sessions as failed", async () => {
   assert.match(output, /failed\tagent-stale\tagents\/agent-stale\t\.switchyard\/worktrees\/agent-stale\t/);
 });
 
+test("statusCommand marks legacy running sessions without a pid as failed", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "agent-legacy",
+    agentName: "agent-legacy",
+    branch: "agents/agent-legacy",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-legacy"),
+    state: "running",
+    runtimePid: null,
+    createdAt: "2026-03-06T09:00:00.000Z",
+    updatedAt: "2026-03-06T10:00:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => true
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(sessions[0]?.runtimePid, null);
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /failed\tagent-legacy\tagents\/agent-legacy\t\.switchyard\/worktrees\/agent-legacy\t/);
+});
+
 async function createInitializedRepo(): Promise<string> {
   const repoDir = await createTempGitRepo("switchyard-status-command-test-");
   await bootstrapSwitchyardLayout(repoDir);

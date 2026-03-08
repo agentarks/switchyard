@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
-import { listSessions } from "../sessions/store.js";
+import { createSession, listSessions } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
 import { slingCommand } from "./sling.js";
@@ -116,6 +116,79 @@ test("stopCommand removes the worktree and branch when cleanup is requested", as
   const output = writes.join("");
   assert.match(output, /Stopped agent-two/);
   assert.match(output, /Cleanup: removed worktree and branch\./);
+});
+
+test("stopCommand marks legacy running sessions without a pid as failed", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  try {
+    await createSession(repoDir, {
+      id: "legacy-agent",
+      agentName: "legacy-agent",
+      branch: "agents/legacy-agent",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "legacy-agent"),
+      state: "running",
+      runtimePid: null,
+      createdAt: "2026-03-06T09:00:00.000Z",
+      updatedAt: "2026-03-06T10:00:00.000Z"
+    });
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await stopCommand({
+      selector: "legacy-agent",
+      startDir: repoDir
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(sessions[0]?.runtimePid, null);
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /has no recorded runtime pid\. Marked failed\./);
+  assert.match(output, /Worktree preserved: \.switchyard\/worktrees\/legacy-agent/);
+});
+
+test("stopCommand treats an exit during shutdown as stopped instead of failed", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await slingCommand({
+      agentName: "Agent Race",
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 6262,
+          command: {
+            command: "codex",
+            args: []
+          }
+        };
+      }
+    });
+
+    await stopCommand({
+      selector: "agent-race",
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 6262,
+      stopRuntime: async () => false
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "stopped");
+    assert.equal(sessions[0]?.runtimePid, null);
+  } finally {
+    await removeTempDir(repoDir);
+  }
 });
 
 async function createInitializedRepo(): Promise<string> {

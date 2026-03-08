@@ -45,11 +45,11 @@ async function reconcileRunningSessions(
   const sessions = await listSessions(projectRoot);
 
   for (const session of sessions) {
-    if (session.state !== "running" || typeof session.runtimePid !== "number") {
+    if (session.state !== "running") {
       continue;
     }
 
-    if (!isRuntimeAlive(session.runtimePid)) {
+    if (typeof session.runtimePid !== "number" || !isRuntimeAlive(session.runtimePid)) {
       await updateSessionState(projectRoot, {
         id: session.id,
         state: "failed",
