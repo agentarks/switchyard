@@ -4,25 +4,24 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Add minimal event logging around sling/stop/mail
-2. Add durable event store tests and one operator-facing read path
-3. Improve status and inspection output with event context
+1. Add one operator-facing read path for durable events
+2. Improve status and inspection output with event context
+3. Decide whether tmux should replace or augment pid-based stop control
 
 ## Next
 
-4. Decide whether tmux should replace or augment pid-based stop control
-5. Define readiness and failure handling for the first spawned session
-6. Add richer session metadata only if lifecycle control needs it
+4. Define readiness and failure handling for the first spawned session
+5. Add richer session metadata only if lifecycle control needs it
+6. Define merge and reintegration workflow
 
 ## After That
 
-7. Define merge and reintegration workflow
-8. Expand mail semantics beyond the first durable path
-9. Add background diagnostics only if operator workflows require it
+7. Expand mail semantics beyond the first durable path
+8. Add background diagnostics only if operator workflows require it
 
 ## Then
 
-10. Dashboard or TUI work, if still justified
+9. Dashboard or TUI work, if still justified
 
 ## Later
 

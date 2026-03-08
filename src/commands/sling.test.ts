@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { access, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
+import { listEvents } from "../events/store.js";
 import { listSessions } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
@@ -52,6 +53,12 @@ test("slingCommand creates a worktree and persists a running session", async () 
   assert.equal(sessions[0]?.runtimePid, 4242);
   assert.equal(sessions[0]?.branch, "agents/agent-one");
   assert.equal(sessions[0]?.worktreePath, join(repoDir, ".switchyard", "worktrees", "agent-one"));
+  const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.eventType, "sling.completed");
+  assert.equal(events[0]?.agentName, "agent-one");
+  assert.equal(events[0]?.payload.runtimePid, 4242);
+  assert.equal(events[0]?.payload.branch, "agents/agent-one");
   assert.match(writes.join(""), /Spawned agent-one/);
   assert.match(writes.join(""), /Runtime: codex --model gpt-5/);
 
@@ -157,6 +164,7 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
 
     const sessions = await listSessions(repoDir);
     const agentThreeSessions = sessions.filter((session) => session.agentName === "agent-three");
+    const events = await listEvents(repoDir, { agentName: "agent-three" });
 
     assert.equal(attempts, 2);
     assert.equal(agentThreeSessions.length, 2);
@@ -165,6 +173,10 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
     assert.equal(agentThreeSessions[1]?.state, "failed");
     assert.equal(agentThreeSessions[1]?.runtimePid, null);
     assert.notEqual(agentThreeSessions[0]?.id, agentThreeSessions[1]?.id);
+    assert.equal(events.length, 2);
+    assert.equal(events[0]?.eventType, "sling.failed");
+    assert.equal(events[0]?.payload.cleanupSucceeded, true);
+    assert.equal(events[1]?.eventType, "sling.completed");
     assert.match(writes.join(""), /Spawned agent-three/);
   } finally {
     process.stdout.write = originalWrite;

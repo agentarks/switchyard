@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildDefaultConfig, writeConfig } from "../config.js";
+import { listEvents } from "../events/store.js";
 import { listMailForSession } from "../mail/store.js";
 import { createSession } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
@@ -41,6 +42,11 @@ test("mailSendCommand stores one durable message for the resolved session", asyn
     assert.equal(mail[0]?.recipient, "agent-one");
     assert.equal(mail[0]?.body, "Please pull the latest branch state.");
     assert.equal(mail[0]?.readAt, null);
+    const events = await listEvents(repoDir, { sessionId: session.id });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "mail.sent");
+    assert.equal(events[0]?.payload.sender, "operator");
+    assert.equal(events[0]?.payload.bodyLength, "Please pull the latest branch state.".length);
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);
@@ -90,12 +96,22 @@ test("mailCheckCommand prints unread mail and marks it read", async () => {
     assert.equal(mail.length, 1);
     assert.equal(mail[0]?.body, "First durable message.");
     assert.ok(mail[0]?.readAt);
+    const events = await listEvents(repoDir, { sessionId: session.id });
+    assert.equal(events.length, 2);
+    assert.equal(events[0]?.eventType, "mail.sent");
+    assert.equal(events[1]?.eventType, "mail.checked");
+    assert.equal(events[1]?.payload.unreadCount, 1);
 
     writes.length = 0;
     await mailCheckCommand({
       selector: session.id,
       startDir: repoDir
     });
+
+    const nextEvents = await listEvents(repoDir, { sessionId: session.id });
+    assert.equal(nextEvents.length, 3);
+    assert.equal(nextEvents[2]?.eventType, "mail.checked");
+    assert.equal(nextEvents[2]?.payload.unreadCount, 0);
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);

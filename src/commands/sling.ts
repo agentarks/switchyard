@@ -3,6 +3,7 @@ import { relative } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
+import { createEvent } from "../events/store.js";
 import { SlingError } from "../errors.js";
 import { createSession } from "../sessions/store.js";
 import {
@@ -63,6 +64,19 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       updatedAt: createdAt
     });
 
+    await createEvent(config.project.root, {
+      sessionId,
+      agentName: managedWorktree.agentName,
+      eventType: "sling.failed",
+      createdAt,
+      payload: {
+        branch: managedWorktree.branch,
+        worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
+        errorMessage: formatErrorMessage(error),
+        cleanupSucceeded: cleanupError ? false : true
+      }
+    });
+
     if (cleanupError) {
       throw new SlingError(`${formatErrorMessage(error)} Cleanup also failed: ${cleanupError.message}`);
     }
@@ -79,6 +93,19 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     runtimePid: runtimeSession.pid,
     createdAt,
     updatedAt: createdAt
+  });
+
+  await createEvent(config.project.root, {
+    sessionId,
+    agentName: managedWorktree.agentName,
+    eventType: "sling.completed",
+    createdAt,
+    payload: {
+      branch: managedWorktree.branch,
+      worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
+      runtimePid: runtimeSession.pid,
+      runtimeCommand: formatRuntimeCommand(runtimeSession)
+    }
   });
 
   process.stdout.write(`Spawned ${managedWorktree.agentName}\n`);

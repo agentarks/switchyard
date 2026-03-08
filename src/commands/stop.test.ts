@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
+import { listEvents } from "../events/store.js";
 import { createSession, listSessions, updateSessionState } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
@@ -52,6 +53,11 @@ test("stopCommand stops a running session and preserves the worktree by default"
     const sessions = await listSessions(repoDir);
     assert.equal(sessions[0]?.state, "stopped");
     assert.equal(sessions[0]?.runtimePid, null);
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+    assert.equal(events.length, 2);
+    assert.equal(events[1]?.eventType, "stop.completed");
+    assert.equal(events[1]?.payload.outcome, "stopped");
+    assert.equal(events[1]?.payload.cleanupPerformed, false);
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);
@@ -149,6 +155,11 @@ test("stopCommand marks legacy running sessions without a pid as failed", async 
     const sessions = await listSessions(repoDir);
     assert.equal(sessions[0]?.state, "failed");
     assert.equal(sessions[0]?.runtimePid, null);
+    const events = await listEvents(repoDir, { sessionId: "legacy-agent" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "stop.completed");
+    assert.equal(events[0]?.payload.outcome, "missing_runtime_pid");
+    assert.equal(events[0]?.payload.cleanupPerformed, false);
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);
@@ -211,6 +222,11 @@ test("stopCommand cleans up legacy running sessions without a pid when requested
     const nextSessions = await listSessions(repoDir);
     assert.equal(nextSessions[0]?.state, "failed");
     assert.equal(nextSessions[0]?.runtimePid, null);
+    const events = await listEvents(repoDir, { sessionId });
+    assert.equal(events.length, 2);
+    assert.equal(events[1]?.eventType, "stop.completed");
+    assert.equal(events[1]?.payload.outcome, "missing_runtime_pid");
+    assert.equal(events[1]?.payload.cleanupPerformed, true);
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);
@@ -268,6 +284,11 @@ test("stopCommand allows cleanup for sessions already marked failed", async () =
     const sessions = await listSessions(repoDir);
     assert.equal(sessions[0]?.state, "failed");
     assert.equal(sessions[0]?.runtimePid, null);
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+    assert.equal(events.length, 2);
+    assert.equal(events[1]?.eventType, "stop.completed");
+    assert.equal(events[1]?.payload.outcome, "already_not_running");
+    assert.equal(events[1]?.payload.cleanupPerformed, true);
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);

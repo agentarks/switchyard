@@ -25,19 +25,19 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Implement the first real event path:
-- add schema ownership and helpers for `events.db`
-- append lifecycle events from sling, stop, and mail
-- expose one narrow operator-facing inspection path
+Expose one narrow operator-facing event inspection path:
+- read recent lifecycle events from `events.db`
+- keep output focused on the core operator loop
+- use the existing event writes from sling, stop, and mail
 
 Why this is next:
-- the repo can now initialize, spawn one session, inspect it, stop it, and exchange basic durable mail
-- event history is now the next missing operator-confidence primitive
+- the repo now has a real durable event timeline, but no CLI view over it
+- the next missing operator-confidence primitive is a narrow read path
 - observability can advance diagnosis without dragging runtime control into a larger redesign
 
 ## Order After That
 
-1. events and richer inspection
+1. richer status and inspection over the new event timeline
 2. tmux or richer runtime metadata only if the pid-based stop path proves too narrow
 3. merge and reintegration workflow
 4. broader mail semantics only if operator usage demands them

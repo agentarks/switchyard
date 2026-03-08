@@ -4,68 +4,61 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Build the first real event path so Switchyard can retain a durable operator-readable timeline for the core lifecycle.
+Expose the first narrow operator-facing event read path so Switchyard can surface the new durable lifecycle timeline from the CLI.
 
 Target outcome:
-- `events.db` is no longer just a placeholder file
-- sling, stop, and mail append durable lifecycle events
-- operators can inspect the most important recent actions without reading source
-- the event model stays narrow enough to revise later
+- operators can inspect the most important recent actions without opening SQLite directly
+- the event output stays narrow enough to revise later
+- status and later inspection work can build on the same event store
 
 ## Why This Is Next
 
 The core lifecycle loop now exists, including basic durable mail. The next smallest missing operator capability is durable observability.
 
-Without a real event path:
-- failures and operator actions are still mostly inferred from current session state
-- `events.db` remains a placeholder artifact
-- inspection cannot yet answer "what just happened?" with durable history
+Without a read path:
+- failures and operator actions are still buried in durable state
+- operators cannot yet answer "what just happened?" from the CLI
+- the event store exists, but it is not yet an operator tool
 
 ## Exact Order
 
-1. Define the minimum event record
-   - event type, session id or agent name, timestamps, narrow payload
-   - no background watchers, analytics, or generic event buses
+1. Pick one CLI surface
+   - extend `sy status` with a small event summary, or add one focused inspection command
+   - keep the choice narrow and operator-oriented
 
-2. Add store ownership for `events.db`
-   - schema creation
-   - narrow append/query helpers
+2. Read from the existing event store
+   - query recent events globally or for one session
+   - avoid broad filtering or analytics features
 
-3. Write events from existing commands
-   - `sy sling`
-   - `sy stop`
-   - `sy mail`
+3. Add focused tests
+   - one command path that proves events are readable from the CLI
+   - one empty-state path
 
-4. Add store and command tests
-   - one append path
-   - one operator-facing read path
-
-5. Update docs
+4. Update docs
    - `docs/current-state.md`
    - `docs/roadmap.md` if the recommended next slice changes
 
 ## What To Keep Small
 
 Do not build these in the same slice unless the implementation forces it:
+- rich filtering UIs or dashboards
 - attachments or richer mail payload formats
 - background delivery loops
 - watchdog automation
-- multi-runtime abstractions
 
 ## Definition Of Done
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- `events.db` owns a real schema
-- key lifecycle commands append durable events
-- tests cover the first event store + command path
+- one CLI path reads the durable event timeline
+- tests cover the first operator-facing event view
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- store less payload
 - read fewer event views
+- prefer a single recent-events view over filters
 - keep targeting one repo-local durable timeline
 
-The point of this slice is to make observability real, not to design the final diagnostics system.
+The point of this slice is to make the stored timeline usable, not to design the final diagnostics system.

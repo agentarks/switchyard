@@ -20,16 +20,18 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `.switchyard/` bootstrap for directories and placeholder database files
 - session store with schema ownership for `sessions.db`
 - mail store with schema ownership for `mail.db`
+- event store with schema ownership for `events.db`
 - session records that now retain the spawned runtime pid
 - worktree manager with deterministic branch and path naming
 - narrow Codex runtime seam that builds and spawns one detached command
 - narrow process liveness and stop helpers for detached Codex sessions
+- durable lifecycle event appends around `sy sling`, `sy stop`, `sy mail send`, and `sy mail check`
 - regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
 
 ## What Does Not Exist Yet
 
 - tmux control
-- event storage or inspection commands
+- event inspection commands
 - merge workflow
 
 ## Current Command Surface
@@ -73,12 +75,12 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## Recommended Next Task
 
-Implement the first real event path:
-- add durable event schema ownership to `events.db`
-- append narrow lifecycle events around sling, stop, and mail
-- improve operator inspection without broadening runtime control yet
+Expose the first operator-facing event read path:
+- add one narrow CLI inspection view over recent durable lifecycle events
+- keep the event model and output intentionally small
+- improve diagnosis without broadening runtime control yet
 
-That would make common lifecycle actions diagnosable from durable state instead of only the latest session row.
+That would let operators answer "what just happened?" from the CLI instead of reading SQLite state directly.
 
 ## How To Use This File
 
