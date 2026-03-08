@@ -91,12 +91,13 @@ Responsible for:
 - tracking parent/child relationships later
 - supporting active and historical queries
 
-Initial session states:
-- `booting`
-- `working`
-- `completed`
-- `stalled`
-- `zombie`
+Current session states:
+- `starting`
+- `running`
+- `stopped`
+- `failed`
+
+These may expand later only if the operator loop needs more lifecycle precision.
 
 ### Process Manager
 
