@@ -10,7 +10,7 @@ Switchyard is through the first operator-loop milestones:
 - M5 lifecycle control is minimally real
 - M6 messaging is now minimally real
 - M7 event inspection is now minimally real
-- M8 first readiness and early-failure handling is now minimally real
+- first readiness and early-failure handling are now minimally real as hardening work ahead of M8
 - later milestones remain design targets, not implementation commitments
 
 ## Near-Term Rule
@@ -28,20 +28,20 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Decide whether pid-only lifecycle control is sufficient for v0 or whether tmux needs to land next:
-- evaluate the current spawn/status/stop guarantees against concrete operator needs
-- make the decision explicit in docs or an ADR
-- keep the scope narrow to one repo-local Codex workflow
+Define the first merge and reintegration workflow:
+- evaluate how the current branch, worktree, status, and stop behavior should lead into a merge step
+- make the workflow explicit in docs and the CLI contract
+- keep the first answer narrow, manual-first, and grounded in one repo-local Codex workflow
 
 Why this is next:
-- the launch boundary is now clearer, so the biggest unresolved lifecycle assumption is runtime control
-- the current stop path is still pid-based only, but tmux remains an open decision rather than an explicit choice
-- resolving that decision reduces risk before merge or broader lifecycle work adds more surface area
+- runtime control is now explicit enough for v0, so the next missing operator step is reintegration
+- agent branches and worktrees now exist durably, but the repo still lacks a defined path for bringing useful work back
+- resolving that workflow reduces risk before later merge automation adds more surface area
 
 ## Order After That
 
-1. decide whether tmux or richer runtime metadata is necessary beyond the pid-based stop path
-2. merge and reintegration workflow
+1. implement the smallest merge path that matches the documented workflow
+2. add richer session metadata only if merge or recovery work truly needs it
 3. broader mail semantics only if operator usage demands them
 
 ## Explicitly Deferred
@@ -59,5 +59,5 @@ Do not prioritize these yet:
 
 Before moving past the core lifecycle, resolve these with code or an ADR:
 - whether Node built-ins remain sufficient for SQLite
-- whether tmux is a hard dependency for v1
-- whether the pid-based stop path is sufficient before tmux-backed control is added
+- what the first operator-readable merge workflow is
+- whether merge or recovery work truly needs richer session metadata

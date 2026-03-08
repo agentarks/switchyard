@@ -16,7 +16,7 @@ These are the current working defaults:
 - primary interface: CLI
 - implementation stack: TypeScript + Node + SQLite
 - session isolation: git worktrees
-- process control: tmux for interactive runtimes
+- process control: pid-backed detached processes for the first Codex loop
 - initial runtime target: Codex-first, adapter-friendly design
 - UI scope for v1: terminal status views, not a web dashboard
 
@@ -88,7 +88,7 @@ Exit criteria:
 - `sy stop`
 - session storage in SQLite
 - worktree creation/removal
-- tmux-backed session spawn
+- pid-backed detached session spawn
 
 Exit criteria:
 - one agent can be launched, observed, messaged, and stopped reliably
@@ -161,14 +161,16 @@ That is the right first slice because every later command depends on the same fi
 These are the current project decisions and should be treated as the default until deliberately revised:
 - the CLI name is `sy`
 - Codex is the first-class runtime for the early project
+- `node:sqlite` is accepted for the first persistence slices behind narrow store modules
+- pid-backed detached runtime control is sufficient for v0; tmux is deferred until operator workflows require attach or transcript handling
 - broader runtime abstraction is deferred until the core lifecycle is real
 
 ## Open Decisions
 
 These still need to be resolved or confirmed:
-- Should we stay on Node built-ins for SQLite, or move to a dedicated SQLite package before M3?
-- Do we want tmux as a hard dependency in v1?
-- Should mail be part of MVP, or can it wait until after spawn/status/stop are solid?
+- What is the smallest explicit merge and reintegration workflow after an agent has produced work on `agents/*`?
+- Does merge and recovery work need richer session metadata beyond the current pid, branch, and worktree fields?
+- Should mail expand beyond the first durable unread-only path?
 
 ## Suggested Order For Our Next Sessions
 

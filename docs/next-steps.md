@@ -4,35 +4,35 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Decide whether pid-only lifecycle control is sufficient for v0 or whether tmux-backed control needs to land next.
+Define the first merge and reintegration workflow for the current single-repo operator loop.
 
 Target outcome:
-- the repo has an explicit answer for whether tmux is required for the first reliable operator loop
-- the answer is grounded in the current `sy sling` / `sy status` / `sy stop` behavior, not general preference
-- the next implementation step is clearer whether the decision is "stay pid-only for now" or "add the smallest tmux slice"
+- the repo has an explicit answer for how work from an agent branch is supposed to return to the canonical branch
+- the answer is grounded in the current worktree, branch, status, and stop behavior
+- the next implementation step is clear whether it is a narrow `sy merge` command, a manual-first contract, or one smaller prerequisite
 
 ## Why This Is Next
 
-The launch boundary is now narrower and more trustworthy. The next unresolved operator-risk question is whether pid-only control is enough to keep the lifecycle understandable and stoppable, or whether tmux is necessary sooner.
+The runtime-control model is now explicit enough for v0. The biggest missing operator workflow is what happens after an agent has produced useful work on an `agents/*` branch.
 
-Without an explicit tmux decision:
-- the project keeps carrying an unresolved runtime-control assumption
-- it is unclear whether current pid-only stop behavior is acceptable for the intended workflow
-- merge and broader lifecycle work risk building on top of an unstable control model
+Without an explicit merge workflow:
+- operators can launch, inspect, and stop agents, but the repo-local lifecycle still has no defined reintegration step
+- cleanup expectations stay ambiguous because it is unclear when a branch or worktree is truly done
+- later merge automation would be forced to invent product rules that have not been written down yet
 
 ## Exact Order
 
-1. Audit the current control path
-   - review the concrete guarantees from the existing pid-based spawn, status, and stop flow
-   - stay focused on real operator tasks, not future runtime breadth
+1. Audit the current post-work artifacts
+   - review what exists after a session runs or stops: branch, worktree, session state, and events
+   - stay grounded in the current single-repo Codex workflow
 
-2. Identify the smallest missing guarantee
-   - decide whether the real gap is interactive control, launch inspection, cleanup reliability, or something else
-   - avoid jumping straight to tmux unless the current failure mode actually requires it
+2. Define the smallest merge contract
+   - decide what the operator must verify before reintegration
+   - decide what should stay manual in the first slice versus what belongs behind a command
 
-3. Record the decision explicitly
-   - update the source-of-truth docs and add an ADR if the tradeoff needs a durable rationale
-   - if tmux is required, define the smallest next vertical slice instead of broad integration
+3. Record the workflow explicitly
+   - update the source-of-truth docs and the CLI contract
+   - add an ADR only if the merge boundary needs a durable tradeoff record
 
 4. Update docs
    - `docs/current-state.md`
@@ -43,23 +43,23 @@ Without an explicit tmux decision:
 
 Do not build these in the same slice unless the implementation forces it:
 - background watchdogs or daemons
-- broad session state machines
-- richer runtime matrices
-- full tmux integration before the specific requirement is clear
+- automated merge queues
+- AI-assisted conflict resolution
+- broad multi-agent coordination logic
 
 ## Definition Of Done
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- the repo has an explicit decision on pid-only control versus tmux for the current loop
-- the rationale points to concrete operator behavior instead of general preference
+- the repo has an explicit merge and reintegration workflow for the current loop
+- the rationale points to concrete operator behavior instead of abstract workflow preference
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- answer the tmux question for the current workflow, not for every future runtime
-- prefer one explicit decision over exploratory implementation
+- answer the merge question for one repo-local Codex workflow, not for every future collaboration model
+- prefer one explicit operator-readable workflow over speculative automation
 - keep targeting one repo-local Codex lifecycle
 
-The point of this slice is to remove the biggest remaining control-model ambiguity, not to design the final runtime supervisor.
+The point of this slice is to remove the biggest remaining lifecycle gap after spawn, inspection, and stop, not to design the final merge system.

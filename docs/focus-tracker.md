@@ -27,17 +27,16 @@ Completed enough to count as minimally real:
 - M5 lifecycle control
 - M6 messaging
 - M7 first event inspection path
-- M8 first readiness and early-failure handling
+- first readiness and early-failure handling as hardening work ahead of M8
 
 Not complete yet:
-- decision on whether pid-only stop is enough or tmux is required
 - merge and reintegration workflow
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- decide whether pid-only lifecycle control is sufficient or tmux is now required
-- improve lifecycle control only where the current operator loop is weak
+- define the smallest merge and reintegration workflow that fits the current repo-local loop
+- improve pid-backed lifecycle control only where the current operator loop is still concretely weak
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
 - pay down small operator-facing ambiguities, such as selector precedence, before adding broader inspection features
@@ -50,6 +49,7 @@ These are derailment risks right now:
 - background daemons or watchdog systems
 - supervisor/coordinator hierarchies
 - merge queue automation before the merge workflow exists
+- tmux-style interactive wrappers unless operator workflows prove pid-only control is insufficient
 - broad analytics, filtering, or reporting features
 - “nice to have” abstractions without current operator value
 

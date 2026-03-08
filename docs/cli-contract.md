@@ -44,7 +44,7 @@ Current contract:
 - command requires one `<agent>` argument and accepts additional positional runtime args
 - command loads config from the canonical repo root
 - command creates one deterministic branch and worktree under `.switchyard/worktrees/`
-- command starts one Codex process from that worktree
+- command starts one detached Codex process from that worktree
 - command persists one `starting` session record in `sessions.db`
 - command records `sling.spawned` when the runtime pid exists
 - command records `sling.completed` after the initial launch window succeeds
@@ -52,7 +52,7 @@ Current contract:
 
 Future target:
 - add richer task/instruction inputs
-- add tmux/session metadata once lifecycle control is implemented
+- add richer runtime metadata only if operator workflows require attach or transcript inspection
 
 ## `sy status [args...]`
 
@@ -94,7 +94,7 @@ Current contract:
 - command removes the worktree and branch when `--cleanup` is passed
 
 Future target:
-- add tmux-backed control if pid-only stop proves too narrow
+- revisit alternate runtime control only if the pid-based path proves too narrow in real operator workflows
 - refine operator-facing output around stale or missing runtime state
 
 ## `sy mail`

@@ -7,10 +7,10 @@ Deliverables:
 - `docs/architecture.md`
 - `docs/milestones.md`
 
-Questions to resolve:
-- SQLite implementation choice
-- tmux requirement
-- MVP mail scope
+Resolved planning decisions:
+- SQLite uses `node:sqlite` behind narrow store modules for the current slices
+- v0 runtime control stays pid-backed; tmux is deferred unless operator workflows require it
+- mail is part of the early operator loop MVP
 
 ## M1: Project Scaffold
 
@@ -51,7 +51,7 @@ Definition of done:
 
 Deliverables:
 - worktree manager
-- tmux session creation
+- pid-backed detached runtime spawn
 - runtime adapter skeleton
 - `sy sling`
 
