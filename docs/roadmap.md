@@ -20,22 +20,21 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Build session persistence before real agent spawning:
-- add a store module that owns schema creation for `sessions.db`
-- define the first persisted session record shape
-- add read/write/list operations with tests
-- keep the schema intentionally small
+Build the first real worktree and spawn path:
+- add a worktree manager with deterministic naming rules
+- keep `sy sling` narrow: one worktree, one runtime target, one persisted session
+- reuse the existing session store instead of expanding storage scope
 
 Why this is next:
-- `status`, `stop`, and later `mail` all depend on durable session state
-- it keeps `sy init` lightweight and avoids premature runtime/process coupling
-- it creates a concrete seam for later worktree and tmux integration
+- the repo now has durable session state and a real `sy status`
+- `sy sling` is the next missing step in the operator lifecycle
+- it tests whether the current session schema is sufficient before `stop` depends on it
 
 ## Order After That
 
-1. session store and basic `sy status`
-2. worktree manager
-3. Codex runtime spawn path for one worker
+1. worktree manager and naming rules
+2. Codex runtime spawn path for one worker
+3. wire `sy sling` to create and persist one session
 4. `sy stop` with liveness and cleanup rules
 5. mail store and basic operator messaging
 6. events and richer inspection

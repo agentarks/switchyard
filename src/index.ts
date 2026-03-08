@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import { createInitCommand } from "./commands/init.js";
 import { createPlaceholderCommand } from "./commands/placeholder.js";
+import { createStatusCommand } from "./commands/status.js";
 import { SwitchyardError } from "./errors.js";
 
 async function main(): Promise<void> {
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
 
   program.addCommand(createInitCommand());
   program.addCommand(createPlaceholderCommand("sling", "Spawn an agent into an isolated worktree"));
-  program.addCommand(createPlaceholderCommand("status", "Show active agent sessions"));
+  program.addCommand(createStatusCommand());
   program.addCommand(createPlaceholderCommand("stop", "Stop a running agent"));
   program.addCommand(createPlaceholderCommand("mail", "Send or check inter-agent mail"));
 
