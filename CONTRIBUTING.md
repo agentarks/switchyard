@@ -59,6 +59,8 @@ When the project state changes materially, update these files:
 
 - keep PRs milestone-scoped
 - prefer one vertical slice per PR
+- after implementing a feature slice, send a PR instead of batching unrelated follow-up work locally
+- include example output in every PR for the operator-facing behavior you changed, especially for CLI output
 - call out any new assumptions about git, tmux, SQLite, or Codex runtime behavior
 - include file references and concrete behavior changes in review summaries
 - note any untested risks explicitly if they remain
