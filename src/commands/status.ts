@@ -2,14 +2,17 @@ import { relative } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
-import { listLatestEventsBySession } from "../events/store.js";
+import { listLatestEventsBySession, recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import type { EventPayloadValue, EventRecord } from "../events/types.js";
 import { isProcessAlive } from "../runtimes/process.js";
+import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
 import { listSessions, updateSessionState } from "../sessions/store.js";
 
 interface StatusOptions {
   startDir?: string;
   isRuntimeAlive?: (pid: number) => boolean;
+  recordEvent?: EventRecorder;
+  now?: () => string;
 }
 
 export function createStatusCommand(): Command {
@@ -23,7 +26,12 @@ export function createStatusCommand(): Command {
 
 export async function statusCommand(options: StatusOptions = {}): Promise<void> {
   const config = await loadConfig(options.startDir);
-  const reconciledSessionIds = await reconcileRunningSessions(config.project.root, options.isRuntimeAlive ?? isProcessAlive);
+  await reconcileSessionLifecycles(
+    config.project.root,
+    options.isRuntimeAlive ?? isProcessAlive,
+    options.recordEvent ?? recordEventBestEffort,
+    options.now ?? (() => new Date().toISOString())
+  );
   const sessions = await listSessions(config.project.root);
 
   if (sessions.length === 0) {
@@ -41,38 +49,48 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 
   for (const session of sessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
-    const recentEvent = reconciledSessionIds.has(session.id)
-      ? "-"
-      : formatRecentEventSummary(latestEventsBySession.get(session.id));
+    const recentEvent = formatRecentEventSummary(latestEventsBySession.get(session.id));
     process.stdout.write(
       `${session.state}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${recentEvent}\n`
     );
   }
 }
 
-async function reconcileRunningSessions(
+async function reconcileSessionLifecycles(
   projectRoot: string,
-  isRuntimeAlive: (pid: number) => boolean
-): Promise<Set<string>> {
+  isRuntimeAlive: (pid: number) => boolean,
+  recordEvent: EventRecorder,
+  now: () => string
+): Promise<void> {
   const sessions = await listSessions(projectRoot);
-  const reconciledSessionIds = new Set<string>();
 
   for (const session of sessions) {
-    if (session.state !== "running") {
+    if (!isActiveSessionState(session.state)) {
       continue;
     }
 
-    if (typeof session.runtimePid !== "number" || !isRuntimeAlive(session.runtimePid)) {
-      await updateSessionState(projectRoot, {
-        id: session.id,
-        state: "failed",
-        runtimePid: null
-      });
-      reconciledSessionIds.add(session.id);
-    }
-  }
+    const createdAt = now();
+    const nextState = determineNextLifecycleState(session, isRuntimeAlive);
 
-  return reconciledSessionIds;
+    if (!nextState) {
+      continue;
+    }
+
+    const nextSession = await updateSessionState(projectRoot, {
+      id: session.id,
+      state: nextState.state,
+      runtimePid: nextState.runtimePid,
+      updatedAt: createdAt
+    });
+
+    await recordEventWithFallback(recordEvent, projectRoot, {
+      sessionId: nextSession.id,
+      agentName: nextSession.agentName,
+      eventType: nextState.eventType,
+      createdAt,
+      payload: nextState.payload
+    });
+  }
 }
 
 function formatWorktreePath(projectRoot: string, worktreePath: string): string {
@@ -114,10 +132,76 @@ function formatPayloadValue(value: EventPayloadValue | undefined): string {
   return String(value);
 }
 
+function determineNextLifecycleState(
+  session: SessionRecord,
+  isRuntimeAlive: (pid: number) => boolean
+): {
+  state: SessionState;
+  runtimePid: number | null;
+  eventType: string;
+  payload: Record<string, EventPayloadValue>;
+} | undefined {
+  if (typeof session.runtimePid !== "number") {
+    return {
+      state: "failed",
+      runtimePid: null,
+      eventType: session.state === "starting" ? "runtime.exited_early" : "runtime.exited",
+      payload: {
+        previousState: session.state,
+        reason: "missing_runtime_pid"
+      }
+    };
+  }
+
+  if (session.state === "starting") {
+    if (isRuntimeAlive(session.runtimePid)) {
+      return {
+        state: "running",
+        runtimePid: session.runtimePid,
+        eventType: "runtime.ready",
+        payload: {
+          previousState: session.state,
+          runtimePid: session.runtimePid,
+          signal: "pid_alive"
+        }
+      };
+    }
+
+    return {
+      state: "failed",
+      runtimePid: null,
+      eventType: "runtime.exited_early",
+      payload: {
+        previousState: session.state,
+        runtimePid: session.runtimePid,
+        reason: "pid_not_alive"
+      }
+    };
+  }
+
+  if (isRuntimeAlive(session.runtimePid)) {
+    return undefined;
+  }
+
+  return {
+    state: "failed",
+    runtimePid: null,
+    eventType: "runtime.exited",
+    payload: {
+      previousState: session.state,
+      runtimePid: session.runtimePid,
+      reason: "pid_not_alive"
+    }
+  };
+}
+
 const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "mail.checked": ["unreadCount"],
   "mail.sent": ["sender", "bodyLength"],
-  "sling.completed": ["runtimePid"],
+  "runtime.exited": ["reason", "runtimePid"],
+  "runtime.exited_early": ["reason", "runtimePid"],
+  "runtime.ready": ["signal", "runtimePid"],
   "sling.failed": ["errorMessage", "cleanupSucceeded"],
+  "sling.started": ["runtimePid"],
   "stop.completed": ["outcome", "cleanupPerformed"]
 };

@@ -10,6 +10,7 @@ Switchyard is through the first operator-loop milestones:
 - M5 lifecycle control is minimally real
 - M6 messaging is now minimally real
 - M7 event inspection is now minimally real
+- M8 first readiness and early-failure handling is now minimally real
 - later milestones remain design targets, not implementation commitments
 
 ## Near-Term Rule
@@ -27,15 +28,15 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Define readiness and failure handling for the first spawned session:
-- distinguish launch success from usable session readiness
-- make early runtime failure states easier to understand from the operator loop
-- keep the implementation narrow to one repo-local Codex session
+Decide whether pid-only lifecycle control is sufficient or whether tmux should replace or augment it:
+- validate the current detached-pid stop path against the now clearer readiness boundary
+- keep the decision grounded in the single-repo, single-agent operator loop
+- prefer a narrow decision and follow-up slice over broad runtime-control expansion
 
 Why this is next:
-- status now carries concise recent event context from the durable timeline
-- the remaining unclear operator moment is immediately after spawn, where `running` does not yet mean "ready"
-- tightening readiness and early-failure behavior improves confidence without expanding runtime control or adding tmux yet
+- the post-launch ready-or-failed boundary is now explicit in the operator loop
+- the next unresolved operator risk is whether stop and later control semantics remain trustworthy without tmux
+- resolving that boundary is more important than adding broader runtime features or abstractions
 
 ## Order After That
 

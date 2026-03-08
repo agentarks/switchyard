@@ -91,7 +91,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     agentName: managedWorktree.agentName,
     branch: managedWorktree.branch,
     worktreePath: managedWorktree.path,
-    state: "running",
+    state: "starting",
     runtimePid: runtimeSession.pid,
     createdAt,
     updatedAt: createdAt
@@ -100,7 +100,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   await recordEventWithFallback(recordEvent, config.project.root, {
     sessionId,
     agentName: managedWorktree.agentName,
-    eventType: "sling.completed",
+    eventType: "sling.started",
     createdAt,
     payload: {
       branch: managedWorktree.branch,
@@ -111,6 +111,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   });
 
   process.stdout.write(`Spawned ${managedWorktree.agentName}\n`);
+  process.stdout.write("State: starting\n");
   process.stdout.write(`Branch: ${managedWorktree.branch}\n`);
   process.stdout.write(`Worktree: ${formatRelativePath(config.project.root, managedWorktree.path)}\n`);
   process.stdout.write(`Runtime: ${formatRuntimeCommand(runtimeSession)}\n`);

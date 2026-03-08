@@ -27,7 +27,7 @@ test("listEvents returns inserted events in creation order with parsed payloads"
     const firstEvent = await createEvent(repoDir, {
       sessionId: "session-1",
       agentName: "agent-one",
-      eventType: "sling.completed",
+      eventType: "sling.started",
       payload: {
         runtimePid: 4242,
         cleanupSucceeded: true
@@ -61,7 +61,7 @@ test("listEvents returns inserted events in creation order with parsed payloads"
       id: firstEvent.id,
       sessionId: "session-1",
       agentName: "agent-one",
-      eventType: "sling.completed",
+      eventType: "sling.started",
       payload: {
         runtimePid: 4242,
         cleanupSucceeded: true
@@ -87,7 +87,7 @@ test("listLatestEventsBySession returns the newest event for each requested sess
     await createEvent(repoDir, {
       sessionId: "session-1",
       agentName: "agent-one",
-      eventType: "sling.completed",
+      eventType: "sling.started",
       payload: {
         runtimePid: 4242
       },

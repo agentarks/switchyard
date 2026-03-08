@@ -1,4 +1,4 @@
-export type SessionState = "running" | "stopped" | "failed";
+export type SessionState = "starting" | "running" | "stopped" | "failed";
 
 export interface SessionRecord {
   id: string;
@@ -27,4 +27,8 @@ export interface UpdateSessionStateInput {
   state: SessionState;
   runtimePid?: number | null;
   updatedAt?: string;
+}
+
+export function isActiveSessionState(state: SessionState): boolean {
+  return state === "starting" || state === "running";
 }

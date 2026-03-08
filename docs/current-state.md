@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, status, stop, and basic durable mail all work end-to-end.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events, and basic durable mail all work end-to-end.
 
 ## What Exists
 
@@ -23,12 +23,15 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - mail store with schema ownership for `mail.db`
 - event store with schema ownership for `events.db`
 - session records that now retain the spawned runtime pid
+- session records that distinguish launch-time `starting` from confirmed `running`
 - worktree manager with deterministic branch and path naming
 - narrow Codex runtime seam that builds and spawns one detached command
 - narrow process liveness and stop helpers for detached Codex sessions
 - durable lifecycle event appends around `sy sling`, `sy stop`, `sy mail send`, and `sy mail check`
+- durable lifecycle events for `sling.started`, `runtime.ready`, `runtime.exited_early`, and `runtime.exited`
 - first operator-facing event inspection path over `events.db`
 - status output that now joins each session to its latest durable event context
+- first-readiness reconciliation in `sy status` that promotes launched sessions to `running` or marks them failed with a durable reason
 - regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
 
 ## What Does Not Exist Yet
@@ -52,16 +55,20 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - creates one deterministic branch under `agents/`
   - creates one worktree under `.switchyard/worktrees/`
   - spawns one Codex process from that worktree
-  - persists one session record as `running`
+  - persists one session record as `starting`
+  - records durable launch metadata before readiness is confirmed
 - `sy status [args...]`
   - loads config and session state
+  - promotes `starting` sessions to `running` when the pid survives the first liveness check
+  - marks early-dead `starting` sessions as `failed`
   - marks obviously stale `running` pid-backed sessions as `failed`
   - prints an empty-state message when no sessions exist
   - prints a tab-separated session table ordered by most recent update
   - includes one concise recent-event summary per session when event history exists
+  - records runtime reconciliation events when it changes session state
 - `sy stop <session>`
   - resolves one session by id or normalized agent name
-  - stops one pid-backed runtime and updates durable session state
+  - stops one active pid-backed runtime and updates durable session state
   - preserves the worktree by default
   - removes the worktree and branch when `--cleanup` is passed
 - `sy mail send <session> <body>`
@@ -78,18 +85,16 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `src/config.ts` is carrying both config logic and git root-resolution behavior; that should eventually split once lifecycle code grows further.
 - `node:sqlite` is still experimental in Node 25, so the SQLite choice may need revision if core API churn becomes painful.
 - there is no end-to-end test around `sy init`.
+- the current readiness signal is intentionally narrow: a launched session becomes `running` only after one successful pid liveness check through `sy status`.
 - the current stop path is pid-based only; tmux-backed control is still deferred.
 - older pre-pid session rows cannot be liveness-checked automatically.
 - `sy events <selector>` currently resolves in this order: exact session row by id, orphaned events by raw `session_id`, then latest session by normalized agent name. That preserves orphaned event readability, but it means a raw selector that could plausibly match both an orphaned session id and an agent name will prefer the orphaned session-id path until the CLI grows explicit selector disambiguation.
 
 ## Recommended Next Task
 
-Define readiness and failure handling for the first spawned session:
-- distinguish process launch from a usable agent session
-- make early runtime failure states clearer in the operator loop
-- keep the implementation narrow and grounded in the existing Codex runtime seam
+Decide whether pid-only lifecycle control is sufficient for v1 or whether tmux needs to become part of the operator loop now.
 
-That should tighten the weakest remaining part of the first operator loop: the moments right after `sy sling` succeeds but before the session is clearly usable or clearly failed.
+That is the next narrow risk after readiness hardening: the operator loop can now tell when a launch becomes ready or dies early, but runtime control still depends on whether detached pid-based stop semantics are reliable enough to keep.
 
 ## How To Use This File
 
