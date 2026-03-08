@@ -78,6 +78,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - there is no end-to-end test around `sy init`.
 - the current stop path is pid-based only; tmux-backed control is still deferred.
 - older pre-pid session rows cannot be liveness-checked automatically.
+- `sy events <selector>` currently resolves in this order: exact session row by id, orphaned events by raw `session_id`, then latest session by normalized agent name. That preserves orphaned event readability, but it means a raw selector that could plausibly match both an orphaned session id and an agent name will prefer the orphaned session-id path until the CLI grows explicit selector disambiguation.
 
 ## Recommended Next Task
 

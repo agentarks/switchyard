@@ -42,6 +42,7 @@ These are the right kinds of tasks right now:
 - improve lifecycle control only where the current operator loop is weak
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
+- pay down small operator-facing ambiguities, such as selector precedence, before adding broader inspection features
 
 ## Current Out-Of-Scope Work
 
