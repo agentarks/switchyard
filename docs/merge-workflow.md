@@ -20,7 +20,8 @@ For the current v0 loop, reintegration is manual-first:
    - Do not pass `--cleanup` before you have either merged or deliberately abandoned the work.
 
 2. Review the preserved branch and worktree.
-   - Use `sy events <session>` and `sy mail check <session>` if you need lifecycle or message context.
+   - Use `sy events <session>` if you need lifecycle context.
+   - Use `sy mail check <session>` only when you intentionally want to consume unread mail; it marks the returned messages as read.
    - Inspect the agent worktree and branch with normal git commands.
    - Run the project checks you expect before reintegration.
 
