@@ -87,27 +87,21 @@ export async function listMailForSession(
 }
 
 export async function readUnreadMailForSession(projectRoot: string, sessionId: string): Promise<MailRecord[]> {
-  const unreadMail = await listMailForSession(projectRoot, sessionId, { unreadOnly: true });
-
-  if (unreadMail.length === 0) {
-    return [];
-  }
-
   const readAt = new Date().toISOString();
-  const placeholders = unreadMail.map(() => "?").join(", ");
 
-  await withMailDatabase(projectRoot, (db) => {
-    db.prepare(`
+  return await withMailDatabase(projectRoot, (db) => {
+    // Claim unread rows in one statement so concurrent readers cannot receive the same message twice.
+    const rows = db.prepare(`
       UPDATE mail_messages
       SET read_at = ?
-      WHERE id IN (${placeholders})
-    `).run(readAt, ...unreadMail.map((message) => message.id));
-  });
+      WHERE session_id = ? AND read_at IS NULL
+      RETURNING id, session_id, sender, recipient, body, created_at, read_at
+    `).all(readAt, sessionId) as unknown as MailRow[];
 
-  return unreadMail.map((message) => ({
-    ...message,
-    readAt
-  }));
+    return rows
+      .map(mapMailRow)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+  });
 }
 
 async function withMailDatabase<T>(projectRoot: string, operation: (db: DatabaseSync) => T): Promise<T> {

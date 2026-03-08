@@ -93,3 +93,38 @@ test("readUnreadMailForSession returns unread mail and marks it read", async () 
     await removeTempDir(repoDir);
   }
 });
+
+test("readUnreadMailForSession delivers unread mail to only one concurrent reader", async () => {
+  const repoDir = await createTempGitRepo("switchyard-mail-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    const createdMessage = await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "operator",
+      recipient: "agent-one",
+      body: "Only one reader should receive this.",
+      createdAt: "2026-03-06T09:00:00.000Z"
+    });
+
+    const [firstRead, secondRead] = await Promise.all([
+      readUnreadMailForSession(repoDir, "session-1"),
+      readUnreadMailForSession(repoDir, "session-1")
+    ]);
+
+    assert.deepEqual(
+      [firstRead.length, secondRead.length].sort((left, right) => left - right),
+      [0, 1]
+    );
+
+    const deliveredMessages = [...firstRead, ...secondRead];
+    assert.equal(deliveredMessages.length, 1);
+    assert.equal(deliveredMessages[0]?.id, createdMessage.id);
+
+    const storedMail = await listMailForSession(repoDir, "session-1");
+    assert.ok(storedMail[0]?.readAt);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
