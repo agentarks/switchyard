@@ -108,11 +108,12 @@ test("statusCommand prints the latest event summary for each session", async () 
   await createEvent(repoDir, {
     sessionId: "session-1",
     agentName: "agent-one",
-    eventType: "sling.started",
+    eventType: "sling.completed",
     payload: {
       branch: "agents/agent-one",
       runtimePid: 1111,
-      runtimeCommand: "codex --json"
+      runtimeCommand: "codex --json",
+      readyAfterMs: 500
     },
     createdAt: "2026-03-08T09:10:00.000Z"
   });
@@ -161,6 +162,53 @@ test("statusCommand prints the latest event summary for each session", async () 
   assert.match(
     output,
     /stopped\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-08T09:05:00.000Z\t2026-03-08T09:20:00.000Z stop\.completed outcome=stopped, cleanupPerformed=true/
+  );
+});
+
+test("statusCommand includes the readiness detail for a freshly launched session", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-ready",
+    agentName: "agent-ready",
+    branch: "agents/agent-ready",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-ready"),
+    state: "running",
+    runtimePid: 2222,
+    createdAt: "2026-03-08T11:00:00.000Z",
+    updatedAt: "2026-03-08T11:00:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-ready",
+    agentName: "agent-ready",
+    eventType: "sling.completed",
+    payload: {
+      runtimePid: 2222,
+      readyAfterMs: 500
+    },
+    createdAt: "2026-03-08T11:01:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 2222
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /running\tagent-ready\tagents\/agent-ready\t\.switchyard\/worktrees\/agent-ready\t2026-03-08T11:00:00.000Z\t2026-03-08T11:01:00.000Z sling\.completed runtimePid=2222, readyAfterMs=500/
   );
 });
 
@@ -232,9 +280,10 @@ test("statusCommand marks stale running sessions as failed", async () => {
   await createEvent(repoDir, {
     sessionId: "agent-stale",
     agentName: "agent-stale",
-    eventType: "sling.started",
+    eventType: "sling.completed",
     payload: {
-      runtimePid: 9090
+      runtimePid: 9090,
+      readyAfterMs: 500
     },
     createdAt: "2026-03-06T09:30:00.000Z"
   });
@@ -288,9 +337,10 @@ test("statusCommand shows the reconciled recent event even when event persistenc
   await createEvent(repoDir, {
     sessionId: "agent-event-fail",
     agentName: "agent-event-fail",
-    eventType: "sling.started",
+    eventType: "sling.completed",
     payload: {
-      runtimePid: 9090
+      runtimePid: 9090,
+      readyAfterMs: 500
     },
     createdAt: "2026-03-06T09:30:00.000Z"
   });
@@ -316,7 +366,7 @@ test("statusCommand shows the reconciled recent event even when event persistenc
 
     const events = await listEvents(repoDir, { sessionId: "agent-event-fail" });
     assert.equal(events.length, 1);
-    assert.equal(events[0]?.eventType, "sling.started");
+    assert.equal(events[0]?.eventType, "sling.completed");
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);
@@ -327,7 +377,7 @@ test("statusCommand shows the reconciled recent event even when event persistenc
     output,
     /failed\tagent-event-fail\tagents\/agent-event-fail\t\.switchyard\/worktrees\/agent-event-fail\t2026-03-08T10:00:00.000Z\t2026-03-08T10:00:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=9090/
   );
-  assert.doesNotMatch(output, /failed\tagent-event-fail[^\n]*sling\.started/);
+  assert.doesNotMatch(output, /failed\tagent-event-fail[^\n]*sling\.(started|completed)/);
 });
 
 test("statusCommand marks starting sessions that die before readiness as failed", async () => {
@@ -348,9 +398,10 @@ test("statusCommand marks starting sessions that die before readiness as failed"
   await createEvent(repoDir, {
     sessionId: "agent-booting",
     agentName: "agent-booting",
-    eventType: "sling.started",
+    eventType: "sling.completed",
     payload: {
-      runtimePid: 8080
+      runtimePid: 8080,
+      readyAfterMs: 500
     },
     createdAt: "2026-03-06T09:30:00.000Z"
   });

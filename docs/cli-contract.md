@@ -46,8 +46,9 @@ Current contract:
 - command creates one deterministic branch and worktree under `.switchyard/worktrees/`
 - command starts one Codex process from that worktree
 - command persists one `starting` session record in `sessions.db`
-- command records launch metadata before readiness is confirmed
-- command prints the launch state, created branch, worktree path, and runtime command line
+- command records `sling.spawned` when the runtime pid exists
+- command records `sling.completed` after the initial launch window succeeds
+- command prints the launch state, created branch, worktree path, runtime command line, and initial readiness delay
 
 Future target:
 - add richer task/instruction inputs
@@ -63,6 +64,7 @@ Current contract:
 - command marks early-dead `starting` sessions as `failed`
 - command marks obviously stale pid-backed `running` sessions as `failed`
 - command records durable runtime reconciliation events when it changes session state
+- command prefers the freshly reconciled lifecycle event in the current table output even if event persistence fails
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
 - when sessions exist, print a concise tab-separated table ordered by most recent update
 

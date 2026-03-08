@@ -4,34 +4,35 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Decide whether the current pid-only runtime control is sufficient for v1 or whether tmux needs to become part of the core operator loop now.
+Decide whether pid-only lifecycle control is sufficient for v0 or whether tmux-backed control needs to land next.
 
 Target outcome:
-- the repo has an explicit direction on pid-only stop control versus tmux-backed control
-- the decision is grounded in the existing launch, status, and stop behavior rather than future abstractions
-- the resulting change stays narrow and operator-first
+- the repo has an explicit answer for whether tmux is required for the first reliable operator loop
+- the answer is grounded in the current `sy sling` / `sy status` / `sy stop` behavior, not general preference
+- the next implementation step is clearer whether the decision is "stay pid-only for now" or "add the smallest tmux slice"
 
 ## Why This Is Next
 
-The launch boundary is now clearer: `sy sling` records a started session, and `sy status` decides ready versus failed early. The next unresolved operator question is whether detached pid control is trustworthy enough to keep as the lifecycle-control foundation.
+The launch boundary is now narrower and more trustworthy. The next unresolved operator-risk question is whether pid-only control is enough to keep the lifecycle understandable and stoppable, or whether tmux is necessary sooner.
 
-Without resolving that:
-- the stop path remains the main lifecycle assumption that has not been deliberately validated
-- future runtime metadata work risks drifting without a clear control model
-- tmux remains a deferred dependency without an explicit keep-or-adopt decision
+Without an explicit tmux decision:
+- the project keeps carrying an unresolved runtime-control assumption
+- it is unclear whether current pid-only stop behavior is acceptable for the intended workflow
+- merge and broader lifecycle work risk building on top of an unstable control model
 
 ## Exact Order
 
 1. Audit the current control path
-   - review how `sy sling`, `sy status`, and `sy stop` now interact around pid-backed sessions
-   - identify the concrete failure cases that still matter to operators
+   - review the concrete guarantees from the existing pid-based spawn, status, and stop flow
+   - stay focused on real operator tasks, not future runtime breadth
 
-2. Make the narrowest useful decision
-   - either affirm pid-only control for v1 with the current constraints
-   - or define the smallest tmux-backed change that the operator loop now requires
+2. Identify the smallest missing guarantee
+   - decide whether the real gap is interactive control, launch inspection, cleanup reliability, or something else
+   - avoid jumping straight to tmux unless the current failure mode actually requires it
 
-3. Add focused code or docs to support that decision
-   - prefer a narrow behavior slice or ADR-level clarification over a broad runtime-control rewrite
+3. Record the decision explicitly
+   - update the source-of-truth docs and add an ADR if the tradeoff needs a durable rationale
+   - if tmux is required, define the smallest next vertical slice instead of broad integration
 
 4. Update docs
    - `docs/current-state.md`
@@ -40,22 +41,25 @@ Without resolving that:
 
 ## What To Keep Small
 
-Do not build these in the same slice unless the decision forces it:
-- broad runtime supervisors
+Do not build these in the same slice unless the implementation forces it:
 - background watchdogs or daemons
-- multi-runtime support
-- merge automation
+- broad session state machines
+- richer runtime matrices
+- full tmux integration before the specific requirement is clear
 
 ## Definition Of Done
 
 This slice is done when all of these are true:
-- `npm run check` passes if behavior changed
-- the repo has a clear answer on pid-only control versus tmux for the current scope
-- tests and docs match the chosen operator-facing behavior
+- `npm run check` passes
+- the repo has an explicit decision on pid-only control versus tmux for the current loop
+- the rationale points to concrete operator behavior instead of general preference
+- docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- validate one control assumption instead of redesigning the runtime layer
-- prefer one explicit operator-facing constraint over speculative flexibility
+- answer the tmux question for the current workflow, not for every future runtime
+- prefer one explicit decision over exploratory implementation
 - keep targeting one repo-local Codex lifecycle
+
+The point of this slice is to remove the biggest remaining control-model ambiguity, not to design the final runtime supervisor.

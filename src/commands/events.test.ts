@@ -29,10 +29,11 @@ test("eventsCommand prints recent events with operator-facing details", async ()
     await createEvent(repoDir, {
       sessionId: "session-1",
       agentName: "agent-one",
-      eventType: "sling.started",
+      eventType: "sling.completed",
       payload: {
         branch: "agents/agent-one",
-        runtimePid: 4242
+        runtimePid: 4242,
+        readyAfterMs: 500
       },
       createdAt: "2026-03-08T09:00:00.000Z"
     });
@@ -53,7 +54,7 @@ test("eventsCommand prints recent events with operator-facing details", async ()
 
     assert.match(output, /Recent events for switchyard-test:/);
     assert.match(output, /TIME\tEVENT\tAGENT\tSESSION\tDETAILS/);
-    assert.match(output, /2026-03-08T09:00:00.000Z\tsling.started\tagent-one\tsession-1\tbranch=agents\/agent-one, runtimePid=4242/);
+    assert.match(output, /2026-03-08T09:00:00.000Z\tsling.completed\tagent-one\tsession-1\tbranch=agents\/agent-one, readyAfterMs=500, runtimePid=4242/);
     assert.match(output, /2026-03-08T10:00:00.000Z\tmail.sent\tagent-one\tsession-1\tbodyLength=18, sender=operator/);
   } finally {
     await removeTempDir(repoDir);
@@ -87,9 +88,10 @@ test("eventsCommand filters events for one resolved session", async () => {
     await createEvent(repoDir, {
       sessionId: "session-1",
       agentName: "agent-one",
-      eventType: "sling.started",
+      eventType: "sling.completed",
       payload: {
-        runtimePid: 1111
+        runtimePid: 1111,
+        readyAfterMs: 500
       },
       createdAt: "2026-03-08T09:10:00.000Z"
     });
@@ -108,7 +110,7 @@ test("eventsCommand filters events for one resolved session", async () => {
     });
 
     assert.match(output, /Recent events for agent-one \(session-1\):/);
-    assert.match(output, /sling.started/);
+    assert.match(output, /sling.completed/);
     assert.doesNotMatch(output, /agent-two/);
     assert.doesNotMatch(output, /stop.completed/);
   } finally {

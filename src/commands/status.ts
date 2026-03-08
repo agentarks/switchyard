@@ -241,7 +241,8 @@ const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "runtime.exited": ["reason", "runtimePid"],
   "runtime.exited_early": ["reason", "runtimePid"],
   "runtime.ready": ["signal", "runtimePid"],
+  "sling.completed": ["runtimePid", "readyAfterMs"],
   "sling.failed": ["errorMessage", "cleanupSucceeded"],
-  "sling.started": ["runtimePid"],
+  "sling.spawned": ["runtimePid"],
   "stop.completed": ["outcome", "cleanupPerformed"]
 };

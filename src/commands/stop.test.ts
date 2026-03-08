@@ -27,7 +27,8 @@ test("stopCommand stops an active session and preserves the worktree by default"
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -84,7 +85,8 @@ test("stopCommand removes the worktree and branch when cleanup is requested", as
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -186,7 +188,8 @@ test("stopCommand cleans up legacy active sessions without a pid when requested"
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -253,7 +256,8 @@ test("stopCommand allows cleanup for sessions already marked failed", async () =
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -313,7 +317,8 @@ test("stopCommand treats an exit during shutdown as stopped instead of failed", 
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -346,7 +351,8 @@ test("stopCommand keeps the stop result when event persistence fails", async () 
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -366,7 +372,7 @@ test("stopCommand keeps the stop result when event persistence fails", async () 
     assert.equal(sessions[0]?.runtimePid, null);
     const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
     assert.equal(events.length, 1);
-    assert.equal(events[0]?.eventType, "sling.started");
+    assert.equal(events[0]?.eventType, "sling.completed");
   } finally {
     await removeTempDir(repoDir);
   }

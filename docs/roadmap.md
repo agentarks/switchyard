@@ -28,15 +28,15 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Decide whether pid-only lifecycle control is sufficient or whether tmux should replace or augment it:
-- validate the current detached-pid stop path against the now clearer readiness boundary
-- keep the decision grounded in the single-repo, single-agent operator loop
-- prefer a narrow decision and follow-up slice over broad runtime-control expansion
+Decide whether pid-only lifecycle control is sufficient for v0 or whether tmux needs to land next:
+- evaluate the current spawn/status/stop guarantees against concrete operator needs
+- make the decision explicit in docs or an ADR
+- keep the scope narrow to one repo-local Codex workflow
 
 Why this is next:
-- the post-launch ready-or-failed boundary is now explicit in the operator loop
-- the next unresolved operator risk is whether stop and later control semantics remain trustworthy without tmux
-- resolving that boundary is more important than adding broader runtime features or abstractions
+- the launch boundary is now clearer, so the biggest unresolved lifecycle assumption is runtime control
+- the current stop path is still pid-based only, but tmux remains an open decision rather than an explicit choice
+- resolving that decision reduces risk before merge or broader lifecycle work adds more surface area
 
 ## Order After That
 
