@@ -2,7 +2,7 @@ import { relative } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
-import { listLatestEventsBySession, recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
+import { listLatestEventsBySession, recordEventBestEffort, type EventRecorder } from "../events/store.js";
 import type { EventPayloadValue, EventRecord } from "../events/types.js";
 import { isProcessAlive } from "../runtimes/process.js";
 import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
@@ -26,7 +26,7 @@ export function createStatusCommand(): Command {
 
 export async function statusCommand(options: StatusOptions = {}): Promise<void> {
   const config = await loadConfig(options.startDir);
-  await reconcileSessionLifecycles(
+  const reconciledEventsBySession = await reconcileSessionLifecycles(
     config.project.root,
     options.isRuntimeAlive ?? isProcessAlive,
     options.recordEvent ?? recordEventBestEffort,
@@ -49,7 +49,9 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 
   for (const session of sessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
-    const recentEvent = formatRecentEventSummary(latestEventsBySession.get(session.id));
+    const recentEvent = formatRecentEventSummary(
+      reconciledEventsBySession.get(session.id) ?? latestEventsBySession.get(session.id)
+    );
     process.stdout.write(
       `${session.state}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${recentEvent}\n`
     );
@@ -61,8 +63,9 @@ async function reconcileSessionLifecycles(
   isRuntimeAlive: (pid: number) => boolean,
   recordEvent: EventRecorder,
   now: () => string
-): Promise<void> {
+): Promise<Map<string, EventRecord>> {
   const sessions = await listSessions(projectRoot);
+  const reconciledEventsBySession = new Map<string, EventRecord>();
 
   for (const session of sessions) {
     if (!isActiveSessionState(session.state)) {
@@ -83,7 +86,10 @@ async function reconcileSessionLifecycles(
       updatedAt: createdAt
     });
 
-    await recordEventWithFallback(recordEvent, projectRoot, {
+    const reconciledEvent = buildReconciledEvent(nextSession, nextState.eventType, nextState.payload, createdAt);
+    reconciledEventsBySession.set(nextSession.id, reconciledEvent);
+
+    await recordEventBestEffortForStatus(recordEvent, projectRoot, {
       sessionId: nextSession.id,
       agentName: nextSession.agentName,
       eventType: nextState.eventType,
@@ -91,6 +97,8 @@ async function reconcileSessionLifecycles(
       payload: nextState.payload
     });
   }
+
+  return reconciledEventsBySession;
 }
 
 function formatWorktreePath(projectRoot: string, worktreePath: string): string {
@@ -193,6 +201,38 @@ function determineNextLifecycleState(
       reason: "pid_not_alive"
     }
   };
+}
+
+function buildReconciledEvent(
+  session: SessionRecord,
+  eventType: string,
+  payload: Record<string, EventPayloadValue>,
+  createdAt: string
+): EventRecord {
+  return {
+    id: `status-reconciled:${session.id}:${createdAt}:${eventType}`,
+    sessionId: session.id,
+    agentName: session.agentName,
+    eventType,
+    payload,
+    createdAt
+  };
+}
+
+async function recordEventBestEffortForStatus(
+  recordEvent: EventRecorder,
+  projectRoot: string,
+  event: Omit<EventRecord, "id">
+): Promise<void> {
+  try {
+    await recordEvent(projectRoot, event);
+  } catch (error) {
+    process.stderr.write(`WARN: failed to persist event '${event.eventType}': ${formatErrorMessage(error)}\n`);
+  }
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {

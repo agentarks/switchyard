@@ -270,6 +270,66 @@ test("statusCommand marks stale running sessions as failed", async () => {
   );
 });
 
+test("statusCommand shows the reconciled recent event even when event persistence fails", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "agent-event-fail",
+    agentName: "agent-event-fail",
+    branch: "agents/agent-event-fail",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-event-fail"),
+    state: "running",
+    runtimePid: 9090,
+    createdAt: "2026-03-06T09:00:00.000Z",
+    updatedAt: "2026-03-06T10:00:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "agent-event-fail",
+    agentName: "agent-event-fail",
+    eventType: "sling.started",
+    payload: {
+      runtimePid: 9090
+    },
+    createdAt: "2026-03-06T09:30:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false,
+      now: () => "2026-03-08T10:00:00.000Z",
+      recordEvent: async () => {
+        throw new Error("events unavailable");
+      }
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(sessions[0]?.runtimePid, null);
+
+    const events = await listEvents(repoDir, { sessionId: "agent-event-fail" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "sling.started");
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(
+    output,
+    /failed\tagent-event-fail\tagents\/agent-event-fail\t\.switchyard\/worktrees\/agent-event-fail\t2026-03-08T10:00:00.000Z\t2026-03-08T10:00:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=9090/
+  );
+  assert.doesNotMatch(output, /failed\tagent-event-fail[^\n]*sling\.started/);
+});
+
 test("statusCommand marks starting sessions that die before readiness as failed", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
