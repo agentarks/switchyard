@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
-import { createSession, listSessions } from "../sessions/store.js";
+import { createSession, listSessions, updateSessionState } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
 import { slingCommand } from "./sling.js";
+import { statusCommand } from "./status.js";
 import { stopCommand } from "./stop.js";
 
 test("stopCommand stops a running session and preserves the worktree by default", async () => {
@@ -156,6 +157,125 @@ test("stopCommand marks legacy running sessions without a pid as failed", async 
   const output = writes.join("");
   assert.match(output, /has no recorded runtime pid\. Marked failed\./);
   assert.match(output, /Worktree preserved: \.switchyard\/worktrees\/legacy-agent/);
+});
+
+test("stopCommand cleans up legacy running sessions without a pid when requested", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-legacy-cleanup");
+
+  try {
+    await slingCommand({
+      agentName: "Agent Legacy Cleanup",
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 7373,
+          command: {
+            command: "codex",
+            args: []
+          }
+        };
+      }
+    });
+
+    const sessions = await listSessions(repoDir);
+    const sessionId = sessions[0]?.id;
+    assert.ok(sessionId);
+
+    await updateSessionState(repoDir, {
+      id: sessionId,
+      state: "running",
+      runtimePid: null
+    });
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await stopCommand({
+      selector: "agent-legacy-cleanup",
+      cleanup: true,
+      startDir: repoDir
+    });
+
+    await assert.rejects(async () => {
+      await access(worktreePath);
+    });
+    await assert.rejects(async () => {
+      await git(repoDir, ["rev-parse", "--verify", "agents/agent-legacy-cleanup"]);
+    });
+
+    const nextSessions = await listSessions(repoDir);
+    assert.equal(nextSessions[0]?.state, "failed");
+    assert.equal(nextSessions[0]?.runtimePid, null);
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /has no recorded runtime pid\. Marked failed\./);
+  assert.match(output, /Cleanup: removed worktree and branch\./);
+});
+
+test("stopCommand allows cleanup for sessions already marked failed", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-stale-cleanup");
+
+  try {
+    await slingCommand({
+      agentName: "Agent Stale Cleanup",
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 8484,
+          command: {
+            command: "codex",
+            args: []
+          }
+        };
+      }
+    });
+
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false
+    });
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await stopCommand({
+      selector: "agent-stale-cleanup",
+      cleanup: true,
+      startDir: repoDir
+    });
+
+    await assert.rejects(async () => {
+      await access(worktreePath);
+    });
+    await assert.rejects(async () => {
+      await git(repoDir, ["rev-parse", "--verify", "agents/agent-stale-cleanup"]);
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(sessions[0]?.runtimePid, null);
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Session agent-stale-cleanup is already failed\./);
+  assert.match(output, /Cleanup: removed worktree and branch\./);
 });
 
 test("stopCommand treats an exit during shutdown as stopped instead of failed", async () => {

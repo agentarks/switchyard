@@ -42,12 +42,25 @@ export function createStopCommand(): Command {
 export async function stopCommand(options: StopCommandOptions): Promise<void> {
   const config = await loadConfig(options.startDir);
   const session = await resolveSession(config.project.root, options.selector);
+  const removeSessionWorktree = options.removeSessionWorktree ?? removeWorktree;
 
   if (!session) {
     throw new StopError(`No session found for '${options.selector}'.`);
   }
 
   if (session.state !== "running") {
+    if (options.cleanup) {
+      await cleanupSessionArtifacts({
+        projectRoot: config.project.root,
+        canonicalBranch: config.project.canonicalBranch,
+        session,
+        removeSessionWorktree
+      });
+      process.stdout.write(`Session ${session.agentName} is already ${session.state}.\n`);
+      process.stdout.write("Cleanup: removed worktree and branch.\n");
+      return;
+    }
+
     throw new StopError(`Session '${options.selector}' is already ${session.state}.`);
   }
 
@@ -58,7 +71,17 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       runtimePid: null
     });
     process.stdout.write(`Session ${session.agentName} has no recorded runtime pid. Marked failed.\n`);
-    process.stdout.write(`Worktree preserved: ${formatRelativePath(config.project.root, session.worktreePath)}\n`);
+    if (options.cleanup) {
+      await cleanupSessionArtifacts({
+        projectRoot: config.project.root,
+        canonicalBranch: config.project.canonicalBranch,
+        session,
+        removeSessionWorktree
+      });
+      process.stdout.write("Cleanup: removed worktree and branch.\n");
+    } else {
+      process.stdout.write(`Worktree preserved: ${formatRelativePath(config.project.root, session.worktreePath)}\n`);
+    }
     return;
   }
 
@@ -82,19 +105,12 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
   });
 
   if (options.cleanup) {
-    const removeSessionWorktree = options.removeSessionWorktree ?? removeWorktree;
-
-    try {
-      await removeSessionWorktree(config.project.root, {
-        agentName: session.agentName,
-        branch: session.branch,
-        path: session.worktreePath,
-        baseBranch: config.project.canonicalBranch
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new StopError(`Stopped ${session.agentName}, but cleanup failed: ${message}`);
-    }
+    await cleanupSessionArtifacts({
+      projectRoot: config.project.root,
+      canonicalBranch: config.project.canonicalBranch,
+      session,
+      removeSessionWorktree
+    });
   }
 
   if (nextState === "failed") {
@@ -118,6 +134,25 @@ async function resolveSession(projectRoot: string, selector: string): Promise<Se
   }
 
   return await findLatestSessionByAgent(projectRoot, normalizeAgentName(selector));
+}
+
+async function cleanupSessionArtifacts(options: {
+  projectRoot: string;
+  canonicalBranch: string;
+  session: SessionRecord;
+  removeSessionWorktree: typeof removeWorktree;
+}): Promise<void> {
+  try {
+    await options.removeSessionWorktree(options.projectRoot, {
+      agentName: options.session.agentName,
+      branch: options.session.branch,
+      path: options.session.worktreePath,
+      baseBranch: options.canonicalBranch
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new StopError(`Cleanup failed for ${options.session.agentName}: ${message}`);
+  }
 }
 
 function formatRelativePath(projectRoot: string, path: string): string {
