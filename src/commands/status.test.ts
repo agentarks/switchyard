@@ -164,6 +164,53 @@ test("statusCommand prints the latest event summary for each session", async () 
   );
 });
 
+test("statusCommand includes the readiness detail for a freshly launched session", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-ready",
+    agentName: "agent-ready",
+    branch: "agents/agent-ready",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-ready"),
+    state: "running",
+    runtimePid: 2222,
+    createdAt: "2026-03-08T11:00:00.000Z",
+    updatedAt: "2026-03-08T11:00:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-ready",
+    agentName: "agent-ready",
+    eventType: "sling.completed",
+    payload: {
+      runtimePid: 2222,
+      readyAfterMs: 500
+    },
+    createdAt: "2026-03-08T11:01:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 2222
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /running\tagent-ready\tagents\/agent-ready\t\.switchyard\/worktrees\/agent-ready\t2026-03-08T11:00:00.000Z\t2026-03-08T11:01:00.000Z sling\.completed runtimePid=2222, readyAfterMs=500/
+  );
+});
+
 test("statusCommand does not leak unknown event payload fields into the recent summary", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];

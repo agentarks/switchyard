@@ -7,6 +7,7 @@ import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } fr
 import { SlingError } from "../errors.js";
 import { createSession } from "../sessions/store.js";
 import {
+  type SpawnedRuntimeProcess,
   type SpawnedRuntimeSession,
   spawnCodexSession
 } from "../runtimes/codex/index.js";
@@ -16,7 +17,12 @@ interface SlingOptions {
   agentName: string;
   runtimeArgs?: string[];
   startDir?: string;
-  spawnRuntime?: (options: { agentName: string; runtimeArgs: string[]; worktreePath: string }) => Promise<SpawnedRuntimeSession>;
+  spawnRuntime?: (options: {
+    agentName: string;
+    runtimeArgs: string[];
+    worktreePath: string;
+    onSpawned?: (runtime: SpawnedRuntimeProcess) => Promise<void>;
+  }) => Promise<SpawnedRuntimeSession>;
   recordEvent?: EventRecorder;
 }
 
@@ -51,7 +57,21 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     runtimeSession = await spawnRuntime({
       agentName: managedWorktree.agentName,
       runtimeArgs,
-      worktreePath: managedWorktree.path
+      worktreePath: managedWorktree.path,
+      onSpawned: async (spawnedRuntime) => {
+        await recordEventWithFallback(recordEvent, config.project.root, {
+          sessionId,
+          agentName: managedWorktree.agentName,
+          eventType: "sling.spawned",
+          createdAt: new Date().toISOString(),
+          payload: {
+            branch: managedWorktree.branch,
+            worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
+            runtimePid: spawnedRuntime.pid,
+            runtimeCommand: formatRuntimeCommand(spawnedRuntime)
+          }
+        });
+      }
     });
   } catch (error) {
     const cleanupError = await cleanupFailedLaunch(config.project.root, managedWorktree);
@@ -106,7 +126,8 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       branch: managedWorktree.branch,
       worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
       runtimePid: runtimeSession.pid,
-      runtimeCommand: formatRuntimeCommand(runtimeSession)
+      runtimeCommand: formatRuntimeCommand(runtimeSession),
+      readyAfterMs: runtimeSession.readyAfterMs
     }
   });
 
@@ -114,6 +135,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   process.stdout.write(`Branch: ${managedWorktree.branch}\n`);
   process.stdout.write(`Worktree: ${formatRelativePath(config.project.root, managedWorktree.path)}\n`);
   process.stdout.write(`Runtime: ${formatRuntimeCommand(runtimeSession)}\n`);
+  process.stdout.write(`Ready: initial launch check passed after ${runtimeSession.readyAfterMs}ms\n`);
 }
 
 function formatRelativePath(projectRoot: string, path: string): string {
@@ -121,7 +143,7 @@ function formatRelativePath(projectRoot: string, path: string): string {
   return relativePath.length > 0 ? relativePath : ".";
 }
 
-function formatRuntimeCommand(runtimeSession: SpawnedRuntimeSession): string {
+function formatRuntimeCommand(runtimeSession: SpawnedRuntimeProcess): string {
   const parts = [runtimeSession.command.command, ...runtimeSession.command.args];
   return parts.join(" ");
 }

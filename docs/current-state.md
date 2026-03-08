@@ -25,10 +25,12 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - session records that now retain the spawned runtime pid
 - worktree manager with deterministic branch and path naming
 - narrow Codex runtime seam that builds and spawns one detached command
+- initial readiness waiting that requires the spawned Codex process to survive a short launch window before the session is marked usable
 - narrow process liveness and stop helpers for detached Codex sessions
 - durable lifecycle event appends around `sy sling`, `sy stop`, `sy mail send`, and `sy mail check`
+- spawn lifecycle events that now distinguish `sling.spawned` from `sling.completed`
 - first operator-facing event inspection path over `events.db`
-- status output that now joins each session to its latest durable event context
+- status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
 - regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
 
 ## What Does Not Exist Yet
@@ -52,13 +54,15 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - creates one deterministic branch under `agents/`
   - creates one worktree under `.switchyard/worktrees/`
   - spawns one Codex process from that worktree
-  - persists one session record as `running`
+  - records `sling.spawned` once the runtime pid exists
+  - waits for one short initial readiness window before persisting the session as `running`
+  - records `sling.failed` when the runtime exits during that launch window
 - `sy status [args...]`
   - loads config and session state
   - marks obviously stale `running` pid-backed sessions as `failed`
   - prints an empty-state message when no sessions exist
   - prints a tab-separated session table ordered by most recent update
-  - includes one concise recent-event summary per session when event history exists
+  - includes one concise recent-event summary per session when event history exists, including `readyAfterMs` for fresh `sling.completed` events
 - `sy stop <session>`
   - resolves one session by id or normalized agent name
   - stops one pid-backed runtime and updates durable session state
@@ -79,17 +83,18 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `node:sqlite` is still experimental in Node 25, so the SQLite choice may need revision if core API churn becomes painful.
 - there is no end-to-end test around `sy init`.
 - the current stop path is pid-based only; tmux-backed control is still deferred.
+- the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.
 - older pre-pid session rows cannot be liveness-checked automatically.
 - `sy events <selector>` currently resolves in this order: exact session row by id, orphaned events by raw `session_id`, then latest session by normalized agent name. That preserves orphaned event readability, but it means a raw selector that could plausibly match both an orphaned session id and an agent name will prefer the orphaned session-id path until the CLI grows explicit selector disambiguation.
 
 ## Recommended Next Task
 
-Define readiness and failure handling for the first spawned session:
-- distinguish process launch from a usable agent session
-- make early runtime failure states clearer in the operator loop
-- keep the implementation narrow and grounded in the existing Codex runtime seam
+Decide whether pid-only lifecycle control is sufficient for v0 or whether tmux needs to land next:
+- compare the current pid-based spawn/status/stop loop against the concrete operator failure cases
+- make the decision explicit in docs or an ADR instead of leaving tmux as an unresolved assumption
+- keep the scope narrow to the current single-repo Codex workflow
 
-That should tighten the weakest remaining part of the first operator loop: the moments right after `sy sling` succeeds but before the session is clearly usable or clearly failed.
+That is the next highest-risk ambiguity in the operator loop now that the first launch boundary is clearer.
 
 ## How To Use This File
 

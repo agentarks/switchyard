@@ -27,7 +27,8 @@ test("stopCommand stops a running session and preserves the worktree by default"
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -84,7 +85,8 @@ test("stopCommand removes the worktree and branch when cleanup is requested", as
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -186,7 +188,8 @@ test("stopCommand cleans up legacy running sessions without a pid when requested
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -253,7 +256,8 @@ test("stopCommand allows cleanup for sessions already marked failed", async () =
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -312,7 +316,8 @@ test("stopCommand treats an exit during shutdown as stopped instead of failed", 
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
@@ -345,7 +350,8 @@ test("stopCommand keeps the stop result when event persistence fails", async () 
           command: {
             command: "codex",
             args: []
-          }
+          },
+          readyAfterMs: 500
         };
       }
     });
