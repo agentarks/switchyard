@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { createInitCommand } from "./commands/init.js";
 import { createSlingCommand } from "./commands/sling.js";
 import { createPlaceholderCommand } from "./commands/placeholder.js";
+import { createStopCommand } from "./commands/stop.js";
 import { createStatusCommand } from "./commands/status.js";
 import { SwitchyardError } from "./errors.js";
 
@@ -18,7 +19,7 @@ async function main(): Promise<void> {
   program.addCommand(createInitCommand());
   program.addCommand(createSlingCommand());
   program.addCommand(createStatusCommand());
-  program.addCommand(createPlaceholderCommand("stop", "Stop a running agent"));
+  program.addCommand(createStopCommand());
   program.addCommand(createPlaceholderCommand("mail", "Send or check inter-agent mail"));
 
   try {

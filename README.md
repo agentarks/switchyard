@@ -11,9 +11,10 @@ Switchyard is a very early-stage custom fork in the Overstory problem space, but
 Current status:
 - `sy init` is implemented
 - `sy sling` creates one worktree-backed Codex session and persists it
-- `sy status` is implemented with a minimal SQLite-backed session store
-- `sy stop` and `sy mail` are still placeholders
-- config, worktree, session-store, sling, and status regression tests are in place
+- `sy status` is implemented with SQLite-backed session state and narrow liveness checks
+- `sy stop` stops one tracked session and supports optional `--cleanup`
+- `sy mail` is still a placeholder
+- config, worktree, session-store, sling, status, and stop regression tests are in place
 
 Development:
 - `npm run build`

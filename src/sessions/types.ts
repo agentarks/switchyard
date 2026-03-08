@@ -6,6 +6,7 @@ export interface SessionRecord {
   branch: string;
   worktreePath: string;
   state: SessionState;
+  runtimePid: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -16,6 +17,14 @@ export interface CreateSessionInput {
   branch: string;
   worktreePath: string;
   state: SessionState;
+  runtimePid?: number | null;
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UpdateSessionStateInput {
+  id: string;
+  state: SessionState;
+  runtimePid?: number | null;
   updatedAt?: string;
 }

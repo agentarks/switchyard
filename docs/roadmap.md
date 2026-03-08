@@ -22,22 +22,22 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Implement the first real stop and cleanup path:
-- add a narrow liveness lookup for the spawned Codex session
-- replace the `stop` placeholder with one-session lifecycle control
-- define when worktrees remain on disk versus when they are removed
+Implement the first real mail path:
+- add schema ownership and helpers for `mail.db`
+- replace the `mail` placeholder with one narrow send/check flow
+- keep the surface small enough to revise after operator usage
 
 Why this is next:
-- the repo can now initialize, spawn one session, and inspect it
-- `sy stop` is the next missing step in the operator lifecycle
-- stop/cleanup work will reveal whether the current session schema needs pid or tmux metadata
+- the repo can now initialize, spawn one session, inspect it, and stop it cleanly
+- `sy mail` is now the next missing MVP primitive
+- mail can advance operator usefulness without dragging runtime control into a larger redesign
 
 ## Order After That
 
-1. `sy stop` with liveness and cleanup rules
-2. mail store and basic operator messaging
-3. events and richer inspection
-4. richer session metadata if lifecycle control requires it
+1. mail store and basic operator messaging
+2. events and richer inspection
+3. tmux or richer runtime metadata only if the pid-based stop path proves too narrow
+4. merge and reintegration workflow
 
 ## Explicitly Deferred
 
@@ -56,4 +56,4 @@ Before moving past the core lifecycle, resolve these with code or an ADR:
 - whether Node built-ins remain sufficient for SQLite
 - whether tmux is a hard dependency for v1
 - whether mail truly belongs in MVP or should follow spawn/status/stop
-- whether session records need pid/tmux fields before `stop` stabilizes
+- whether the pid-based stop path is sufficient before tmux-backed control is added

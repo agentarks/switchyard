@@ -58,23 +58,25 @@ Current contract:
 - command exists and accepts positional arguments reserved for future filters
 - command loads `.switchyard/config.yaml` from the canonical repo root
 - command reads durable session state from `sessions.db`
+- command marks obviously stale pid-backed `running` sessions as `failed`
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
 - when sessions exist, print a concise tab-separated table ordered by most recent update
 
 Future target:
-- check liveness where needed
 - show concise operator-friendly status for active and recent sessions
 
-## `sy stop [args...]`
+## `sy stop <session>`
 
 Current contract:
-- command exists and accepts positional arguments
-- command is a placeholder until process/session control exists
+- command resolves one session by id or normalized agent name
+- command stops one pid-backed runtime cleanly
+- command updates durable session state in `sessions.db`
+- command preserves the worktree by default
+- command removes the worktree and branch when `--cleanup` is passed
 
 Future target:
-- stop a running agent cleanly
-- update durable session state
-- clean up worktree state deliberately
+- add tmux-backed control if pid-only stop proves too narrow
+- refine operator-facing output around stale or missing runtime state
 
 ## `sy mail [args...]`
 

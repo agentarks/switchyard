@@ -70,6 +70,7 @@ test("listSessions returns inserted sessions ordered by most recent update", asy
       branch: "agents/agent-one",
       worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-one"),
       state: "running",
+      runtimePid: 1234,
       createdAt: "2026-03-06T09:00:00.000Z",
       updatedAt: "2026-03-06T10:00:00.000Z"
     });
@@ -79,6 +80,7 @@ test("listSessions returns inserted sessions ordered by most recent update", asy
       branch: "agents/agent-two",
       worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-two"),
       state: "stopped",
+      runtimePid: null,
       createdAt: "2026-03-06T11:00:00.000Z",
       updatedAt: "2026-03-06T12:00:00.000Z"
     });
@@ -94,6 +96,7 @@ test("listSessions returns inserted sessions ordered by most recent update", asy
       branch: "agents/agent-two",
       worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-two"),
       state: "stopped",
+      runtimePid: null,
       createdAt: "2026-03-06T11:00:00.000Z",
       updatedAt: "2026-03-06T12:00:00.000Z"
     });

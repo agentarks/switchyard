@@ -49,6 +49,7 @@ test("slingCommand creates a worktree and persists a running session", async () 
   assert.notEqual(sessions[0]?.id, "agent-one");
   assert.equal(sessions[0]?.agentName, "agent-one");
   assert.deepEqual(sessions[0]?.state, "running");
+  assert.equal(sessions[0]?.runtimePid, 4242);
   assert.equal(sessions[0]?.branch, "agents/agent-one");
   assert.equal(sessions[0]?.worktreePath, join(repoDir, ".switchyard", "worktrees", "agent-one"));
   assert.match(writes.join(""), /Spawned agent-one/);
@@ -83,7 +84,10 @@ test("statusCommand shows a session created by slingCommand", async () => {
     });
 
     writes.length = 0;
-    await statusCommand({ startDir: repoDir });
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 31337
+    });
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);
@@ -157,7 +161,9 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
     assert.equal(attempts, 2);
     assert.equal(agentThreeSessions.length, 2);
     assert.equal(agentThreeSessions[0]?.state, "running");
+    assert.equal(agentThreeSessions[0]?.runtimePid, 2027);
     assert.equal(agentThreeSessions[1]?.state, "failed");
+    assert.equal(agentThreeSessions[1]?.runtimePid, null);
     assert.notEqual(agentThreeSessions[0]?.id, agentThreeSessions[1]?.id);
     assert.match(writes.join(""), /Spawned agent-three/);
   } finally {
