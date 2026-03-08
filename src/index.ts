@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { createInitCommand } from "./commands/init.js";
+import { createSlingCommand } from "./commands/sling.js";
 import { createPlaceholderCommand } from "./commands/placeholder.js";
 import { createStatusCommand } from "./commands/status.js";
 import { SwitchyardError } from "./errors.js";
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
     .version("0.1.0");
 
   program.addCommand(createInitCommand());
-  program.addCommand(createPlaceholderCommand("sling", "Spawn an agent into an isolated worktree"));
+  program.addCommand(createSlingCommand());
   program.addCommand(createStatusCommand());
   program.addCommand(createPlaceholderCommand("stop", "Stop a running agent"));
   program.addCommand(createPlaceholderCommand("mail", "Send or check inter-agent mail"));

@@ -4,47 +4,45 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Build the first real worktree and spawn path so Switchyard can create one tracked agent session.
+Build the first real stop path so Switchyard can stop one tracked agent session cleanly.
 
 Target outcome:
-- the project has one worktree manager module
-- naming rules for branches and worktree directories are deterministic
-- `sy sling` is no longer a placeholder
-- one spawned session is persisted into the existing session store
+- `sy stop` is no longer a placeholder
+- one persisted session can be transitioned away from `running`
+- liveness checks are narrow but real
+- cleanup behavior for stopped worktrees is explicit
 
 ## Why This Is Next
 
-This is the shortest path from scaffold to a real orchestration loop.
+This is the shortest path from spawn-only behavior to a real lifecycle loop.
 
-Without a real spawn path:
-- `status` has nothing live or operator-created to inspect
-- `stop` still has no real lifecycle target
-- the current session schema is not validated by actual command flow
+Without a real stop path:
+- `status` cannot distinguish live sessions from stale rows
+- spawned worktrees accumulate without operator control
+- the current session schema is not validated against lifecycle control
 
 ## Exact Order
 
-1. Create `src/worktrees/`
-   - add deterministic branch naming
-   - add deterministic worktree path naming
+1. Decide the minimum runtime metadata needed for stop
+   - pid only, tmux only, or explicit deferral
+   - keep the schema narrow if possible
 
-2. Add worktree tests
-   - root repo invocation
-   - nested directory invocation
-   - collision handling rules if needed
+2. Add narrow liveness lookup
+   - enough to detect obvious stale sessions
+   - no watchdog or background automation
 
-3. Add a narrow Codex runtime seam
-   - enough structure to build a command line
-   - no multi-runtime abstractions yet
+3. Replace the `stop` placeholder
+   - locate one persisted session
+   - stop the runtime cleanly
+   - update durable session state
 
-4. Replace the `sling` placeholder
-   - validate config
-   - create the worktree
-   - persist one session record
-   - leave tmux/process liveness small if possible
+4. Define cleanup behavior
+   - default whether worktrees remain or are removed
+   - add guardrails for active or missing paths
 
 5. Add command tests
-   - `sy sling` from an initialized repo
-   - resulting session can be seen via `sy status`
+   - `sy stop` from an initialized repo with one spawned session
+   - resulting state can be seen via `sy status`
 
 6. Update docs
    - `docs/current-state.md`
@@ -53,7 +51,6 @@ Without a real spawn path:
 ## What To Keep Small
 
 Do not build these in the same slice unless the implementation forces it:
-- tmux integration
 - full process supervision
 - mail
 - events
@@ -63,16 +60,16 @@ Do not build these in the same slice unless the implementation forces it:
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- `sy sling` is no longer a placeholder
-- one session can be created through the command path
-- tests cover the first worktree + persisted-session path
+- `sy stop` is no longer a placeholder
+- one spawned session can be stopped through the command path
+- tests cover the first stop + state-transition path
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- spawn less runtime state
-- defer tmux
-- persist fewer fields if the command path works
+- stop less runtime state
+- defer tmux if pid-based control is enough
+- remove fewer artifacts if the command path works
 
-The point of this slice is to make the first real agent lifecycle real, not to perfect runtime control.
+The point of this slice is to complete the first real agent lifecycle, not to perfect supervision.

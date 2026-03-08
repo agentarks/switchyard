@@ -5,6 +5,8 @@
 Switchyard is in early scaffold/bootstrap territory:
 - M1 scaffold is effectively present
 - M2 repo bootstrap is effectively complete
+- M3 session persistence is effectively complete
+- M4 agent spawn is now minimally real for one Codex session
 - later milestones remain design targets, not implementation commitments
 
 ## Near-Term Rule
@@ -20,24 +22,22 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Build the first real worktree and spawn path:
-- add a worktree manager with deterministic naming rules
-- keep `sy sling` narrow: one worktree, one runtime target, one persisted session
-- reuse the existing session store instead of expanding storage scope
+Implement the first real stop and cleanup path:
+- add a narrow liveness lookup for the spawned Codex session
+- replace the `stop` placeholder with one-session lifecycle control
+- define when worktrees remain on disk versus when they are removed
 
 Why this is next:
-- the repo now has durable session state and a real `sy status`
-- `sy sling` is the next missing step in the operator lifecycle
-- it tests whether the current session schema is sufficient before `stop` depends on it
+- the repo can now initialize, spawn one session, and inspect it
+- `sy stop` is the next missing step in the operator lifecycle
+- stop/cleanup work will reveal whether the current session schema needs pid or tmux metadata
 
 ## Order After That
 
-1. worktree manager and naming rules
-2. Codex runtime spawn path for one worker
-3. wire `sy sling` to create and persist one session
-4. `sy stop` with liveness and cleanup rules
-5. mail store and basic operator messaging
-6. events and richer inspection
+1. `sy stop` with liveness and cleanup rules
+2. mail store and basic operator messaging
+3. events and richer inspection
+4. richer session metadata if lifecycle control requires it
 
 ## Explicitly Deferred
 
@@ -56,4 +56,4 @@ Before moving past the core lifecycle, resolve these with code or an ADR:
 - whether Node built-ins remain sufficient for SQLite
 - whether tmux is a hard dependency for v1
 - whether mail truly belongs in MVP or should follow spawn/status/stop
-- where git helpers should live once `config.ts` starts growing again
+- whether session records need pid/tmux fields before `stop` stabilizes

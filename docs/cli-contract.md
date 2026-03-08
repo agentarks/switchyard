@@ -41,14 +41,16 @@ Failure rules:
 ## `sy sling [args...]`
 
 Current contract:
-- command exists and accepts positional arguments
-- command is a placeholder until worktree/session/runtime behavior is implemented
-- current output should make it clear the command is planned but not implemented
+- command requires one `<agent>` argument and accepts additional positional runtime args
+- command loads config from the canonical repo root
+- command creates one deterministic branch and worktree under `.switchyard/worktrees/`
+- command starts one Codex process from that worktree
+- command persists one session record in `sessions.db`
+- command prints the created branch, worktree path, and runtime command line
 
 Future target:
-- create one isolated worktree
-- prepare one Codex worker session
-- persist one session record
+- add richer task/instruction inputs
+- add tmux/session metadata once lifecycle control is implemented
 
 ## `sy status [args...]`
 
@@ -72,7 +74,7 @@ Current contract:
 Future target:
 - stop a running agent cleanly
 - update durable session state
-- optionally clean up worktree state later
+- clean up worktree state deliberately
 
 ## `sy mail [args...]`
 

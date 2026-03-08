@@ -19,3 +19,21 @@ export class InitError extends SwitchyardError {
     super(message, "INIT_ERROR");
   }
 }
+
+export class WorktreeError extends SwitchyardError {
+  constructor(message: string) {
+    super(message, "WORKTREE_ERROR");
+  }
+}
+
+export class RuntimeError extends SwitchyardError {
+  constructor(message: string) {
+    super(message, "RUNTIME_ERROR");
+  }
+}
+
+export class SlingError extends SwitchyardError {
+  constructor(message: string) {
+    super(message, "SLING_ERROR");
+  }
+}
