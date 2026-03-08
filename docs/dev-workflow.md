@@ -8,6 +8,7 @@ This file is the recommended owner workflow for a normal Switchyard coding sessi
    - `docs/current-state.md`
    - `docs/next-steps.md`
    - `docs/backlog.md`
+   - `docs/focus-tracker.md`
 
 2. If the task touches behavior or architecture, also read:
    - `docs/cli-contract.md`
@@ -58,3 +59,5 @@ Ask these questions before adding complexity:
 - can this be tested in this session?
 
 If the answer is no to all three, defer it.
+
+Also check `docs/focus-tracker.md` before starting work that introduces a new subsystem or a broader UI surface.

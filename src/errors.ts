@@ -49,3 +49,9 @@ export class MailError extends SwitchyardError {
     super(message, "MAIL_ERROR");
   }
 }
+
+export class EventsError extends SwitchyardError {
+  constructor(message: string) {
+    super(message, "EVENTS_ERROR");
+  }
+}
