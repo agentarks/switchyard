@@ -16,6 +16,7 @@ For the current v0 loop, reintegration is still manual-first even though `sy mer
 1. Reach a stable session state.
    - Run `sy status`.
    - If the session is still `starting` or `running`, run `sy stop <session>`.
+   - If you include `--cleanup` too early, Switchyard still stops the active session first and then preserves the work unless cleanup is confirmed safe or you passed explicit `--abandon`.
    - Do not pass `--cleanup` before you have either merged or deliberately abandoned the work.
 
 2. Review the preserved branch and worktree.
@@ -40,7 +41,8 @@ git merge --no-ff agents/<agent-name>
    - If you decide not to keep the work, treat that as an explicit abandon decision.
 
 5. Clean up only after the outcome is known.
-   - After a successful merge, or after an explicit abandon decision, remove the preserved branch and worktree with `sy stop <session> --cleanup`.
+   - After a successful merge, remove the preserved branch and worktree with `sy stop <session> --cleanup`.
+   - After an explicit abandon decision, discard the preserved branch and worktree with `sy stop <session> --cleanup --abandon`.
 
 ## Why This Is Manual First
 
@@ -69,3 +71,4 @@ The current `sy merge <session>` path:
 - runs the same explicit merge contract from this document
 
 It does not replace operator review, manual conflict resolution, post-merge validation, or explicit cleanup.
+The corresponding cleanup path is also intentionally narrow: plain `--cleanup` is safe cleanup after merge, while `--cleanup --abandon` is explicit discard.

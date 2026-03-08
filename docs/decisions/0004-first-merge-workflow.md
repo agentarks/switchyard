@@ -9,12 +9,12 @@ Accepted
 Switchyard now supports the core repo-local operator loop:
 - `sy sling` creates a deterministic `agents/*` branch and a repo-local worktree
 - `sy status` and `sy events` expose enough durable state to understand what happened
-- `sy stop` can stop the runtime while preserving the worktree by default or removing it with `--cleanup`
+- `sy stop` can stop the runtime while preserving the worktree by default, remove merged artifacts with `--cleanup`, or discard them explicitly with `--cleanup --abandon`
 
 That made the next lifecycle gap explicit: there was still no defined answer for how useful work on an agent branch returns to the canonical branch.
 
 Two risks followed from that gap:
-- cleanup remained ambiguous because `sy stop --cleanup` deletes the branch and worktree that would otherwise be merged
+- cleanup remained ambiguous because `sy stop --cleanup` could delete the branch and worktree that would otherwise be merged
 - any future merge command would be forced to invent operator rules that had not been written down yet
 
 ## Decision
@@ -25,7 +25,8 @@ Working rule:
 - stop active sessions without `--cleanup` until the operator has either merged or abandoned the branch
 - review the preserved branch and worktree with normal git and project checks
 - perform the actual reintegration from the canonical branch with an explicit git merge
-- run `sy stop <session> --cleanup` only after merge success or an explicit abandon decision
+- run `sy stop <session> --cleanup` only after merge success
+- run `sy stop <session> --cleanup --abandon` only after an explicit abandon decision
 
 Command boundary:
 - Switchyard owns session state, event inspection, and cleanup of preserved artifacts
@@ -47,9 +48,9 @@ Positive:
 
 Negative:
 - reintegration is still manual and requires the operator to use git directly
-- cleanup before merge remains a destructive operator choice until a merge command adds stronger preflight checks
+- cleanup before merge remains a destructive operator choice unless the operator uses explicit abandon
 - conflict reporting stays in git rather than Switchyard for now
 
 ## Follow-Up
 
-The next merge-adjacent slice should implement the smallest `sy merge` path that follows this contract instead of redesigning the workflow again.
+The next merge-adjacent slice should keep hardening operator-visible lifecycle behavior without broadening merge automation prematurely.

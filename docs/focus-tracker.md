@@ -32,13 +32,13 @@ Completed enough to count as minimally real:
 - first readiness and early-failure handling as hardening work ahead of M8
 
 Not complete yet:
-- broader merge cleanup ergonomics and any metadata that real recovery work proves necessary
+- broader mail semantics and any metadata that real recovery work proves necessary
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
+- expand mail semantics where the current durable path is still concretely awkward
 - only broaden session metadata if a real merge or recovery workflow needs it
-- improve merge cleanup ergonomics if the first merge path exposes a concrete operator risk
 - improve pid-backed lifecycle control only where the current operator loop is still concretely weak
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes

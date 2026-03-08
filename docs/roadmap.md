@@ -29,21 +29,21 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Validate whether merge or recovery work truly needs richer session metadata:
-- keep the current schema if the new merge path proves it is already sufficient
-- add only the smallest field or contract clarification that removes a concrete operator ambiguity
-- keep cleanup and conflict handling explicit unless real usage shows a safer default is necessary
+Expand mail semantics beyond the first durable unread-only path:
+- keep the message model small, durable, and operator-readable
+- add only the narrowest behavior that removes a concrete operator friction point
+- avoid broad coordination logic while the current repo-local loop is still the target
 
 Why this is next:
-- the merge path is now real, so the repo can judge metadata needs against actual workflow instead of guesses
-- the current branch/worktree/state fields may already be enough for the current scope
-- broadening durable state before that is proven would add complexity without operator value
+- the merge and cleanup paths now cover the main reintegration risk in the current loop
+- mail is the remaining intentionally thin operator-facing path
+- broadening messaging carefully is a better next use of scope than adding more merge machinery without evidence
 
 ## Order After That
 
 1. add richer session metadata only if merge or recovery work truly needs it
-2. improve merge cleanup ergonomics only if the first merge path exposes a real operator problem
-3. broader mail semantics only if operator usage demands them
+2. broader mail semantics after the next narrow improvement only if operator usage still demands them
+3. improve diagnostics only if operator workflows require them
 
 ## Explicitly Deferred
 

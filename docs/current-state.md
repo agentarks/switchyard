@@ -34,6 +34,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - durable runtime reconciliation events for `runtime.ready`, `runtime.exited_early`, and `runtime.exited`
 - first operator-facing event inspection path over `events.db`
 - first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
+- first operator-facing cleanup guard that only removes preserved merge artifacts automatically when the branch is confirmed merged, and otherwise requires explicit `--abandon`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
 - merge lifecycle events for `merge.completed`, `merge.failed`, and `merge.skipped`
 - first-readiness reconciliation in `sy status` that promotes launched sessions to `running` or marks them failed with a durable reason
@@ -80,7 +81,10 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - resolves one session by id or normalized agent name
   - stops one active pid-backed runtime and updates durable session state
   - preserves the worktree by default so the operator can review or merge the branch later
-  - removes the worktree and branch when `--cleanup` is passed
+  - still stops active sessions when `--cleanup` is requested, even if cleanup is later refused
+  - removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the configured canonical branch
+  - requires `--cleanup --abandon` to discard preserved work that is not confirmed merged
+  - reports when preserved cleanup artifacts were already absent instead of claiming removal
 - `sy merge <session>`
   - resolves one session by id or normalized agent name
   - refuses active sessions so merge only runs against preserved work
@@ -106,7 +110,8 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - inspect status, events, mail, and the preserved worktree as needed
 - run `sy merge <session>` to execute the documented repo-root merge path against the configured canonical branch
 - if git reports conflicts, resolve them manually or abort with git from the repo root
-- run cleanup only after the merged result is validated or the branch is explicitly abandoned
+- run `sy stop <session> --cleanup` after the merged result is validated
+- run `sy stop <session> --cleanup --abandon` only after an explicit discard decision
 
 ## Current Risks
 
@@ -118,15 +123,15 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.
 - older pre-pid session rows cannot be liveness-checked automatically.
 - `sy events <selector>` currently resolves in this order: exact session row by id, orphaned events by raw `session_id`, then latest session by normalized agent name. That preserves orphaned event readability, but it means a raw selector that could plausibly match both an orphaned session id and an agent name will prefer the orphaned session-id path until the CLI grows explicit selector disambiguation.
-- the merge path is intentionally narrow: it preflights obvious unsafe states and runs the explicit git merge, but review, conflict resolution, post-merge validation, and cleanup remain manual-first.
+- the merge and cleanup paths are intentionally narrow: they preflight obvious unsafe states and keep review, conflict resolution, post-merge validation, and explicit abandon decisions manual-first.
 
 ## Recommended Next Task
 
-Use the new merge path to validate the existing metadata model before broadening it:
-- only add richer session metadata if merge or recovery work exposes a concrete gap
-- otherwise keep hardening operator-visible lifecycle behavior instead of inventing more stored state
+Expand mail semantics beyond the first durable unread-only path:
+- keep the message model operator-readable and repo-local
+- only broaden the surface where current mail usage is concretely awkward
 
-The merge command removed the biggest missing gap in the repo-local lifecycle. The next slice should stay narrow and evidence-driven.
+The merge path and cleanup guard now cover the main reintegration risk in the current loop. The next slice should stay small and operator-facing.
 
 ## How To Use This File
 

@@ -92,7 +92,11 @@ Current contract:
 - command stops one active pid-backed runtime cleanly
 - command updates durable session state in `sessions.db`
 - command preserves the worktree by default so the operator can still review or merge the branch later
-- command removes the worktree and branch when `--cleanup` is passed
+- command still stops an active session even when a requested cleanup cannot proceed safely
+- command removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the configured canonical branch
+- command requires `--cleanup --abandon` to discard work that is not confirmed merged
+- command rejects `--abandon` unless `--cleanup` is also set
+- command reports already-absent artifacts as already absent instead of reporting a removal that did not happen
 
 Future target:
 - revisit alternate runtime control only if the pid-based path proves too narrow in real operator workflows
@@ -123,10 +127,11 @@ Current contract:
 - operators should review the preserved `agents/*` branch and worktree with normal git and project checks
 - operators may run `sy merge <session>` to execute the documented repo-root merge path
 - operators may still use normal git directly when they intentionally want the manual path
-- operators should run `sy stop <session> --cleanup` only after a successful merge or an explicit abandon decision
+- operators should run `sy stop <session> --cleanup` only after a successful merge
+- operators should run `sy stop <session> --cleanup --abandon` only after an explicit abandon decision
 
 Future target:
-- improve cleanup ergonomics only if the first merge path exposes a concrete operator risk
+- broaden mail semantics only if operator usage justifies it
 
 ## `sy mail`
 
