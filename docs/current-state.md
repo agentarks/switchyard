@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, status, stop, and basic durable mail all work end-to-end.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events, and basic durable mail all work end-to-end.
 
 ## What Exists
 
@@ -23,14 +23,17 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - mail store with schema ownership for `mail.db`
 - event store with schema ownership for `events.db`
 - session records that now retain the spawned runtime pid
+- session records that distinguish launch-time `starting` from confirmed `running`
 - worktree manager with deterministic branch and path naming
 - narrow Codex runtime seam that builds and spawns one detached command
 - initial readiness waiting that requires the spawned Codex process to survive a short launch window before the session is marked usable
 - narrow process liveness and stop helpers for detached Codex sessions
 - durable lifecycle event appends around `sy sling`, `sy stop`, `sy mail send`, and `sy mail check`
 - spawn lifecycle events that now distinguish `sling.spawned` from `sling.completed`
+- durable runtime reconciliation events for `runtime.ready`, `runtime.exited_early`, and `runtime.exited`
 - first operator-facing event inspection path over `events.db`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
+- first-readiness reconciliation in `sy status` that promotes launched sessions to `running` or marks them failed with a durable reason
 - regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
 
 ## What Does Not Exist Yet
@@ -55,17 +58,21 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - creates one worktree under `.switchyard/worktrees/`
   - spawns one Codex process from that worktree
   - records `sling.spawned` once the runtime pid exists
-  - waits for one short initial readiness window before persisting the session as `running`
+  - waits for one short initial readiness window before persisting the session as `starting`
+  - records `sling.completed` after that launch window succeeds, including `readyAfterMs`
   - records `sling.failed` when the runtime exits during that launch window
 - `sy status [args...]`
   - loads config and session state
+  - promotes `starting` sessions to `running` when the pid survives the first liveness check
+  - marks early-dead `starting` sessions as `failed`
   - marks obviously stale `running` pid-backed sessions as `failed`
   - prints an empty-state message when no sessions exist
   - prints a tab-separated session table ordered by most recent update
   - includes one concise recent-event summary per session when event history exists, including `readyAfterMs` for fresh `sling.completed` events
+  - records runtime reconciliation events when it changes session state
 - `sy stop <session>`
   - resolves one session by id or normalized agent name
-  - stops one pid-backed runtime and updates durable session state
+  - stops one active pid-backed runtime and updates durable session state
   - preserves the worktree by default
   - removes the worktree and branch when `--cleanup` is passed
 - `sy mail send <session> <body>`
@@ -82,6 +89,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `src/config.ts` is carrying both config logic and git root-resolution behavior; that should eventually split once lifecycle code grows further.
 - `node:sqlite` is still experimental in Node 25, so the SQLite choice may need revision if core API churn becomes painful.
 - there is no end-to-end test around `sy init`.
+- the current readiness model is intentionally narrow: `sy sling` only proves the process survived a short launch window, and `sy status` promotes the session to `running` on the first later successful pid liveness check.
 - the current stop path is pid-based only; tmux-backed control is still deferred.
 - the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.
 - older pre-pid session rows cannot be liveness-checked automatically.

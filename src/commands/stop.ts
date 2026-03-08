@@ -10,7 +10,7 @@ import {
   getSessionById,
   updateSessionState
 } from "../sessions/store.js";
-import type { SessionRecord } from "../sessions/types.js";
+import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
 import { normalizeAgentName } from "../worktrees/naming.js";
 import { removeWorktree } from "../worktrees/manager.js";
 
@@ -30,7 +30,7 @@ interface StopCommandOptions {
 
 export function createStopCommand(): Command {
   return new Command("stop")
-    .description("Stop a running agent")
+    .description("Stop an active agent")
     .argument("<session>", "Session id or agent name")
     .option("--cleanup", "Remove the worktree and branch after the runtime stops")
     .action(async (selector: string, options: StopCommandCliOptions) => {
@@ -51,7 +51,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     throw new StopError(`No session found for '${options.selector}'.`);
   }
 
-  if (session.state !== "running") {
+  if (!isActiveSessionState(session.state)) {
     if (options.cleanup) {
       await cleanupSessionArtifacts({
         projectRoot: config.project.root,

@@ -11,7 +11,7 @@ import { slingCommand } from "./sling.js";
 import { statusCommand } from "./status.js";
 import { stopCommand } from "./stop.js";
 
-test("stopCommand stops a running session and preserves the worktree by default", async () => {
+test("stopCommand stops an active session and preserves the worktree by default", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
@@ -127,7 +127,7 @@ test("stopCommand removes the worktree and branch when cleanup is requested", as
   assert.match(output, /Cleanup: removed worktree and branch\./);
 });
 
-test("stopCommand marks legacy running sessions without a pid as failed", async () => {
+test("stopCommand marks legacy active sessions without a pid as failed", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
@@ -172,7 +172,7 @@ test("stopCommand marks legacy running sessions without a pid as failed", async 
   assert.match(output, /Worktree preserved: \.switchyard\/worktrees\/legacy-agent/);
 });
 
-test("stopCommand cleans up legacy running sessions without a pid when requested", async () => {
+test("stopCommand cleans up legacy active sessions without a pid when requested", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
@@ -289,10 +289,11 @@ test("stopCommand allows cleanup for sessions already marked failed", async () =
     assert.equal(sessions[0]?.state, "failed");
     assert.equal(sessions[0]?.runtimePid, null);
     const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
-    assert.equal(events.length, 2);
-    assert.equal(events[1]?.eventType, "stop.completed");
-    assert.equal(events[1]?.payload.outcome, "already_not_running");
-    assert.equal(events[1]?.payload.cleanupPerformed, true);
+    assert.equal(events.length, 3);
+    assert.equal(events[1]?.eventType, "runtime.exited_early");
+    assert.equal(events[2]?.eventType, "stop.completed");
+    assert.equal(events[2]?.payload.outcome, "already_not_running");
+    assert.equal(events[2]?.payload.cleanupPerformed, true);
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);

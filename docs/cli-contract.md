@@ -45,8 +45,10 @@ Current contract:
 - command loads config from the canonical repo root
 - command creates one deterministic branch and worktree under `.switchyard/worktrees/`
 - command starts one Codex process from that worktree
-- command persists one session record in `sessions.db`
-- command prints the created branch, worktree path, and runtime command line
+- command persists one `starting` session record in `sessions.db`
+- command records `sling.spawned` when the runtime pid exists
+- command records `sling.completed` after the initial launch window succeeds
+- command prints the launch state, created branch, worktree path, runtime command line, and initial readiness delay
 
 Future target:
 - add richer task/instruction inputs
@@ -58,7 +60,11 @@ Current contract:
 - command exists and accepts positional arguments reserved for future filters
 - command loads `.switchyard/config.yaml` from the canonical repo root
 - command reads durable session state from `sessions.db`
+- command promotes `starting` sessions to `running` when the first pid liveness check succeeds
+- command marks early-dead `starting` sessions as `failed`
 - command marks obviously stale pid-backed `running` sessions as `failed`
+- command records durable runtime reconciliation events when it changes session state
+- command prefers the freshly reconciled lifecycle event in the current table output even if event persistence fails
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
 - when sessions exist, print a concise tab-separated table ordered by most recent update
 
@@ -82,7 +88,7 @@ Future target:
 
 Current contract:
 - command resolves one session by id or normalized agent name
-- command stops one pid-backed runtime cleanly
+- command stops one active pid-backed runtime cleanly
 - command updates durable session state in `sessions.db`
 - command preserves the worktree by default
 - command removes the worktree and branch when `--cleanup` is passed

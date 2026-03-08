@@ -37,6 +37,7 @@ Without an explicit tmux decision:
 4. Update docs
    - `docs/current-state.md`
    - `docs/roadmap.md`
+   - any contract docs changed by the decision
 
 ## What To Keep Small
 

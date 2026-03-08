@@ -30,7 +30,7 @@ test("listEvents returns inserted events in creation order with parsed payloads"
       eventType: "sling.completed",
       payload: {
         runtimePid: 4242,
-        cleanupSucceeded: true
+        readyAfterMs: 500
       },
       createdAt: "2026-03-08T09:00:00.000Z"
     });
@@ -64,7 +64,7 @@ test("listEvents returns inserted events in creation order with parsed payloads"
       eventType: "sling.completed",
       payload: {
         runtimePid: 4242,
-        cleanupSucceeded: true
+        readyAfterMs: 500
       },
       createdAt: "2026-03-08T09:00:00.000Z"
     });
@@ -89,7 +89,8 @@ test("listLatestEventsBySession returns the newest event for each requested sess
       agentName: "agent-one",
       eventType: "sling.completed",
       payload: {
-        runtimePid: 4242
+        runtimePid: 4242,
+        readyAfterMs: 500
       },
       createdAt: "2026-03-08T09:00:00.000Z"
     });

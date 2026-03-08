@@ -27,6 +27,7 @@ Completed enough to count as minimally real:
 - M5 lifecycle control
 - M6 messaging
 - M7 first event inspection path
+- M8 first readiness and early-failure handling
 
 Not complete yet:
 - decision on whether pid-only stop is enough or tmux is required
@@ -35,7 +36,7 @@ Not complete yet:
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- decide whether the current pid-based control path is sufficient for the operator loop
+- decide whether pid-only lifecycle control is sufficient or tmux is now required
 - improve lifecycle control only where the current operator loop is weak
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes

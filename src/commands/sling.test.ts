@@ -10,7 +10,7 @@ import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
 import { statusCommand } from "./status.js";
 import { slingCommand } from "./sling.js";
 
-test("slingCommand creates a worktree and persists a running session", async () => {
+test("slingCommand creates a worktree and persists a started session", async () => {
   const repoDir = await createInitializedRepo();
   const nestedDir = join(repoDir, "apps", "api");
   const writes: string[] = [];
@@ -56,10 +56,11 @@ test("slingCommand creates a worktree and persists a running session", async () 
   assert.match(sessions[0]?.id ?? "", /^[0-9a-f-]{36}$/);
   assert.notEqual(sessions[0]?.id, "agent-one");
   assert.equal(sessions[0]?.agentName, "agent-one");
-  assert.deepEqual(sessions[0]?.state, "running");
+  assert.equal(sessions[0]?.state, "starting");
   assert.equal(sessions[0]?.runtimePid, 4242);
   assert.equal(sessions[0]?.branch, "agents/agent-one");
   assert.equal(sessions[0]?.worktreePath, join(repoDir, ".switchyard", "worktrees", "agent-one"));
+
   const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
   assert.equal(events.length, 2);
   const spawnedEvent = events.find((event) => event.eventType === "sling.spawned");
@@ -76,14 +77,16 @@ test("slingCommand creates a worktree and persists a running session", async () 
     && typeof completedEvent?.createdAt === "string"
     && spawnedEvent.createdAt < completedEvent.createdAt
   );
+
   assert.match(writes.join(""), /Spawned agent-one/);
+  assert.match(writes.join(""), /State: starting/);
   assert.match(writes.join(""), /Runtime: codex --model gpt-5/);
   assert.match(writes.join(""), /Ready: initial launch check passed after 500ms/);
 
   await removeTempDir(repoDir);
 });
 
-test("statusCommand shows a session created by slingCommand", async () => {
+test("statusCommand promotes a started session to running after the first successful liveness check", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
@@ -97,13 +100,19 @@ test("statusCommand shows a session created by slingCommand", async () => {
     await slingCommand({
       agentName: "Agent Two",
       startDir: repoDir,
-      spawnRuntime: async () => {
-        return {
+      spawnRuntime: async ({ onSpawned }) => {
+        const runtime = {
           pid: 31337,
           command: {
             command: "codex",
             args: []
-          },
+          }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
           readyAfterMs: 500
         };
       }
@@ -112,17 +121,32 @@ test("statusCommand shows a session created by slingCommand", async () => {
     writes.length = 0;
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 31337
+      isRuntimeAlive: (pid) => pid === 31337,
+      now: () => "2026-03-09T09:10:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
-    await removeTempDir(repoDir);
   }
 
-  const output = writes.join("");
-  assert.match(output, /running\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t/);
-  assert.match(output, /sling\.completed/);
-  assert.doesNotMatch(output, /sling\.spawned/);
+  try {
+    const output = writes.join("");
+    const sessions = await listSessions(repoDir);
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+
+    assert.equal(sessions[0]?.state, "running");
+    assert.equal(sessions[0]?.runtimePid, 31337);
+    assert.equal(events.length, 3);
+    assert.equal(events[0]?.eventType, "sling.spawned");
+    assert.equal(events[1]?.eventType, "sling.completed");
+    assert.equal(events[2]?.eventType, "runtime.ready");
+    assert.equal(events[2]?.payload.signal, "pid_alive");
+    assert.match(
+      output,
+      /running\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-09T09:10:00.000Z\t2026-03-09T09:10:00.000Z runtime\.ready signal=pid_alive, runtimePid=31337/
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
 });
 
 test("slingCommand cleans up failed worktrees and allows retrying the same agent", async () => {
@@ -197,7 +221,7 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
 
     assert.equal(attempts, 2);
     assert.equal(agentThreeSessions.length, 2);
-    assert.equal(agentThreeSessions[0]?.state, "running");
+    assert.equal(agentThreeSessions[0]?.state, "starting");
     assert.equal(agentThreeSessions[0]?.runtimePid, 2027);
     assert.equal(agentThreeSessions[1]?.state, "failed");
     assert.equal(agentThreeSessions[1]?.runtimePid, null);
@@ -214,7 +238,7 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
   }
 });
 
-test("slingCommand keeps a running session when event persistence fails", async () => {
+test("slingCommand keeps a started session when event persistence fails", async () => {
   const repoDir = await createInitializedRepo();
 
   try {
@@ -238,7 +262,7 @@ test("slingCommand keeps a running session when event persistence fails", async 
 
     const sessions = await listSessions(repoDir);
     assert.equal(sessions.length, 1);
-    assert.equal(sessions[0]?.state, "running");
+    assert.equal(sessions[0]?.state, "starting");
     assert.equal(sessions[0]?.runtimePid, 4040);
     const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
     assert.deepEqual(events, []);
@@ -280,15 +304,76 @@ test("slingCommand records an early readiness failure after launch", async () =>
     const spawnedEvent = events.find((event) => event.eventType === "sling.spawned");
     const failedEvent = events.find((event) => event.eventType === "sling.failed");
     assert.equal(spawnedEvent?.payload.runtimePid, 9001);
-    assert.match(
-      String(failedEvent?.payload.errorMessage),
-      /marked the session ready/
-    );
+    assert.match(String(failedEvent?.payload.errorMessage), /marked the session ready/);
     assert.ok(
       typeof spawnedEvent?.createdAt === "string"
       && typeof failedEvent?.createdAt === "string"
       && spawnedEvent.createdAt < failedEvent.createdAt
     );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("slingCommand stops the launched runtime and cleans up when session persistence fails after spawn", async () => {
+  const repoDir = await createInitializedRepo();
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-persist-fail");
+  const branchName = "agents/agent-persist-fail";
+  const stoppedPids: number[] = [];
+
+  try {
+    await assert.rejects(async () => {
+      await slingCommand({
+        agentName: "Agent Persist Fail",
+        startDir: repoDir,
+        spawnRuntime: async ({ onSpawned }) => {
+          const runtime = {
+            pid: 5151,
+            command: {
+              command: "codex",
+              args: []
+            }
+          };
+
+          await onSpawned?.(runtime);
+
+          return {
+            ...runtime,
+            readyAfterMs: 500
+          };
+        },
+        createSessionRecord: async (_projectRoot, input) => {
+          if (input.state === "starting") {
+            throw new Error("sessions unavailable");
+          }
+
+          return input;
+        },
+        stopRuntime: async (pid) => {
+          stoppedPids.push(pid);
+          return true;
+        }
+      });
+    }, /Failed to persist session after runtime launch: sessions unavailable/);
+
+    const sessions = await listSessions(repoDir);
+    assert.deepEqual(sessions, []);
+
+    const events = await listEvents(repoDir, { agentName: "agent-persist-fail" });
+    assert.equal(events.length, 2);
+    assert.equal(events[0]?.eventType, "sling.spawned");
+    assert.equal(events[1]?.eventType, "sling.failed");
+    assert.equal(events[1]?.payload.runtimePid, 5151);
+    assert.equal(events[1]?.payload.runtimeStopped, true);
+    assert.equal(events[1]?.payload.cleanupSucceeded, true);
+    assert.deepEqual(stoppedPids, [5151]);
+
+    await assert.rejects(async () => {
+      await access(worktreePath);
+    });
+    await assert.rejects(async () => {
+      await git(repoDir, ["rev-parse", "--verify", branchName]);
+    }, /Needed a single revision/);
   } finally {
     await removeTempDir(repoDir);
   }

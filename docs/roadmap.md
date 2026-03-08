@@ -10,6 +10,7 @@ Switchyard is through the first operator-loop milestones:
 - M5 lifecycle control is minimally real
 - M6 messaging is now minimally real
 - M7 event inspection is now minimally real
+- M8 first readiness and early-failure handling is now minimally real
 - later milestones remain design targets, not implementation commitments
 
 ## Near-Term Rule
