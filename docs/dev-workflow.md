@@ -40,6 +40,8 @@ Before you consider the session done:
 2. review `git diff`
 3. update the docs that changed in meaning
 4. confirm the next recommended task still makes sense
+5. send a PR for the completed feature slice
+6. include example output in the PR description for any operator-facing behavior or CLI output you changed
 
 ## If You Only Have 30-60 Minutes
 
