@@ -27,7 +27,7 @@ Completed enough to count as minimally real:
 - M5 lifecycle control
 - M6 messaging
 - M7 first event inspection path
-- M8 first readiness and early-failure handling
+- first readiness and early-failure handling as hardening work ahead of M8
 
 Not complete yet:
 - merge and reintegration workflow
