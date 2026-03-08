@@ -4,11 +4,10 @@ This document defines the first explicit merge contract for the current Switchya
 
 ## Current Contract
 
-Switchyard does not have a `sy merge` command yet.
-
-For the current v0 loop, reintegration is manual-first:
+For the current v0 loop, reintegration is still manual-first even though `sy merge` now exists:
 - Switchyard owns session lookup, status, events, stop, and optional artifact cleanup.
-- Git owns the actual content review, conflict handling, and merge mechanics.
+- Switchyard also owns the narrow preflighted merge entrypoint.
+- Git still owns the actual content review, conflict handling, and merge mechanics.
 - The preserved `agents/*` branch is the merge input.
 - The configured canonical branch in `.switchyard/config.yaml` is the merge target.
 
@@ -26,9 +25,9 @@ For the current v0 loop, reintegration is manual-first:
    - Run the project checks you expect before reintegration.
 
 3. Reintegrate from the canonical branch in the main repository.
-   - Switch to the repo root on the configured canonical branch.
-   - Ensure the canonical branch worktree is in a clean state.
-   - Merge the agent branch explicitly with git:
+   - Prefer `sy merge <session>` once review is complete.
+   - The command checks that the session is no longer active, verifies the preserved branch still exists, requires a clean repo-root worktree, switches to the configured canonical branch, and then runs the explicit git merge.
+   - The equivalent git path remains:
 
 ```bash
 git switch <canonical-branch>
@@ -37,7 +36,7 @@ git merge --no-ff agents/<agent-name>
 
 4. Resolve the outcome explicitly.
    - If the merge succeeds, validate the merged result with the checks you normally trust on the canonical branch.
-   - If the merge conflicts, resolve it manually or abort with git. Switchyard does not resolve conflicts.
+   - If the merge conflicts, resolve it manually or abort with git. Switchyard does not resolve conflicts or abort for you.
    - If you decide not to keep the work, treat that as an explicit abandon decision.
 
 5. Clean up only after the outcome is known.
@@ -46,7 +45,7 @@ git merge --no-ff agents/<agent-name>
 ## Why This Is Manual First
 
 - The current operator loop already has durable branch, worktree, session, and event state.
-- The missing piece is product policy, not raw git reachability.
+- The command is intentionally narrow because the missing piece was product policy, not raw git reachability.
 - Keeping merge review and conflict handling explicit avoids hiding important operator choices behind an immature command.
 - The default `sy stop` behavior preserves the worktree specifically so review and reintegration can happen after the runtime stops.
 
@@ -58,12 +57,12 @@ git merge --no-ff agents/<agent-name>
 - automatic cleanup after merge
 - broader multi-agent branch coordination
 
-## Next Implementation Target
+## Current Implementation Notes
 
-The next CLI slice should be a narrow `sy merge <session>` path that:
+The current `sy merge <session>` path:
 - checks that the session is no longer active
 - resolves the session to its preserved branch
 - validates that the canonical branch worktree is usable
 - runs the same explicit merge contract from this document
 
-That future command should not replace operator review or manual conflict resolution.
+It does not replace operator review, manual conflict resolution, post-merge validation, or explicit cleanup.

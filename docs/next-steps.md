@@ -4,38 +4,37 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Implement the smallest merge path that matches the documented merge contract.
+Validate whether merge or recovery work actually needs richer session metadata.
 
 Target outcome:
-- the repo has a narrow `sy merge` path for the current single-repo Codex loop
-- the command follows the documented manual-first workflow instead of inventing new product rules
-- the implementation makes it clearer whether merge needs any richer session metadata than the repo already stores
+- the repo stays on the current session schema unless a concrete operator workflow proves it is too thin
+- any metadata broadening is justified by one real merge or recovery gap, not by speculation
+- docs state clearly whether the current branch/worktree/state fields are sufficient for the current loop
 
 ## Why This Is Next
 
-The runtime-control model is now explicit enough for v0. The biggest missing operator workflow is what happens after an agent has produced useful work on an `agents/*` branch.
+The narrow merge command is now real, which means the repo can stop theorizing about session metadata and start judging it against actual operator behavior.
 
-The repo now has an explicit reintegration workflow, but the CLI still stops short of helping the operator execute it safely.
+Right now the important question is not "what else could we store?" It is "what real task is still blocked or ambiguous with the current fields?"
 
-Without a narrow merge command:
-- operators still have to translate session state into raw git steps by hand every time
-- Switchyard cannot preflight obvious risks such as trying to merge an active session
-- cleanup remains easier to get wrong than it should be because the product still relies on operator discipline alone
+Without that discipline:
+- the repo risks adding state that does not improve the current operator loop
+- recovery code will drift into hypothetical cases instead of real operator pain
+- the core lifecycle becomes harder to reason about without reducing concrete risk
 
 ## Exact Order
 
 1. Audit the current post-work artifacts
-   - confirm exactly which stored fields and files the merge path can rely on today: branch, worktree, session state, config, and events
+   - confirm exactly which stored fields and files merge and cleanup rely on today: branch, worktree, session state, config, and events
    - stay grounded in the current single-repo Codex workflow
 
-2. Implement the smallest `sy merge` path
-   - resolve one session to its preserved branch
-   - refuse unsafe states such as active sessions or missing branch metadata
-   - run the documented merge path against the configured canonical branch
+2. Only add metadata if a concrete gap appears
+   - prefer one small field or one clarified contract over a broad session-model redesign
+   - keep recovery and merge behavior explicit and operator-readable
 
 3. Keep the scope narrow
-   - leave review, testing judgment, and conflict resolution operator-visible
-   - keep cleanup explicit unless the implementation proves a safer default
+   - do not redesign merge now that the first path exists
+   - keep cleanup explicit unless real usage shows a safer default is necessary
 
 4. Update docs
    - `docs/current-state.md`
@@ -56,16 +55,15 @@ Do not build these in the same slice unless the implementation forces it:
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- the repo has a working narrow merge path for the current loop
-- the command behavior matches the documented merge contract
-- tests cover the critical safety checks and happy path
+- the repo only carries session metadata that serves a real operator workflow
+- any metadata change is covered by tests and reflected in the docs
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- implement one session-at-a-time merge path, not a broader merge system
-- prefer one explicit operator-readable command over speculative automation
+- prefer one explicit operator-readable field or contract clarification over speculative storage
+- defer metadata changes entirely if the current merge and recovery paths are already sufficient
 - keep targeting one repo-local Codex lifecycle
 
-The point of this slice is to turn the documented reintegration workflow into a minimal safe command, not to design the final merge system.
+The point of this slice is to prove whether the current stored state is enough, not to build a broader recovery system just because the merge command now exists.

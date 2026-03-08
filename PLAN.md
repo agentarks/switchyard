@@ -164,13 +164,12 @@ These are the current project decisions and should be treated as the default unt
 - Codex is the first-class runtime for the early project
 - `node:sqlite` is accepted for the first persistence slices behind narrow store modules
 - pid-backed detached runtime control is sufficient for v0; tmux is deferred until operator workflows require attach or transcript handling
-- the first merge workflow is manual-first: stop without cleanup, review the preserved branch, merge explicitly with git, then clean up
+- the first merge workflow is manual-first: stop without cleanup, review the preserved branch, use the narrow `sy merge` path or explicit git to merge into the canonical branch, then clean up
 - broader runtime abstraction is deferred until the core lifecycle is real
 
 ## Open Decisions
 
 These still need to be resolved or confirmed:
-- What is the smallest `sy merge` command that should automate the documented merge workflow?
 - Does merge and recovery work need richer session metadata beyond the current pid, branch, and worktree fields?
 - Should mail expand beyond the first durable unread-only path?
 

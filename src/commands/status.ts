@@ -238,6 +238,8 @@ function formatErrorMessage(error: unknown): string {
 const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "mail.checked": ["unreadCount"],
   "mail.sent": ["sender", "bodyLength"],
+  "merge.completed": ["canonicalBranch", "branch"],
+  "merge.failed": ["reason", "branch"],
   "runtime.exited": ["reason", "runtimePid"],
   "runtime.exited_early": ["reason", "runtimePid"],
   "runtime.ready": ["signal", "runtimePid"],

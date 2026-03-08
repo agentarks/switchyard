@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events, basic durable mail, and a documented manual-first reintegration workflow all exist end-to-end.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events, basic durable mail, and a narrow merge path for the documented reintegration workflow all exist end-to-end.
 
 ## What Exists
 
@@ -13,6 +13,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - implemented `sy status`
 - implemented `sy sling`
 - implemented `sy stop`
+- implemented `sy merge`
 - implemented `sy mail send`
 - implemented `sy mail check`
 - repo root detection that handles nested directories and git worktrees
@@ -32,7 +33,9 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - spawn lifecycle events that now distinguish `sling.spawned` from `sling.completed`
 - durable runtime reconciliation events for `runtime.ready`, `runtime.exited_early`, and `runtime.exited`
 - first operator-facing event inspection path over `events.db`
+- first operator-facing merge path that preflights active sessions and dirty repo-root state before running `git merge --no-ff`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
+- merge lifecycle events for `merge.completed` and `merge.failed`
 - first-readiness reconciliation in `sy status` that promotes launched sessions to `running` or marks them failed with a durable reason
 - explicit v0 decision to keep runtime control pid-backed and defer tmux unless operator workflows require attach or transcript handling
 - documented first merge and reintegration workflow that keeps the initial contract manual-first and git-native
@@ -41,8 +44,8 @@ This repository now has a minimal but real operator loop for one repo-local Code
 ## What Does Not Exist Yet
 
 - interactive runtime attach or transcript capture
-- `sy merge` command
 - conflict reporting beyond normal git behavior
+- automatic cleanup after merge
 
 ## Current Command Surface
 
@@ -78,6 +81,14 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - stops one active pid-backed runtime and updates durable session state
   - preserves the worktree by default so the operator can review or merge the branch later
   - removes the worktree and branch when `--cleanup` is passed
+- `sy merge <session>`
+  - resolves one session by id or normalized agent name
+  - refuses active sessions so merge only runs against preserved work
+  - requires the repo root worktree to be clean before it switches to the configured canonical branch
+  - verifies the preserved local `agents/*` branch still exists
+  - runs `git merge --no-ff <branch>` from the canonical repo root worktree
+  - records `merge.completed` on success and `merge.failed` when git stops in a conflict state
+  - leaves review, conflict resolution, validation, and cleanup explicit for the operator
 - `sy mail send <session> <body>`
   - resolves one session by id or normalized agent name
   - writes one durable message into `mail.db`
@@ -91,8 +102,9 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 - stop the session without `--cleanup` if it is still active
 - inspect status, events, mail, and the preserved worktree as needed
-- switch to the canonical branch in the main repository and merge the agent branch manually with git
-- run cleanup only after the merge succeeds or the branch is explicitly abandoned
+- run `sy merge <session>` to execute the documented repo-root merge path against the configured canonical branch
+- if git reports conflicts, resolve them manually or abort with git from the repo root
+- run cleanup only after the merged result is validated or the branch is explicitly abandoned
 
 ## Current Risks
 
@@ -104,16 +116,15 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.
 - older pre-pid session rows cannot be liveness-checked automatically.
 - `sy events <selector>` currently resolves in this order: exact session row by id, orphaned events by raw `session_id`, then latest session by normalized agent name. That preserves orphaned event readability, but it means a raw selector that could plausibly match both an orphaned session id and an agent name will prefer the orphaned session-id path until the CLI grows explicit selector disambiguation.
-- reintegration is still manual, so Switchyard cannot yet preflight merge safety, surface conflicts, or guard operators from calling `sy stop --cleanup` before they have merged a useful branch.
+- the merge path is intentionally narrow: it preflights obvious unsafe states and runs the explicit git merge, but review, conflict resolution, post-merge validation, and cleanup remain manual-first.
 
 ## Recommended Next Task
 
-Implement the smallest merge path that matches the documented workflow:
-- add a narrow `sy merge` command that resolves one stopped session to its preserved branch
-- keep review, validation, and conflict handling explicit instead of hiding them behind automation
-- broaden session metadata only if the merge implementation proves it is necessary
+Use the new merge path to validate the existing metadata model before broadening it:
+- only add richer session metadata if merge or recovery work exposes a concrete gap
+- otherwise keep hardening operator-visible lifecycle behavior instead of inventing more stored state
 
-That is the next biggest missing piece in the repo-local lifecycle now that runtime control is explicit enough for v0.
+The merge command removed the biggest missing gap in the repo-local lifecycle. The next slice should stay narrow and evidence-driven.
 
 ## How To Use This File
 

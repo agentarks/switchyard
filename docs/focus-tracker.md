@@ -6,7 +6,7 @@ Use it at the start and end of each session.
 
 ## Current Target
 
-The current target is a reliable single-repo, single-agent operator loop with durable state and enough CLI inspection to understand what happened.
+The current target is a reliable single-repo, single-agent operator loop with durable state, enough CLI inspection to understand what happened, and a narrow reintegration path that stays operator-visible.
 
 That means the project should reliably support:
 - `sy init`
@@ -14,6 +14,7 @@ That means the project should reliably support:
 - `sy status`
 - `sy events`
 - `sy stop`
+- `sy merge`
 - `sy mail send`
 - `sy mail check`
 
@@ -27,15 +28,17 @@ Completed enough to count as minimally real:
 - M5 lifecycle control
 - M6 messaging
 - M7 first event inspection path
+- first merge and reintegration CLI path
 - first readiness and early-failure handling as hardening work ahead of M8
 
 Not complete yet:
-- merge and reintegration CLI implementation
+- broader merge cleanup ergonomics and any metadata that real recovery work proves necessary
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- implement the smallest merge command that fits the documented repo-local workflow
+- only broaden session metadata if a real merge or recovery workflow needs it
+- improve merge cleanup ergonomics if the first merge path exposes a concrete operator risk
 - improve pid-backed lifecycle control only where the current operator loop is still concretely weak
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
@@ -71,7 +74,7 @@ Use this rough project view instead of one flat percentage:
 
 - Core v0 operator loop: mostly complete
 - v0 hardening and operator confidence: in progress
-- merge/reintegration workflow: documented, not started in CLI implementation
+- merge/reintegration workflow: minimally real, still intentionally narrow
 - broader long-term vision: intentionally deferred
 
 ## Exit Rule For A Session
