@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import type { ChildProcess, spawn } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 import { spawnCodexSession } from "./index.js";
 
-test("spawnCodexSession waits for the initial readiness window before resolving", async () => {
+test("spawnCodexSession reports the observed readiness delay from spawn through launch setup", async () => {
   const child = new FakeChildProcess();
   const spawned: Array<{ pid: number; command: string }> = [];
 
@@ -17,18 +18,20 @@ test("spawnCodexSession waits for the initial readiness window before resolving"
       });
       return child as unknown as ChildProcess;
     }) as unknown as typeof spawn,
-    onSpawned: (runtime) => {
+    onSpawned: async (runtime) => {
       spawned.push({
         pid: runtime.pid,
         command: [runtime.command.command, ...runtime.command.args].join(" ")
       });
+
+      await delay(40);
     }
   });
 
   const session = await sessionPromise;
 
   assert.equal(session.pid, 4242);
-  assert.equal(session.readyAfterMs, 5);
+  assert.ok(session.readyAfterMs >= 40);
   assert.equal(child.unrefCalled, true);
   assert.deepEqual(spawned, [{ pid: 4242, command: "codex" }]);
 });

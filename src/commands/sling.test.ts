@@ -71,6 +71,11 @@ test("slingCommand creates a worktree and persists a running session", async () 
   assert.equal(completedEvent?.payload.runtimePid, 4242);
   assert.equal(completedEvent?.payload.branch, "agents/agent-one");
   assert.equal(completedEvent?.payload.readyAfterMs, 500);
+  assert.ok(
+    typeof spawnedEvent?.createdAt === "string"
+    && typeof completedEvent?.createdAt === "string"
+    && spawnedEvent.createdAt < completedEvent.createdAt
+  );
   assert.match(writes.join(""), /Spawned agent-one/);
   assert.match(writes.join(""), /Runtime: codex --model gpt-5/);
   assert.match(writes.join(""), /Ready: initial launch check passed after 500ms/);
@@ -116,6 +121,8 @@ test("statusCommand shows a session created by slingCommand", async () => {
 
   const output = writes.join("");
   assert.match(output, /running\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t/);
+  assert.match(output, /sling\.completed/);
+  assert.doesNotMatch(output, /sling\.spawned/);
 });
 
 test("slingCommand cleans up failed worktrees and allows retrying the same agent", async () => {
@@ -270,10 +277,17 @@ test("slingCommand records an early readiness failure after launch", async () =>
 
     const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
     assert.equal(events.length, 2);
-    assert.equal(events.find((event) => event.eventType === "sling.spawned")?.payload.runtimePid, 9001);
+    const spawnedEvent = events.find((event) => event.eventType === "sling.spawned");
+    const failedEvent = events.find((event) => event.eventType === "sling.failed");
+    assert.equal(spawnedEvent?.payload.runtimePid, 9001);
     assert.match(
-      String(events.find((event) => event.eventType === "sling.failed")?.payload.errorMessage),
+      String(failedEvent?.payload.errorMessage),
       /marked the session ready/
+    );
+    assert.ok(
+      typeof spawnedEvent?.createdAt === "string"
+      && typeof failedEvent?.createdAt === "string"
+      && spawnedEvent.createdAt < failedEvent.createdAt
     );
   } finally {
     await removeTempDir(repoDir);

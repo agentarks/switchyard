@@ -56,6 +56,7 @@ async function waitForChildReady(
   return await new Promise<SpawnedRuntimeSession>((resolve, reject) => {
     let settled = false;
     let readyTimer: NodeJS.Timeout | undefined;
+    let readinessStartedAt = 0;
 
     const cleanup = (): void => {
       child.removeListener("error", handleError);
@@ -88,7 +89,7 @@ async function waitForChildReady(
       resolve({
         command,
         pid,
-        readyAfterMs: options.readyTimeoutMs
+        readyAfterMs: Math.max(0, Date.now() - readinessStartedAt)
       });
     };
 
@@ -107,6 +108,8 @@ async function waitForChildReady(
         fail(new RuntimeError("Codex started without a process id."));
         return;
       }
+
+      readinessStartedAt = Date.now();
 
       const runtime = {
         command,

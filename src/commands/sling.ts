@@ -50,6 +50,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   });
   const runtimeArgs = options.runtimeArgs ?? [];
   const createdAt = new Date().toISOString();
+  let lastLifecycleTimestamp = createdAt;
   const sessionId = randomUUID();
   let runtimeSession: SpawnedRuntimeSession;
 
@@ -59,11 +60,14 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       runtimeArgs,
       worktreePath: managedWorktree.path,
       onSpawned: async (spawnedRuntime) => {
+        const spawnedAt = nextLifecycleTimestamp(lastLifecycleTimestamp);
+        lastLifecycleTimestamp = spawnedAt;
+
         await recordEventWithFallback(recordEvent, config.project.root, {
           sessionId,
           agentName: managedWorktree.agentName,
           eventType: "sling.spawned",
-          createdAt: new Date().toISOString(),
+          createdAt: spawnedAt,
           payload: {
             branch: managedWorktree.branch,
             worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
@@ -75,6 +79,8 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     });
   } catch (error) {
     const cleanupError = await cleanupFailedLaunch(config.project.root, managedWorktree);
+    const failedAt = nextLifecycleTimestamp(lastLifecycleTimestamp);
+    lastLifecycleTimestamp = failedAt;
 
     await createSession(config.project.root, {
       id: sessionId,
@@ -83,14 +89,14 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       worktreePath: managedWorktree.path,
       state: "failed",
       createdAt,
-      updatedAt: createdAt
+      updatedAt: failedAt
     });
 
     await recordEventWithFallback(recordEvent, config.project.root, {
       sessionId,
       agentName: managedWorktree.agentName,
       eventType: "sling.failed",
-      createdAt,
+      createdAt: failedAt,
       payload: {
         branch: managedWorktree.branch,
         worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
@@ -106,6 +112,8 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     throw error;
   }
 
+  const completedAt = nextLifecycleTimestamp(lastLifecycleTimestamp);
+
   await createSession(config.project.root, {
     id: sessionId,
     agentName: managedWorktree.agentName,
@@ -114,14 +122,14 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     state: "running",
     runtimePid: runtimeSession.pid,
     createdAt,
-    updatedAt: createdAt
+    updatedAt: completedAt
   });
 
   await recordEventWithFallback(recordEvent, config.project.root, {
     sessionId,
     agentName: managedWorktree.agentName,
     eventType: "sling.completed",
-    createdAt,
+    createdAt: completedAt,
     payload: {
       branch: managedWorktree.branch,
       worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
@@ -159,4 +167,14 @@ async function cleanupFailedLaunch(projectRoot: string, worktree: ManagedWorktre
 
 function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function nextLifecycleTimestamp(previousTimestamp: string): string {
+  const currentTimestamp = new Date().toISOString();
+
+  if (currentTimestamp > previousTimestamp) {
+    return currentTimestamp;
+  }
+
+  return new Date(Date.parse(previousTimestamp) + 1).toISOString();
 }
