@@ -76,6 +76,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     branch: managedWorktree.branch,
     worktreePath: managedWorktree.path,
     state: "running",
+    runtimePid: runtimeSession.pid,
     createdAt,
     updatedAt: createdAt
   });

@@ -11,20 +11,23 @@ This repository is still in the setup phase. The codebase has enough structure t
 - implemented `sy init`
 - implemented `sy status`
 - implemented `sy sling`
-- placeholder `sy stop` and `sy mail`
+- implemented `sy stop`
+- placeholder `sy mail`
 - repo root detection that handles nested directories and git worktrees
 - canonical branch detection that prefers `origin/HEAD`
 - config loading that normalizes `project.root` to the canonical repo root
 - `.switchyard/` bootstrap for directories and placeholder database files
 - session store with schema ownership for `sessions.db`
+- session records that now retain the spawned runtime pid
 - worktree manager with deterministic branch and path naming
 - narrow Codex runtime seam that builds and spawns one detached command
-- regression tests around config/root behavior, worktree creation, session persistence, and command parsing
+- narrow process liveness and stop helpers for detached Codex sessions
+- regression tests around config/root behavior, worktree creation, session persistence, stop, and command parsing
 
 ## What Does Not Exist Yet
 
 - tmux control
-- real `stop` or `mail` behavior
+- real `mail` behavior
 - event storage or inspection commands
 - merge workflow
 
@@ -42,10 +45,14 @@ This repository is still in the setup phase. The codebase has enough structure t
   - persists one session record as `running`
 - `sy status [args...]`
   - loads config and session state
+  - marks obviously stale `running` pid-backed sessions as `failed`
   - prints an empty-state message when no sessions exist
   - prints a tab-separated session table ordered by most recent update
-- `sy stop [args...]`
-  - placeholder only
+- `sy stop <session>`
+  - resolves one session by id or normalized agent name
+  - stops one pid-backed runtime and updates durable session state
+  - preserves the worktree by default
+  - removes the worktree and branch when `--cleanup` is passed
 - `sy mail [args...]`
   - placeholder only
 
@@ -54,17 +61,17 @@ This repository is still in the setup phase. The codebase has enough structure t
 - `src/config.ts` is carrying both config logic and git root-resolution behavior; that should eventually split once lifecycle code grows further.
 - `node:sqlite` is still experimental in Node 25, so the SQLite choice may need revision if core API churn becomes painful.
 - there is no end-to-end test around `sy init`.
-- the session schema does not yet record pid or tmux metadata, which may force changes during `sy stop`.
-- `sy sling` creates detached runtime state, but `sy status` does not verify liveness yet.
+- the current stop path is pid-based only; tmux-backed control is still deferred.
+- older pre-pid session rows cannot be liveness-checked automatically.
 
 ## Recommended Next Task
 
-Implement the first real stop path:
-- add liveness lookup for the spawned runtime
-- replace the `sy stop` placeholder
-- define cleanup behavior for stopped worktrees
+Implement the first real mail path:
+- add durable mail schema ownership to `mail.db`
+- replace the `sy mail` placeholder with one narrow send/check flow
+- keep the operator surface intentionally small
 
-That closes the core lifecycle loop instead of adding more passive storage work.
+That extends the now-complete init -> sling -> status -> stop loop without broadening runtime control too early.
 
 ## How To Use This File
 

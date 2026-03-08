@@ -4,31 +4,31 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Define liveness lookup for one spawned Codex session
-2. Implement the first real `sy stop`
-3. Add tests for stop state transitions and worktree cleanup rules
+1. Implement the first real `sy mail`
+2. Add durable mail store tests and command tests
+3. Decide whether the first mail surface needs send/check subcommands or a narrower shape
 
 ## Next
 
-4. Decide whether pid or tmux metadata belongs in the session store
-5. Implement worktree cleanup semantics
-6. Add minimal operator messaging via `sy mail`
+4. Add minimal event logging around sling/stop/mail
+5. Improve status and inspection output
+6. Decide whether tmux should replace or augment pid-based stop control
 
 ## After That
 
 7. Define readiness and failure handling for the first spawned session
-8. Implement `sy stop`
-9. Add liveness checks and state transitions
+8. Add richer session metadata only if lifecycle control needs it
+9. Define merge and reintegration workflow
 
 ## Then
 
-10. Define cleanup behavior for stopped sessions and worktrees
-11. Implement the first mail store path
-12. Add minimal event logging
+10. Add background diagnostics only if operator workflows require it
+11. Expand mail semantics beyond the first durable path
+12. Add minimal event logging if it was deferred again
 
 ## Later
 
-13. Improve status and inspection surfaces
+13. Dashboard or TUI work, if still justified
 
 ## Not A Priority Yet
 

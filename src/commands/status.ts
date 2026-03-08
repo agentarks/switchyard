@@ -2,10 +2,12 @@ import { relative } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
-import { listSessions } from "../sessions/store.js";
+import { isProcessAlive } from "../runtimes/process.js";
+import { listSessions, updateSessionState } from "../sessions/store.js";
 
 interface StatusOptions {
   startDir?: string;
+  isRuntimeAlive?: (pid: number) => boolean;
 }
 
 export function createStatusCommand(): Command {
@@ -19,6 +21,7 @@ export function createStatusCommand(): Command {
 
 export async function statusCommand(options: StatusOptions = {}): Promise<void> {
   const config = await loadConfig(options.startDir);
+  await reconcileRunningSessions(config.project.root, options.isRuntimeAlive ?? isProcessAlive);
   const sessions = await listSessions(config.project.root);
 
   if (sessions.length === 0) {
@@ -32,6 +35,27 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
   for (const session of sessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
     process.stdout.write(`${session.state}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\n`);
+  }
+}
+
+async function reconcileRunningSessions(
+  projectRoot: string,
+  isRuntimeAlive: (pid: number) => boolean
+): Promise<void> {
+  const sessions = await listSessions(projectRoot);
+
+  for (const session of sessions) {
+    if (session.state !== "running") {
+      continue;
+    }
+
+    if (typeof session.runtimePid !== "number" || !isRuntimeAlive(session.runtimePid)) {
+      await updateSessionState(projectRoot, {
+        id: session.id,
+        state: "failed",
+        runtimePid: null
+      });
+    }
   }
 }
 

@@ -37,3 +37,9 @@ export class SlingError extends SwitchyardError {
     super(message, "SLING_ERROR");
   }
 }
+
+export class StopError extends SwitchyardError {
+  constructor(message: string) {
+    super(message, "STOP_ERROR");
+  }
+}

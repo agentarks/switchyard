@@ -4,55 +4,51 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Build the first real stop path so Switchyard can stop one tracked agent session cleanly.
+Build the first real mail path so Switchyard can move one durable message between the operator and an agent session.
 
 Target outcome:
-- `sy stop` is no longer a placeholder
-- one persisted session can be transitioned away from `running`
-- liveness checks are narrow but real
-- cleanup behavior for stopped worktrees is explicit
+- `sy mail` is no longer a placeholder
+- one durable mail record can be written and read back
+- session-targeted mail flow is explicit
+- the command shape stays small enough to revise later
 
 ## Why This Is Next
 
-This is the shortest path from spawn-only behavior to a real lifecycle loop.
+The core lifecycle loop now exists. The next smallest missing operator capability is basic durable messaging.
 
-Without a real stop path:
-- `status` cannot distinguish live sessions from stale rows
-- spawned worktrees accumulate without operator control
-- the current session schema is not validated against lifecycle control
+Without a real mail path:
+- there is no durable operator-to-agent handoff inside Switchyard
+- `mail.db` remains a placeholder artifact
+- the MVP surface is still missing one of its intended primitives
 
 ## Exact Order
 
-1. Decide the minimum runtime metadata needed for stop
-   - pid only, tmux only, or explicit deferral
-   - keep the schema narrow if possible
+1. Define the minimum mail record
+   - sender, recipient, body, timestamps
+   - no threads, routing graphs, or background delivery
 
-2. Add narrow liveness lookup
-   - enough to detect obvious stale sessions
-   - no watchdog or background automation
+2. Add store ownership for `mail.db`
+   - schema creation
+   - narrow read/write helpers
 
-3. Replace the `stop` placeholder
-   - locate one persisted session
-   - stop the runtime cleanly
-   - update durable session state
+3. Replace the `mail` placeholder
+   - support one write path
+   - support one read/check path
+   - keep output operator-readable
 
-4. Define cleanup behavior
-   - default whether worktrees remain or are removed
-   - add guardrails for active or missing paths
+4. Add command tests
+   - one mail send path
+   - one mail check/read path
 
-5. Add command tests
-   - `sy stop` from an initialized repo with one spawned session
-   - resulting state can be seen via `sy status`
-
-6. Update docs
+5. Update docs
    - `docs/current-state.md`
    - `docs/roadmap.md` if the recommended next slice changes
 
 ## What To Keep Small
 
 Do not build these in the same slice unless the implementation forces it:
-- full process supervision
-- mail
+- attachments or rich payload formats
+- background delivery loops
 - events
 - multi-runtime abstractions
 
@@ -60,16 +56,16 @@ Do not build these in the same slice unless the implementation forces it:
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- `sy stop` is no longer a placeholder
-- one spawned session can be stopped through the command path
-- tests cover the first stop + state-transition path
+- `sy mail` is no longer a placeholder
+- one durable mail record can be sent and checked through the command path
+- tests cover the first mail store + command path
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- stop less runtime state
-- defer tmux if pid-based control is enough
-- remove fewer artifacts if the command path works
+- send less metadata
+- read fewer views of the mailbox
+- keep targeting one repo-local durable flow
 
-The point of this slice is to complete the first real agent lifecycle, not to perfect supervision.
+The point of this slice is to make mail real, not to design the final messaging system.

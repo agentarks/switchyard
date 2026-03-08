@@ -54,5 +54,5 @@ export async function initCommand(options: InitOptions): Promise<void> {
 
   process.stdout.write(`Initialized Switchyard in ${projectRoot}\n`);
   process.stdout.write(`Config: ${configPath}\n`);
-  process.stdout.write("Next step: implement spawn/status/stop workflows.\n");
+  process.stdout.write("Next step: use sy sling, sy status, and sy stop to exercise the lifecycle.\n");
 }
