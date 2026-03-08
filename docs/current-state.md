@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository is still in the setup phase. The codebase has enough structure to support iterative work, but not enough implemented behavior to be considered a usable orchestration tool yet.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, status, stop, and basic durable mail all work end-to-end.
 
 ## What Exists
 
@@ -12,22 +12,23 @@ This repository is still in the setup phase. The codebase has enough structure t
 - implemented `sy status`
 - implemented `sy sling`
 - implemented `sy stop`
-- placeholder `sy mail`
+- implemented `sy mail send`
+- implemented `sy mail check`
 - repo root detection that handles nested directories and git worktrees
 - canonical branch detection that prefers `origin/HEAD`
 - config loading that normalizes `project.root` to the canonical repo root
 - `.switchyard/` bootstrap for directories and placeholder database files
 - session store with schema ownership for `sessions.db`
+- mail store with schema ownership for `mail.db`
 - session records that now retain the spawned runtime pid
 - worktree manager with deterministic branch and path naming
 - narrow Codex runtime seam that builds and spawns one detached command
 - narrow process liveness and stop helpers for detached Codex sessions
-- regression tests around config/root behavior, worktree creation, session persistence, stop, and command parsing
+- regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
 
 ## What Does Not Exist Yet
 
 - tmux control
-- real `mail` behavior
 - event storage or inspection commands
 - merge workflow
 
@@ -53,8 +54,14 @@ This repository is still in the setup phase. The codebase has enough structure t
   - stops one pid-backed runtime and updates durable session state
   - preserves the worktree by default
   - removes the worktree and branch when `--cleanup` is passed
-- `sy mail [args...]`
-  - placeholder only
+- `sy mail send <session> <body>`
+  - resolves one session by id or normalized agent name
+  - writes one durable message into `mail.db`
+  - defaults the sender to `operator`
+- `sy mail check <session>`
+  - resolves one session by id or normalized agent name
+  - reads unread mail for that session in creation order
+  - marks returned messages as read
 
 ## Current Risks
 
@@ -66,12 +73,12 @@ This repository is still in the setup phase. The codebase has enough structure t
 
 ## Recommended Next Task
 
-Implement the first real mail path:
-- add durable mail schema ownership to `mail.db`
-- replace the `sy mail` placeholder with one narrow send/check flow
-- keep the operator surface intentionally small
+Implement the first real event path:
+- add durable event schema ownership to `events.db`
+- append narrow lifecycle events around sling, stop, and mail
+- improve operator inspection without broadening runtime control yet
 
-That extends the now-complete init -> sling -> status -> stop loop without broadening runtime control too early.
+That would make common lifecycle actions diagnosable from durable state instead of only the latest session row.
 
 ## How To Use This File
 

@@ -4,41 +4,41 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Build the first real mail path so Switchyard can move one durable message between the operator and an agent session.
+Build the first real event path so Switchyard can retain a durable operator-readable timeline for the core lifecycle.
 
 Target outcome:
-- `sy mail` is no longer a placeholder
-- one durable mail record can be written and read back
-- session-targeted mail flow is explicit
-- the command shape stays small enough to revise later
+- `events.db` is no longer just a placeholder file
+- sling, stop, and mail append durable lifecycle events
+- operators can inspect the most important recent actions without reading source
+- the event model stays narrow enough to revise later
 
 ## Why This Is Next
 
-The core lifecycle loop now exists. The next smallest missing operator capability is basic durable messaging.
+The core lifecycle loop now exists, including basic durable mail. The next smallest missing operator capability is durable observability.
 
-Without a real mail path:
-- there is no durable operator-to-agent handoff inside Switchyard
-- `mail.db` remains a placeholder artifact
-- the MVP surface is still missing one of its intended primitives
+Without a real event path:
+- failures and operator actions are still mostly inferred from current session state
+- `events.db` remains a placeholder artifact
+- inspection cannot yet answer "what just happened?" with durable history
 
 ## Exact Order
 
-1. Define the minimum mail record
-   - sender, recipient, body, timestamps
-   - no threads, routing graphs, or background delivery
+1. Define the minimum event record
+   - event type, session id or agent name, timestamps, narrow payload
+   - no background watchers, analytics, or generic event buses
 
-2. Add store ownership for `mail.db`
+2. Add store ownership for `events.db`
    - schema creation
-   - narrow read/write helpers
+   - narrow append/query helpers
 
-3. Replace the `mail` placeholder
-   - support one write path
-   - support one read/check path
-   - keep output operator-readable
+3. Write events from existing commands
+   - `sy sling`
+   - `sy stop`
+   - `sy mail`
 
-4. Add command tests
-   - one mail send path
-   - one mail check/read path
+4. Add store and command tests
+   - one append path
+   - one operator-facing read path
 
 5. Update docs
    - `docs/current-state.md`
@@ -47,25 +47,25 @@ Without a real mail path:
 ## What To Keep Small
 
 Do not build these in the same slice unless the implementation forces it:
-- attachments or rich payload formats
+- attachments or richer mail payload formats
 - background delivery loops
-- events
+- watchdog automation
 - multi-runtime abstractions
 
 ## Definition Of Done
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- `sy mail` is no longer a placeholder
-- one durable mail record can be sent and checked through the command path
-- tests cover the first mail store + command path
+- `events.db` owns a real schema
+- key lifecycle commands append durable events
+- tests cover the first event store + command path
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- send less metadata
-- read fewer views of the mailbox
-- keep targeting one repo-local durable flow
+- store less payload
+- read fewer event views
+- keep targeting one repo-local durable timeline
 
-The point of this slice is to make mail real, not to design the final messaging system.
+The point of this slice is to make observability real, not to design the final diagnostics system.

@@ -78,15 +78,19 @@ Future target:
 - add tmux-backed control if pid-only stop proves too narrow
 - refine operator-facing output around stale or missing runtime state
 
-## `sy mail [args...]`
+## `sy mail`
 
 Current contract:
-- command exists and accepts positional arguments
-- command is a placeholder until mail storage and command behavior exist
+- command has `send` and `check` subcommands
+- `sy mail send <session> <body>` resolves one session by id or normalized agent name
+- `sy mail send` writes one durable record into `mail.db`
+- `sy mail check <session>` reads unread mail for one resolved session
+- `sy mail check` marks returned messages as read
 
 Future target:
 - support simple durable operator/agent messaging
 - keep the early surface intentionally small
+- expand beyond unread-only reads only when operator usage justifies it
 
 ## Priority Order
 
