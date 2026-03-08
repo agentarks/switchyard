@@ -26,7 +26,7 @@ For the current v0 loop, reintegration is still manual-first even though `sy mer
 
 3. Reintegrate from the canonical branch in the main repository.
    - Prefer `sy merge <session>` once review is complete.
-   - The command checks that the session is no longer active, verifies the preserved branch still exists, requires a clean repo-root worktree, switches to the configured canonical branch, and then runs the explicit git merge.
+   - The command checks that the session is no longer active, verifies the preserved branch still exists, requires both the preserved agent worktree and the repo-root worktree to be clean, switches to the configured canonical branch, and then runs the explicit git merge.
    - The equivalent git path remains:
 
 ```bash
@@ -62,7 +62,9 @@ git merge --no-ff agents/<agent-name>
 The current `sy merge <session>` path:
 - checks that the session is no longer active
 - resolves the session to its preserved branch
+- refuses dirty preserved worktrees so uncommitted agent changes are not stranded before cleanup
 - validates that the canonical branch worktree is usable
+- records a no-op `merge.skipped` event when the branch is already integrated
 - runs the same explicit merge contract from this document
 
 It does not replace operator review, manual conflict resolution, post-merge validation, or explicit cleanup.

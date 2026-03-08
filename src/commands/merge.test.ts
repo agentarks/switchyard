@@ -116,6 +116,43 @@ test("mergeCommand refuses to run when the canonical worktree is dirty", async (
   }
 });
 
+test("mergeCommand refuses to merge when the preserved worktree has uncommitted changes", async () => {
+  const repoDir = await createInitializedRepo();
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-worktree-dirty");
+
+  try {
+    await createBranchFromMain(
+      repoDir,
+      "agents/agent-worktree-dirty",
+      "feature.txt",
+      "agent branch\n",
+      "Agent dirty worktree branch"
+    );
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-worktree-dirty"]);
+    await writeFile(join(worktreePath, "draft.txt"), "not committed\n", "utf8");
+
+    await createSession(repoDir, {
+      id: "session-worktree-dirty",
+      agentName: "agent-worktree-dirty",
+      branch: "agents/agent-worktree-dirty",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:15:00.000Z"
+    });
+
+    await assert.rejects(async () => {
+      await mergeCommand({
+        selector: "agent-worktree-dirty",
+        startDir: repoDir
+      });
+    }, /Preserved worktree.*not clean/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("mergeCommand surfaces merge conflicts and records a failed merge event", async () => {
   const repoDir = await createInitializedRepo();
   const conflictPath = join(repoDir, "conflict.txt");
@@ -158,6 +195,57 @@ test("mergeCommand surfaces merge conflicts and records a failed merge event", a
     assert.equal(events[0]?.eventType, "merge.failed");
     assert.equal(events[0]?.payload.reason, "merge_conflict");
     assert.equal(events[0]?.payload.branch, "agents/agent-conflict");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("mergeCommand reports already-integrated branches without recording merge.completed", async () => {
+  const repoDir = await createInitializedRepo();
+  const notesPath = join(repoDir, "notes.txt");
+
+  try {
+    await writeFile(notesPath, "base\n", "utf8");
+    await git(repoDir, ["add", "notes.txt"]);
+    await git(repoDir, ["commit", "-m", "Add notes"]);
+    await git(repoDir, ["switch", "-c", "agents/agent-repeat"]);
+    await writeFile(notesPath, "agent change\n", "utf8");
+    await git(repoDir, ["add", "notes.txt"]);
+    await git(repoDir, ["commit", "-m", "Agent repeat change"]);
+    await git(repoDir, ["switch", "main"]);
+
+    await createSession(repoDir, {
+      id: "session-repeat",
+      agentName: "agent-repeat",
+      branch: "agents/agent-repeat",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-repeat"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:25:00.000Z"
+    });
+
+    await mergeCommand({
+      selector: "agent-repeat",
+      startDir: repoDir
+    });
+
+    const firstMergeHead = await git(repoDir, ["rev-parse", "HEAD"]);
+    const output = await captureStdout(async () => {
+      await mergeCommand({
+        selector: "session-repeat",
+        startDir: repoDir
+      });
+    });
+
+    assert.match(output, /already merged into main/);
+    assert.equal(await git(repoDir, ["rev-parse", "HEAD"]), firstMergeHead);
+
+    const events = await listEvents(repoDir, { sessionId: "session-repeat" });
+    assert.equal(events.length, 2);
+    assert.equal(events[0]?.eventType, "merge.completed");
+    assert.equal(events[1]?.eventType, "merge.skipped");
+    assert.equal(events[1]?.payload.reason, "already_up_to_date");
   } finally {
     await removeTempDir(repoDir);
   }

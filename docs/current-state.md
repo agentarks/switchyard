@@ -33,9 +33,9 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - spawn lifecycle events that now distinguish `sling.spawned` from `sling.completed`
 - durable runtime reconciliation events for `runtime.ready`, `runtime.exited_early`, and `runtime.exited`
 - first operator-facing event inspection path over `events.db`
-- first operator-facing merge path that preflights active sessions and dirty repo-root state before running `git merge --no-ff`
+- first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
-- merge lifecycle events for `merge.completed` and `merge.failed`
+- merge lifecycle events for `merge.completed`, `merge.failed`, and `merge.skipped`
 - first-readiness reconciliation in `sy status` that promotes launched sessions to `running` or marks them failed with a durable reason
 - explicit v0 decision to keep runtime control pid-backed and defer tmux unless operator workflows require attach or transcript handling
 - documented first merge and reintegration workflow that keeps the initial contract manual-first and git-native
@@ -84,10 +84,11 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `sy merge <session>`
   - resolves one session by id or normalized agent name
   - refuses active sessions so merge only runs against preserved work
+  - refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
   - requires the repo root worktree to be clean before it switches to the configured canonical branch
   - verifies the preserved local `agents/*` branch still exists
   - runs `git merge --no-ff <branch>` from the canonical repo root worktree
-  - records `merge.completed` on success and `merge.failed` when git stops in a conflict state
+  - records `merge.completed` on success, `merge.failed` when git stops in a conflict state, and `merge.skipped` when the branch is already integrated
   - leaves review, conflict resolution, validation, and cleanup explicit for the operator
 - `sy mail send <session> <body>`
   - resolves one session by id or normalized agent name

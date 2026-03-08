@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { access } from "node:fs/promises";
+import { relative } from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
 import { Command } from "commander";
@@ -54,13 +56,33 @@ export async function mergeCommand(options: MergeCommandOptions): Promise<void> 
     throw new MergeError(`Session ${session.id} points at '${branch}', which matches the canonical branch.`);
   }
 
-  await ensureProjectRootIsClean(config.project.root);
   await ensureLocalBranchExists(config.project.root, branch);
+  await ensurePreservedWorktreeIsClean(config.project.root, session);
+  await ensureProjectRootIsClean(config.project.root);
 
   const currentBranch = await getCurrentBranch(config.project.root);
 
   if (currentBranch !== canonicalBranch) {
     await switchToCanonicalBranch(config.project.root, canonicalBranch);
+  }
+
+  if (await isBranchAlreadyMerged(config.project.root, branch)) {
+    await recordEventWithFallback(recordEvent, config.project.root, {
+      sessionId: session.id,
+      agentName: session.agentName,
+      eventType: "merge.skipped",
+      payload: {
+        branch,
+        canonicalBranch,
+        reason: "already_up_to_date"
+      }
+    });
+
+    process.stdout.write(`Session ${session.agentName} is already merged into ${canonicalBranch}\n`);
+    process.stdout.write(`Session: ${session.id}\n`);
+    process.stdout.write(`Branch: ${branch}\n`);
+    process.stdout.write(`Next: if you no longer need the preserved worktree, run 'sy stop ${session.id} --cleanup'.\n`);
+    return;
   }
 
   try {
@@ -127,6 +149,25 @@ async function ensureProjectRootIsClean(projectRoot: string): Promise<void> {
   }
 }
 
+async function ensurePreservedWorktreeIsClean(projectRoot: string, session: SessionRecord): Promise<void> {
+  if (!(await pathExists(session.worktreePath))) {
+    return;
+  }
+
+  const { stdout } = await runGit(session.worktreePath, ["status", "--porcelain", "--untracked-files=all"]);
+  const dirtyEntries = stdout
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0)
+    .filter((line) => !isSwitchyardStateEntry(line));
+
+  if (dirtyEntries.length > 0) {
+    throw new MergeError(
+      `Preserved worktree for ${session.agentName} is not clean (${formatRelativePath(projectRoot, session.worktreePath)}). Commit, stash, or discard changes there before merging.`
+    );
+  }
+}
+
 async function ensureLocalBranchExists(projectRoot: string, branch: string): Promise<void> {
   try {
     await runGit(projectRoot, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
@@ -145,6 +186,15 @@ async function switchToCanonicalBranch(projectRoot: string, canonicalBranch: str
     await runGit(projectRoot, ["switch", canonicalBranch]);
   } catch (error) {
     throw new MergeError(`Failed to switch the repo root to '${canonicalBranch}': ${formatGitError(error)}`);
+  }
+}
+
+async function isBranchAlreadyMerged(projectRoot: string, branch: string): Promise<boolean> {
+  try {
+    await runGit(projectRoot, ["merge-base", "--is-ancestor", branch, "HEAD"]);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -204,4 +254,18 @@ function unquoteGitPath(path: string): string {
   }
 
   return path;
+}
+
+function formatRelativePath(projectRoot: string, path: string): string {
+  const relativePath = relative(projectRoot, path);
+  return relativePath.length > 0 ? relativePath : ".";
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
