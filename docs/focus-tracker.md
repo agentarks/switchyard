@@ -30,12 +30,12 @@ Completed enough to count as minimally real:
 - first readiness and early-failure handling as hardening work ahead of M8
 
 Not complete yet:
-- merge and reintegration workflow
+- merge and reintegration CLI implementation
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- define the smallest merge and reintegration workflow that fits the current repo-local loop
+- implement the smallest merge command that fits the documented repo-local workflow
 - improve pid-backed lifecycle control only where the current operator loop is still concretely weak
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
@@ -71,7 +71,7 @@ Use this rough project view instead of one flat percentage:
 
 - Core v0 operator loop: mostly complete
 - v0 hardening and operator confidence: in progress
-- merge/reintegration workflow: not started in implementation
+- merge/reintegration workflow: documented, not started in CLI implementation
 - broader long-term vision: intentionally deferred
 
 ## Exit Rule For A Session

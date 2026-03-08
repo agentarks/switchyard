@@ -4,39 +4,43 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Define the first merge and reintegration workflow for the current single-repo operator loop.
+Implement the smallest merge path that matches the documented merge contract.
 
 Target outcome:
-- the repo has an explicit answer for how work from an agent branch is supposed to return to the canonical branch
-- the answer is grounded in the current worktree, branch, status, and stop behavior
-- the next implementation step is clear whether it is a narrow `sy merge` command, a manual-first contract, or one smaller prerequisite
+- the repo has a narrow `sy merge` path for the current single-repo Codex loop
+- the command follows the documented manual-first workflow instead of inventing new product rules
+- the implementation makes it clearer whether merge needs any richer session metadata than the repo already stores
 
 ## Why This Is Next
 
 The runtime-control model is now explicit enough for v0. The biggest missing operator workflow is what happens after an agent has produced useful work on an `agents/*` branch.
 
-Without an explicit merge workflow:
-- operators can launch, inspect, and stop agents, but the repo-local lifecycle still has no defined reintegration step
-- cleanup expectations stay ambiguous because it is unclear when a branch or worktree is truly done
-- later merge automation would be forced to invent product rules that have not been written down yet
+The repo now has an explicit reintegration workflow, but the CLI still stops short of helping the operator execute it safely.
+
+Without a narrow merge command:
+- operators still have to translate session state into raw git steps by hand every time
+- Switchyard cannot preflight obvious risks such as trying to merge an active session
+- cleanup remains easier to get wrong than it should be because the product still relies on operator discipline alone
 
 ## Exact Order
 
 1. Audit the current post-work artifacts
-   - review what exists after a session runs or stops: branch, worktree, session state, and events
+   - confirm exactly which stored fields and files the merge path can rely on today: branch, worktree, session state, config, and events
    - stay grounded in the current single-repo Codex workflow
 
-2. Define the smallest merge contract
-   - decide what the operator must verify before reintegration
-   - decide what should stay manual in the first slice versus what belongs behind a command
+2. Implement the smallest `sy merge` path
+   - resolve one session to its preserved branch
+   - refuse unsafe states such as active sessions or missing branch metadata
+   - run the documented merge path against the configured canonical branch
 
-3. Record the workflow explicitly
-   - update the source-of-truth docs and the CLI contract
-   - add an ADR only if the merge boundary needs a durable tradeoff record
+3. Keep the scope narrow
+   - leave review, testing judgment, and conflict resolution operator-visible
+   - keep cleanup explicit unless the implementation proves a safer default
 
 4. Update docs
    - `docs/current-state.md`
    - `docs/roadmap.md`
+   - `docs/cli-contract.md`
    - any contract docs changed by the decision
 
 ## What To Keep Small
@@ -46,20 +50,22 @@ Do not build these in the same slice unless the implementation forces it:
 - automated merge queues
 - AI-assisted conflict resolution
 - broad multi-agent coordination logic
+- post-merge dashboards or reporting
 
 ## Definition Of Done
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- the repo has an explicit merge and reintegration workflow for the current loop
-- the rationale points to concrete operator behavior instead of abstract workflow preference
+- the repo has a working narrow merge path for the current loop
+- the command behavior matches the documented merge contract
+- tests cover the critical safety checks and happy path
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- answer the merge question for one repo-local Codex workflow, not for every future collaboration model
-- prefer one explicit operator-readable workflow over speculative automation
+- implement one session-at-a-time merge path, not a broader merge system
+- prefer one explicit operator-readable command over speculative automation
 - keep targeting one repo-local Codex lifecycle
 
-The point of this slice is to remove the biggest remaining lifecycle gap after spawn, inspection, and stop, not to design the final merge system.
+The point of this slice is to turn the documented reintegration workflow into a minimal safe command, not to design the final merge system.

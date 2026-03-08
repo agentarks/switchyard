@@ -9,6 +9,7 @@ This file defines the expected user-facing behavior of the early Switchyard CLI.
 - Failures should be explicit and operator-readable.
 - JSON output can wait until the underlying command behavior is stable.
 - Placeholder commands may accept future-looking arguments, but they should fail only when behavior is actually unsupported, not because the parser shape is too narrow.
+- Merge remains manual-first until a dedicated `sy merge` command exists.
 
 ## `sy init`
 
@@ -90,12 +91,24 @@ Current contract:
 - command resolves one session by id or normalized agent name
 - command stops one active pid-backed runtime cleanly
 - command updates durable session state in `sessions.db`
-- command preserves the worktree by default
+- command preserves the worktree by default so the operator can still review or merge the branch later
 - command removes the worktree and branch when `--cleanup` is passed
 
 Future target:
 - revisit alternate runtime control only if the pid-based path proves too narrow in real operator workflows
 - refine operator-facing output around stale or missing runtime state
+
+## Merge And Reintegration
+
+Current contract:
+- there is no `sy merge` command yet
+- operators should stop sessions without `--cleanup` before reintegration
+- operators should review the preserved `agents/*` branch and worktree with normal git and project checks
+- operators should merge that branch into the configured canonical branch manually from the repo root
+- operators should run `sy stop <session> --cleanup` only after a successful merge or an explicit abandon decision
+
+Future target:
+- add a narrow `sy merge <session>` command that automates preflight checks and invokes the documented merge path without hiding review or conflict resolution
 
 ## `sy mail`
 
