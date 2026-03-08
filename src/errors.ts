@@ -55,3 +55,9 @@ export class EventsError extends SwitchyardError {
     super(message, "EVENTS_ERROR");
   }
 }
+
+export class MergeError extends SwitchyardError {
+  constructor(message: string) {
+    super(message, "MERGE_ERROR");
+  }
+}

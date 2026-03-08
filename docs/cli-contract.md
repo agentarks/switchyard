@@ -9,7 +9,7 @@ This file defines the expected user-facing behavior of the early Switchyard CLI.
 - Failures should be explicit and operator-readable.
 - JSON output can wait until the underlying command behavior is stable.
 - Placeholder commands may accept future-looking arguments, but they should fail only when behavior is actually unsupported, not because the parser shape is too narrow.
-- Merge remains manual-first until a dedicated `sy merge` command exists.
+- Merge stays manual-first even with `sy merge`: the command should only preflight and run the explicit git merge path, while review, conflict resolution, validation, and cleanup stay operator-visible.
 
 ## `sy init`
 
@@ -98,17 +98,35 @@ Future target:
 - revisit alternate runtime control only if the pid-based path proves too narrow in real operator workflows
 - refine operator-facing output around stale or missing runtime state
 
+## `sy merge <session>`
+
+Current contract:
+- command resolves one session by id or normalized agent name
+- command refuses active sessions and only merges preserved work
+- command verifies that the preserved worktree path still resolves to the expected git worktree root
+- command refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
+- command requires the canonical repo-root worktree to be clean before it switches branches
+- command verifies the preserved local branch still exists
+- command switches the repo root to the configured canonical branch when needed
+- command runs `git merge --no-ff <agent-branch>` from the repo root
+- command records durable merge events for success, already-integrated no-op merges, and git-stopped conflict states
+- command leaves conflict resolution, validation, and cleanup explicit for the operator
+
+Future target:
+- improve cleanup ergonomics only if the first merge path exposes a real operator risk
+- broaden merge automation only if the explicit operator-visible path proves insufficient
+
 ## Merge And Reintegration
 
 Current contract:
-- there is no `sy merge` command yet
 - operators should stop sessions without `--cleanup` before reintegration
 - operators should review the preserved `agents/*` branch and worktree with normal git and project checks
-- operators should merge that branch into the configured canonical branch manually from the repo root
+- operators may run `sy merge <session>` to execute the documented repo-root merge path
+- operators may still use normal git directly when they intentionally want the manual path
 - operators should run `sy stop <session> --cleanup` only after a successful merge or an explicit abandon decision
 
 Future target:
-- add a narrow `sy merge <session>` command that automates preflight checks and invokes the documented merge path without hiding review or conflict resolution
+- improve cleanup ergonomics only if the first merge path exposes a concrete operator risk
 
 ## `sy mail`
 

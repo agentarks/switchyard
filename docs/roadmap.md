@@ -10,6 +10,7 @@ Switchyard is through the first operator-loop milestones:
 - M5 lifecycle control is minimally real
 - M6 messaging is now minimally real
 - M7 event inspection is now minimally real
+- first merge and reintegration CLI path is now minimally real
 - first readiness and early-failure handling are now minimally real as hardening work ahead of M8
 - later milestones remain design targets, not implementation commitments
 
@@ -28,21 +29,21 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Implement the smallest merge path that matches the documented workflow:
-- resolve one session to its preserved branch and configured canonical branch
-- add the narrowest safe command surface for the current repo-local Codex loop
-- keep review and conflict handling explicit instead of broadening automation
+Validate whether merge or recovery work truly needs richer session metadata:
+- keep the current schema if the new merge path proves it is already sufficient
+- add only the smallest field or contract clarification that removes a concrete operator ambiguity
+- keep cleanup and conflict handling explicit unless real usage shows a safer default is necessary
 
 Why this is next:
-- the merge contract is now explicit, so the next gap is executing it safely from the CLI
-- agent branches and worktrees already exist durably, which gives `sy merge` enough state to start small
-- implementing the narrow path should reveal whether richer metadata is actually needed or just theoretical
+- the merge path is now real, so the repo can judge metadata needs against actual workflow instead of guesses
+- the current branch/worktree/state fields may already be enough for the current scope
+- broadening durable state before that is proven would add complexity without operator value
 
 ## Order After That
 
 1. add richer session metadata only if merge or recovery work truly needs it
-2. broader mail semantics only if operator usage demands them
-3. improve merge cleanup ergonomics only if the first merge path exposes a real operator problem
+2. improve merge cleanup ergonomics only if the first merge path exposes a real operator problem
+3. broader mail semantics only if operator usage demands them
 
 ## Explicitly Deferred
 

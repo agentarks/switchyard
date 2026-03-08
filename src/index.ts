@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { createEventsCommand } from "./commands/events.js";
 import { createInitCommand } from "./commands/init.js";
 import { createMailCommand } from "./commands/mail.js";
+import { createMergeCommand } from "./commands/merge.js";
 import { createSlingCommand } from "./commands/sling.js";
 import { createStopCommand } from "./commands/stop.js";
 import { createStatusCommand } from "./commands/status.js";
@@ -22,6 +23,7 @@ async function main(): Promise<void> {
   program.addCommand(createSlingCommand());
   program.addCommand(createStatusCommand());
   program.addCommand(createStopCommand());
+  program.addCommand(createMergeCommand());
   program.addCommand(createMailCommand());
 
   try {

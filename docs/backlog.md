@@ -4,21 +4,20 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Implement the smallest merge path that matches the documented workflow
-2. Add richer session metadata only if merge or recovery work needs it
+1. Add richer session metadata only if merge or recovery work exposes a concrete gap
+2. Improve merge cleanup ergonomics only if the first merge path exposes a real operator risk
 
 ## Next
 
 3. Expand mail semantics beyond the first durable path
-4. Improve merge cleanup ergonomics only if the first merge path exposes a real operator risk
 
 ## After That
 
-5. Add background diagnostics only if operator workflows require it
+4. Add background diagnostics only if operator workflows require it
 
 ## Then
 
-6. Dashboard or TUI work, if still justified
+5. Dashboard or TUI work, if still justified
 
 ## Later
 
