@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
 import type { EventPayload, EventRecord } from "../events/types.js";
-import { EventsError } from "../errors.js";
+import { EventsError, WorktreeError } from "../errors.js";
 import { findLatestSessionByAgent, getSessionById } from "../sessions/store.js";
 import type { SessionRecord } from "../sessions/types.js";
 import { normalizeAgentName } from "../worktrees/naming.js";
@@ -63,14 +63,37 @@ export async function eventsCommand(options: EventsCommandOptions = {}): Promise
   }
 }
 
-async function resolveSession(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
-  const byId = await getSessionById(projectRoot, selector);
+interface ResolvedSessionSelector {
+  byId?: SessionRecord;
+  byAgent?: SessionRecord;
+}
 
-  if (byId) {
-    return byId;
+async function resolveSessionSelector(projectRoot: string, selector: string): Promise<ResolvedSessionSelector> {
+  const byId = await getSessionById(projectRoot, selector);
+  const normalizedSelector = normalizeSelectorAsAgentName(selector);
+  const byAgent = normalizedSelector
+    ? await findLatestSessionByAgent(projectRoot, normalizedSelector)
+    : undefined;
+
+  if (byId && byAgent && byId.id !== byAgent.id) {
+    throw new EventsError(
+      `Selector '${selector}' is ambiguous: it matches session '${byId.id}' by id and session '${byAgent.id}' by agent name.`
+    );
   }
 
-  return await findLatestSessionByAgent(projectRoot, normalizeAgentName(selector));
+  return { byId, byAgent };
+}
+
+function normalizeSelectorAsAgentName(selector: string): string | undefined {
+  try {
+    return normalizeAgentName(selector);
+  } catch (error) {
+    if (error instanceof WorktreeError) {
+      return undefined;
+    }
+
+    throw error;
+  }
 }
 
 async function resolveEventSelection(
@@ -78,7 +101,8 @@ async function resolveEventSelection(
   selector: string,
   limit: number
 ): Promise<ResolvedEventSelection | undefined> {
-  const session = await resolveSessionById(projectRoot, selector);
+  const { byId, byAgent } = await resolveSessionSelector(projectRoot, selector);
+  const session = byId;
 
   if (session) {
     const events = await listEvents(projectRoot, {
@@ -99,32 +123,32 @@ async function resolveEventSelection(
   });
 
   if (directSessionEvents.length > 0) {
+    if (byAgent) {
+      throw new EventsError(
+        `Selector '${selector}' is ambiguous: it matches orphaned events for session '${selector}' and session '${byAgent.id}' by agent name.`
+      );
+    }
+
     return {
       sessionId: selector,
       events: directSessionEvents
     };
   }
 
-  const sessionByAgent = await findLatestSessionByAgent(projectRoot, normalizeAgentName(selector));
-
-  if (!sessionByAgent) {
+  if (!byAgent) {
     return undefined;
   }
 
   const agentEvents = await listEvents(projectRoot, {
-    sessionId: sessionByAgent.id,
+    sessionId: byAgent.id,
     limit
   });
 
   return {
-    session: sessionByAgent,
-    sessionId: sessionByAgent.id,
+    session: byAgent,
+    sessionId: byAgent.id,
     events: agentEvents
   };
-}
-
-async function resolveSessionById(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
-  return await getSessionById(projectRoot, selector);
 }
 
 function formatHeading(projectName: string, session?: SessionRecord, sessionId?: string): string {

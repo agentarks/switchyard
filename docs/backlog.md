@@ -4,19 +4,19 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Pay down selector ambiguity in operator inspection paths
+1. Add richer session metadata only if merge or recovery work exposes a concrete gap
 
 ## Next
 
-2. Add richer session metadata only if merge or recovery work exposes a concrete gap
+2. Add background diagnostics only if operator workflows require it
 
 ## After That
 
-3. Add background diagnostics only if operator workflows require it
+3. Dashboard or TUI work, if still justified
 
 ## Then
 
-4. Dashboard or TUI work, if still justified
+4. Multiple runtimes beyond Codex, if still justified
 
 ## Later
 
