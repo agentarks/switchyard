@@ -475,6 +475,74 @@ test("statusCommand marks stale running sessions as failed", async () => {
   );
 });
 
+test("statusCommand keeps rendering when unread mail counts cannot be loaded", async () => {
+  const repoDir = await createInitializedRepo();
+  const stdoutWrites: string[] = [];
+  const stderrWrites: string[] = [];
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  await createSession(repoDir, {
+    id: "agent-mail-broken",
+    agentName: "agent-mail-broken",
+    branch: "agents/agent-mail-broken",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-mail-broken"),
+    state: "running",
+    runtimePid: 9191,
+    createdAt: "2026-03-06T09:00:00.000Z",
+    updatedAt: "2026-03-06T10:00:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "agent-mail-broken",
+    agentName: "agent-mail-broken",
+    eventType: "sling.completed",
+    payload: {
+      runtimePid: 9191,
+      readyAfterMs: 500
+    },
+    createdAt: "2026-03-06T09:30:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    stdoutWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stderr.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false,
+      now: () => "2026-03-08T10:05:00.000Z",
+      listUnreadMailCounts: async () => {
+        throw new Error("mail unavailable");
+      }
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(sessions[0]?.runtimePid, null);
+
+    const events = await listEvents(repoDir, { sessionId: "agent-mail-broken" });
+    assert.equal(events.length, 2);
+    assert.equal(events[1]?.eventType, "runtime.exited");
+    assert.equal(events[1]?.payload.reason, "pid_not_alive");
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    stdoutWrites.join(""),
+    /failed\tagent-mail-broken\tagents\/agent-mail-broken\t\.switchyard\/worktrees\/agent-mail-broken\t2026-03-08T10:05:00.000Z\t\?\t2026-03-08T10:05:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=9191/
+  );
+  assert.match(stderrWrites.join(""), /WARN: failed to load unread mail counts: mail unavailable/);
+});
+
 test("statusCommand shows the reconciled recent event even when event persistence fails", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
