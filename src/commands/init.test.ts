@@ -58,6 +58,8 @@ test("sy init bootstraps the repo root when invoked from a nested directory", as
     ]) {
       await access(join(repoDir, relativePath));
     }
+
+    await assert.rejects(() => access(join(nestedDir, ".switchyard", "config.yaml")));
   } finally {
     await removeTempDir(repoDir);
   }
