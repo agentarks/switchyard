@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with unread-mail visibility, stop, events with explicit selector disambiguation, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with unread-mail visibility, stop, events with explicit selector disambiguation, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
 
 ## What Exists
 
@@ -22,6 +22,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - canonical branch detection that prefers `origin/HEAD`
 - config loading that normalizes `project.root` to the canonical repo root
 - `.switchyard/` bootstrap for directories and placeholder database files
+- end-to-end CLI regression coverage around `sy init`, including nested-directory root resolution and repo-root bootstrap outputs
 - session store with schema ownership for `sessions.db`
 - mail store with schema ownership for `mail.db`
 - event store with schema ownership for `events.db`
@@ -138,7 +139,6 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 - `src/config.ts` is carrying both config logic and git root-resolution behavior; that should eventually split once lifecycle code grows further.
 - `node:sqlite` is still experimental in Node 25, so the SQLite choice may need revision if core API churn becomes painful.
-- there is no end-to-end test around `sy init`.
 - older session rows created before `baseBranch` was added now fail closed for `sy merge` and plain merged-cleanup, so operators must use manual git review/merge or explicit `--abandon`
 - the current readiness model is intentionally narrow: `sy sling` only proves the process survived a short launch window, and `sy status` promotes the session to `running` on the first later successful pid liveness check.
 - the current runtime-control model intentionally omits live attach and transcript capture, so debugging still relies on durable events and external process inspection.
@@ -148,11 +148,10 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## Recommended Next Task
 
-Add end-to-end regression coverage around `sy init`:
-- keep the slice narrow and focused on the repo bootstrap contract
-- prefer one realistic CLI-path test over broader new behavior
-
-The current inspection gap is now covered narrowly enough for the operator loop. The next slice should reduce bootstrap risk without broadening product scope.
+Do not pick a broad new surface area yet:
+- wait for the next concrete operator-loop blind spot before fixing a new slice
+- prefer another narrow inspection or lifecycle hardening task only when a real workflow exposes it
+- keep prioritizing operator-readable behavior inside the current repo-local loop over new subsystems
 
 ## How To Use This File
 

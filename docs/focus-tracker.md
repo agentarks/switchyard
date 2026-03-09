@@ -36,9 +36,10 @@ Completed enough to count as minimally real:
 - merge-target metadata retention for canonical-branch drift
 - dirty-entry diagnostics for merge preflight failures
 - first readiness and early-failure handling as hardening work ahead of M8
+- end-to-end coverage around `sy init`
 
 Not complete yet:
-- end-to-end coverage around `sy init`
+- the next hardening slice is intentionally not preselected; wait for a concrete operator-loop gap
 
 ## Current In-Scope Work
 

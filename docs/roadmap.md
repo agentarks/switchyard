@@ -16,6 +16,7 @@ Switchyard is through the first operator-loop milestones:
 - first merge and reintegration CLI path is now minimally real
 - merge-target metadata retention for canonical-branch drift is now minimally real
 - first readiness and early-failure handling are now minimally real as hardening work ahead of M8
+- end-to-end repo-bootstrap regression coverage for `sy init` is now minimally real
 - later milestones remain design targets, not implementation commitments
 
 ## Near-Term Rule
@@ -33,15 +34,15 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Add end-to-end regression coverage around `sy init`:
-- keep the slice grounded in the existing repo bootstrap contract
-- prefer one realistic operator path over broader new behavior
-- use the test to lock in root resolution, config creation, and bootstrap layout expectations
+Do not pre-commit to a broader feature slice yet:
+- wait for the next concrete blind spot in the current operator loop
+- choose the smallest inspection or lifecycle hardening task that addresses that real gap
+- keep new work grounded in repo-local reliability rather than new surface area
 
 Why this is next:
-- the current merge inspection gap is now covered with dirty-entry diagnostics
-- `sy init` still lacks end-to-end coverage even though the bootstrap contract anchors the whole operator loop
-- this is a smaller risk-reduction slice than adding more reporting surface
+- the repo bootstrap contract is now covered by one realistic CLI-path regression test
+- the current loop has no single larger missing slice that is clearly worth fixing before another real operator gap appears
+- deferring speculative breadth is more valuable than inventing a new milestone-sized task
 
 ## Order After That
 
