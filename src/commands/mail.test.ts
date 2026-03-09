@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
+import { MailError } from "../errors.js";
 import { createMail, listMailForSession, readUnreadMailForSession } from "../mail/store.js";
 import { createSession } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
@@ -315,6 +316,104 @@ test("mailListCommand reports an empty mailbox without mutating state", async ()
   }
 
   assert.match(writes.join(""), /No mail for agent-six\./);
+});
+
+test("mailListCommand rejects selectors that match different sessions by id and agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    const idMatchedSession = await createSession(repoDir, {
+      id: "shared-name",
+      agentName: "other-agent",
+      branch: "agents/other-agent",
+      worktreePath: `${repoDir}/.switchyard/worktrees/other-agent`,
+      state: "running",
+      runtimePid: 7771,
+      createdAt: "2026-03-06T15:00:00.000Z",
+      updatedAt: "2026-03-06T15:00:00.000Z"
+    });
+    const agentMatchedSession = await createSession(repoDir, {
+      id: "session-seven",
+      agentName: "shared-name",
+      branch: "agents/shared-name",
+      worktreePath: `${repoDir}/.switchyard/worktrees/shared-name`,
+      state: "running",
+      runtimePid: 7772,
+      createdAt: "2026-03-06T15:05:00.000Z",
+      updatedAt: "2026-03-06T15:05:00.000Z"
+    });
+
+    await assert.rejects(
+      () =>
+        mailListCommand({
+          selector: "shared-name",
+          startDir: repoDir
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof MailError);
+        assert.match(
+          error.message,
+          /Selector 'shared-name' is ambiguous: it matches session 'shared-name' by id and session 'session-seven' by agent name\./
+        );
+        return true;
+      }
+    );
+
+    const idMailbox = await listMailForSession(repoDir, idMatchedSession.id);
+    const agentMailbox = await listMailForSession(repoDir, agentMatchedSession.id);
+    assert.deepEqual(idMailbox, []);
+    assert.deepEqual(agentMailbox, []);
+    const events = await listEvents(repoDir, { limit: 10 });
+    assert.deepEqual(events, []);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("mailSendCommand rejects selectors that match different sessions by id and agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createSession(repoDir, {
+      id: "shared-name",
+      agentName: "other-agent",
+      branch: "agents/other-agent",
+      worktreePath: `${repoDir}/.switchyard/worktrees/other-agent`,
+      state: "running",
+      runtimePid: 8881,
+      createdAt: "2026-03-06T16:00:00.000Z",
+      updatedAt: "2026-03-06T16:00:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-eight",
+      agentName: "shared-name",
+      branch: "agents/shared-name",
+      worktreePath: `${repoDir}/.switchyard/worktrees/shared-name`,
+      state: "running",
+      runtimePid: 8882,
+      createdAt: "2026-03-06T16:05:00.000Z",
+      updatedAt: "2026-03-06T16:05:00.000Z"
+    });
+
+    await assert.rejects(
+      () =>
+        mailSendCommand({
+          selector: "shared-name",
+          body: "This should not be sent.",
+          startDir: repoDir
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof MailError);
+        assert.match(error.message, /Selector 'shared-name' is ambiguous:/);
+        return true;
+      }
+    );
+
+    const events = await listEvents(repoDir, { limit: 10 });
+    assert.deepEqual(events, []);
+  } finally {
+    await removeTempDir(repoDir);
+  }
 });
 
 async function createInitializedRepo(): Promise<string> {

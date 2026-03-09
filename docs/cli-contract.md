@@ -143,6 +143,7 @@ Current contract:
 - `sy mail check` marks returned messages as read
 - `sy mail list <session>` reads the full mailbox for one resolved session
 - `sy mail list` does not change read state
+- mail commands reject selectors that match one session by id and a different session by normalized agent name
 
 Future target:
 - support simple durable operator/agent messaging

@@ -108,6 +108,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - resolves one session by id or normalized agent name
   - prints the full mailbox for that session in creation order
   - leaves read/unread state unchanged
+  - rejects ambiguous selectors that would match different sessions by id and agent name
 
 ## Current Merge Workflow
 
