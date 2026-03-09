@@ -41,7 +41,7 @@ git merge --no-ff agents/<agent-name>
 
 4. Resolve the outcome explicitly.
    - If the merge succeeds, validate the merged result with the checks you normally trust on the canonical branch.
-   - If the merge conflicts, resolve it manually or abort with git. Switchyard does not resolve conflicts or abort for you.
+   - If the merge conflicts, `sy merge` surfaces the conflicting paths so you can inspect them immediately. Resolve the conflict manually or abort with git. Switchyard does not resolve conflicts or abort for you.
    - If you decide not to keep the work, treat that as an explicit abandon decision.
 
 5. Clean up only after the outcome is known.
@@ -73,6 +73,7 @@ The current `sy merge <session>` path:
 - verifies that the preserved worktree path is still the expected git worktree
 - refuses dirty preserved worktrees so uncommitted agent changes are not stranded before cleanup
 - validates that the canonical branch worktree is usable
+- reports the conflicted paths when `git merge` stops in a conflict state
 - records a no-op `merge.skipped` event when the branch is already integrated
 - runs the same explicit merge contract from this document
 

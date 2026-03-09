@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts and exact per-session inspection, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts and exact per-session inspection, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop. Merge conflicts now also surface the conflicting paths directly in `sy merge`, with compact conflict metadata carried into durable events and recent status context.
 
 ## What Exists
 
@@ -45,6 +45,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - explicit selector disambiguation in `sy stop` and `sy merge` when one raw selector could name different sessions by session-id and agent-name
 - first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
 - merge preflight failures that now surface the blocking git status entries for dirty repo-root and preserved-worktree states
+- merge conflict failures that now surface the conflicting paths directly in `sy merge` and durable `merge.failed` events
 - merge and merged-cleanup guards that now refuse to silently retarget preserved work when the configured canonical branch changes after launch
 - first operator-facing cleanup guard that only removes preserved merge artifacts automatically when the branch is confirmed merged, and otherwise requires explicit `--abandon`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
@@ -59,7 +60,6 @@ This repository now has a minimal but real operator loop for one repo-local Code
 ## What Does Not Exist Yet
 
 - interactive runtime attach or transcript capture
-- conflict reporting beyond normal git behavior
 - automatic cleanup after merge
 
 ## Current Command Surface
@@ -102,7 +102,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - prints a tab-separated session table ordered by most recent update
   - includes the durable session id in that table for exact follow-up selectors
   - includes one unread-mail count per session from `mail.db`
-  - includes one concise recent-event summary per session when event history exists, including `readyAfterMs` for fresh `sling.completed` events
+  - includes one concise recent-event summary per session when event history exists, including `readyAfterMs` for fresh `sling.completed` events and compact merge-conflict details for `merge.failed`
   - records runtime reconciliation events when it changes session state
 - `sy stop <session>`
   - resolves one session by id or normalized agent name
@@ -129,6 +129,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - reports the blocking git status entries when the repo root is dirty
   - verifies the preserved local `agents/*` branch still exists
   - runs `git merge --no-ff <branch>` from the canonical repo root worktree
+  - surfaces the conflicting paths when git stops in a merge-conflict state
   - records `merge.completed` on success, `merge.failed` when git stops in a conflict state, and `merge.skipped` when the branch is already integrated
   - leaves review, conflict resolution, validation, and cleanup explicit for the operator
 - `sy mail send <session> <body>`

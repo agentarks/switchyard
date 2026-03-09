@@ -399,12 +399,20 @@ test("mergeCommand surfaces merge conflicts and records a failed merge event", a
       updatedAt: "2026-03-08T09:20:00.000Z"
     });
 
-    await assert.rejects(async () => {
-      await mergeCommand({
-        selector: "agent-conflict",
-        startDir: repoDir
-      });
-    }, /git merge --abort/);
+    await assert.rejects(
+      async () => {
+        await mergeCommand({
+          selector: "agent-conflict",
+          startDir: repoDir
+        });
+      },
+      (error: unknown) => {
+        assert.ok(error instanceof MergeError);
+        assert.match(error.message, /Conflicting paths: conflict\.txt\./);
+        assert.match(error.message, /git merge --abort/);
+        return true;
+      }
+    );
 
     assert.ok((await git(repoDir, ["rev-parse", "--verify", "MERGE_HEAD"])).length > 0);
 
@@ -413,6 +421,8 @@ test("mergeCommand surfaces merge conflicts and records a failed merge event", a
     assert.equal(events[0]?.eventType, "merge.failed");
     assert.equal(events[0]?.payload.reason, "merge_conflict");
     assert.equal(events[0]?.payload.branch, "agents/agent-conflict");
+    assert.equal(events[0]?.payload.conflictCount, 1);
+    assert.equal(events[0]?.payload.firstConflictPath, "conflict.txt");
   } finally {
     await removeTempDir(repoDir);
   }
