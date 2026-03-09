@@ -12,6 +12,7 @@ Switchyard is through the first operator-loop milestones:
 - read-only mailbox inspection is now minimally real inside the messaging path
 - M7 event inspection is now minimally real
 - first merge and reintegration CLI path is now minimally real
+- merge-target metadata retention for canonical-branch drift is now minimally real
 - first readiness and early-failure handling are now minimally real as hardening work ahead of M8
 - later milestones remain design targets, not implementation commitments
 
@@ -30,21 +31,20 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Validate whether merge or recovery work needs richer session metadata:
-- add metadata only when a concrete operator workflow proves the current stored state is insufficient
-- keep the change narrow and operator-readable instead of broadening schema or reporting preemptively
-- avoid broad inspection features while the current repo-local loop is still the target
+Validate whether the current `send` / `check` / `list` mail split needs one more narrow operator-facing behavior:
+- add semantics only when a concrete operator workflow proves the current mail path is insufficient
+- keep the change narrow and operator-readable instead of broadening mailbox state or coordination semantics preemptively
+- avoid broad messaging features while the current repo-local loop is still the target
 
 Why this is next:
-- selector precedence is now explicit in the inspection path, so the next question is whether recovery work still lacks any concrete context
-- broader metadata should be justified by real merge or recovery pressure, not added speculatively
-- validating the current state shape is a better next use of scope than expanding schema without evidence
+- the merge/recovery metadata question is now resolved with one stored `baseBranch` field
+- broader mail semantics should be justified by real operator friction, not added speculatively
+- validating the current mail path is a better next use of scope than expanding collaboration features without evidence
 
 ## Order After That
 
-1. broader mail semantics only if the current send/check/list split still proves insufficient
-2. improve diagnostics only if operator workflows require them
-3. broader runtime breadth only if the current Codex-first loop stops being the right constraint
+1. improve diagnostics only if operator workflows require them
+2. broader runtime breadth only if the current Codex-first loop stops being the right constraint
 
 ## Explicitly Deferred
 
@@ -61,4 +61,3 @@ Do not prioritize these yet:
 
 Before moving past the core lifecycle, resolve these with code or an ADR:
 - whether Node built-ins remain sufficient for SQLite
-- whether merge or recovery work truly needs richer session metadata

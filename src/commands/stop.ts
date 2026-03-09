@@ -261,11 +261,14 @@ async function resolveCleanupRequest(options: {
     };
   }
 
-  await cleanupSessionArtifacts(options);
+  await cleanupSessionArtifacts({
+    ...options,
+    canonicalBranch: decision.canonicalBranch
+  });
 
   return {
     performed: true,
-    message: formatCleanupMessage(decision.mode, options.canonicalBranch),
+    message: formatCleanupMessage(decision.mode, decision.canonicalBranch),
     cleanupMode: decision.mode
   };
 }
@@ -301,12 +304,14 @@ async function determineCleanupDecision(options: {
   session: SessionRecord;
   abandon?: boolean;
 }): Promise<
-  | { kind: "perform"; mode: CleanupMode }
-  | { kind: "blocked"; reason: CleanupReason; message: string }
+  | { kind: "perform"; mode: CleanupMode; canonicalBranch: string }
+  | { kind: "blocked"; reason: CleanupReason; message: string; canonicalBranch: string }
   | { kind: "already_absent" }
 > {
+  const canonicalBranch = resolveSessionCanonicalBranch(options.session, options.canonicalBranch);
+
   if (options.abandon) {
-    return { kind: "perform", mode: "abandoned" };
+    return { kind: "perform", mode: "abandoned", canonicalBranch };
   }
 
   const branch = options.session.branch.trim();
@@ -315,6 +320,7 @@ async function determineCleanupDecision(options: {
     return {
       kind: "blocked",
       reason: "missing_branch_metadata",
+      canonicalBranch,
       message: `Refusing cleanup for ${options.session.agentName}: no preserved branch metadata is available. Rerun with '--cleanup --abandon' to discard the remaining artifacts explicitly.`
     };
   }
@@ -330,18 +336,20 @@ async function determineCleanupDecision(options: {
     return {
       kind: "blocked",
       reason: "branch_missing",
-      message: `Refusing cleanup for ${options.session.agentName}: cannot confirm preserved branch '${branch}' is merged into '${options.canonicalBranch}'. Rerun without '--cleanup' to preserve the remaining artifacts, or pass '--cleanup --abandon' to discard them explicitly.`
+      canonicalBranch,
+      message: `Refusing cleanup for ${options.session.agentName}: cannot confirm preserved branch '${branch}' is merged into '${canonicalBranch}'. Rerun without '--cleanup' to preserve the remaining artifacts, or pass '--cleanup --abandon' to discard them explicitly.`
     };
   }
 
-  if (branch === options.canonicalBranch || await isBranchMergedIntoCanonical(options.projectRoot, branch, options.canonicalBranch)) {
-    return { kind: "perform", mode: "merged" };
+  if (branch === canonicalBranch || await isBranchMergedIntoCanonical(options.projectRoot, branch, canonicalBranch)) {
+    return { kind: "perform", mode: "merged", canonicalBranch };
   }
 
   return {
     kind: "blocked",
     reason: "not_merged",
-    message: `Refusing cleanup for ${options.session.agentName}: preserved branch '${branch}' is not merged into '${options.canonicalBranch}'. Rerun without '--cleanup' to preserve it, or pass '--cleanup --abandon' to discard it explicitly.`
+    canonicalBranch,
+    message: `Refusing cleanup for ${options.session.agentName}: preserved branch '${branch}' is not merged into '${canonicalBranch}'. Rerun without '--cleanup' to preserve it, or pass '--cleanup --abandon' to discard it explicitly.`
   };
 }
 
@@ -355,6 +363,11 @@ function formatCleanupMessage(cleanupMode: CleanupMode | undefined, canonicalBra
   }
 
   return "Cleanup: removed worktree and branch.";
+}
+
+function resolveSessionCanonicalBranch(session: SessionRecord, configuredCanonicalBranch: string): string {
+  const sessionBaseBranch = session.baseBranch?.trim() ?? "";
+  return sessionBaseBranch.length > 0 ? sessionBaseBranch : configuredCanonicalBranch;
 }
 
 async function localBranchExists(projectRoot: string, branch: string): Promise<boolean> {

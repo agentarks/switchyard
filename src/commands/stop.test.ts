@@ -568,6 +568,65 @@ test("stopCommand removes the worktree and branch after confirmed merge cleanup"
   assert.match(output, /Cleanup: removed worktree and branch after confirming merge into main\./);
 });
 
+test("stopCommand uses the session base branch for merged cleanup when config drifts later", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-target-drift");
+
+  try {
+    await slingCommand({
+      agentName: "Agent Target Drift",
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 9091,
+          command: {
+            command: "codex",
+            args: []
+          },
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    await stopCommand({
+      selector: "agent-target-drift",
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 9091,
+      stopRuntime: async () => true
+    });
+
+    await git(repoDir, ["merge", "--no-ff", "agents/agent-target-drift", "-m", "Merge agent target drift"]);
+    await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "release"));
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await stopCommand({
+      selector: "agent-target-drift",
+      cleanup: true,
+      startDir: repoDir
+    });
+
+    await assert.rejects(async () => {
+      await access(worktreePath);
+    });
+    await assert.rejects(async () => {
+      await git(repoDir, ["rev-parse", "--verify", "agents/agent-target-drift"]);
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Session agent-target-drift is already stopped\./);
+  assert.match(output, /Cleanup: removed worktree and branch after confirming merge into main\./);
+});
+
 test("stopCommand rejects --abandon without --cleanup", async () => {
   const repoDir = await createInitializedRepo();
 

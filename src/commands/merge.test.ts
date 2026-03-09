@@ -90,6 +90,38 @@ test("mergeCommand refuses to merge an active session", async () => {
   }
 });
 
+test("mergeCommand refuses to retarget a preserved session when canonical config drifted", async () => {
+  const repoDir = await createInitializedRepo();
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-drift");
+
+  try {
+    await createBranchFromMain(repoDir, "agents/agent-drift", "drift.txt", "agent branch\n", "Agent drift branch");
+    await git(repoDir, ["branch", "release"]);
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-drift"]);
+    await createSession(repoDir, {
+      id: "session-drift",
+      agentName: "agent-drift",
+      branch: "agents/agent-drift",
+      baseBranch: "main",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:12:00.000Z"
+    });
+    await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "release"));
+
+    await assert.rejects(async () => {
+      await mergeCommand({
+        selector: "agent-drift",
+        startDir: repoDir
+      });
+    }, /created against 'main'.*configured to merge into 'release'/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("mergeCommand refuses to run when the canonical worktree is dirty", async () => {
   const repoDir = await createInitializedRepo();
   const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-dirty");

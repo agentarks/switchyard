@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events with explicit selector disambiguation, durable mail with both unread reads and read-only mailbox inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events with explicit selector disambiguation, durable mail with both unread reads and read-only mailbox inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
 
 ## What Exists
 
@@ -25,6 +25,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - mail store with schema ownership for `mail.db`
 - event store with schema ownership for `events.db`
 - session records that now retain the spawned runtime pid
+- session records that now retain the original canonical branch as `baseBranch`
 - session records that distinguish launch-time `starting` from confirmed `running`
 - worktree manager with deterministic branch and path naming
 - narrow Codex runtime seam that builds and spawns one detached command
@@ -36,6 +37,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - first operator-facing event inspection path over `events.db`
 - explicit selector disambiguation in `sy events` when one raw selector could name different session-id, agent-name, or orphaned-event targets
 - first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
+- merge and merged-cleanup guards that now refuse to silently retarget preserved work when the configured canonical branch changes after launch
 - first operator-facing cleanup guard that only removes preserved merge artifacts automatically when the branch is confirmed merged, and otherwise requires explicit `--abandon`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
 - merge lifecycle events for `merge.completed`, `merge.failed`, and `merge.skipped`
@@ -67,6 +69,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - creates one deterministic branch under `agents/`
   - creates one worktree under `.switchyard/worktrees/`
   - spawns one Codex process from that worktree
+  - persists the original canonical branch as session `baseBranch`
   - records `sling.spawned` once the runtime pid exists
   - waits for one short initial readiness window before persisting the session as `starting`
   - records `sling.completed` after that launch window succeeds, including `readyAfterMs`
@@ -85,12 +88,13 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - stops one active pid-backed runtime and updates durable session state
   - preserves the worktree by default so the operator can review or merge the branch later
   - still stops active sessions when `--cleanup` is requested, even if cleanup is later refused
-  - removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the configured canonical branch
+  - removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch` when available, or the configured canonical branch for older rows
   - requires `--cleanup --abandon` to discard preserved work that is not confirmed merged
   - reports when preserved cleanup artifacts were already absent instead of claiming removal
 - `sy merge <session>`
   - resolves one session by id or normalized agent name
   - refuses active sessions so merge only runs against preserved work
+  - refuses to silently retarget preserved work when the session `baseBranch` disagrees with the current configured canonical branch
   - verifies the preserved worktree path still resolves to the expected git worktree root
   - refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
   - requires the repo root worktree to be clean before it switches to the configured canonical branch
@@ -126,6 +130,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `src/config.ts` is carrying both config logic and git root-resolution behavior; that should eventually split once lifecycle code grows further.
 - `node:sqlite` is still experimental in Node 25, so the SQLite choice may need revision if core API churn becomes painful.
 - there is no end-to-end test around `sy init`.
+- older session rows created before `baseBranch` was added still fall back to the current configured canonical branch during merge and merged-cleanup checks
 - the current readiness model is intentionally narrow: `sy sling` only proves the process survived a short launch window, and `sy status` promotes the session to `running` on the first later successful pid liveness check.
 - the current runtime-control model intentionally omits live attach and transcript capture, so debugging still relies on durable events and external process inspection.
 - the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.
@@ -134,11 +139,11 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## Recommended Next Task
 
-Validate whether merge or recovery work needs richer session metadata:
-- add metadata only when a concrete operator workflow proves the current pid, branch, worktree, and event context are insufficient
+Validate whether the current `sy mail send` / `sy mail check` / `sy mail list` split needs one more narrow operator-facing behavior:
+- add semantics only if a concrete operator workflow is still awkward with the current send, unread-consume, and read-only-inspect paths
 - keep the change narrow and grounded in the current single-repo lifecycle
 
-The selector ambiguity in the current inspection path is now explicit instead of silently guessed. The next slice should stay small and only broaden state if real recovery work proves a gap.
+The merge/recovery metadata question is now resolved with one stored `baseBranch` field. The next slice should stay equally small and avoid broadening mail or inspection semantics without clear operator pressure.
 
 ## How To Use This File
 

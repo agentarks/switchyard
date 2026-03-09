@@ -164,13 +164,13 @@ These are the current project decisions and should be treated as the default unt
 - Codex is the first-class runtime for the early project
 - `node:sqlite` is accepted for the first persistence slices behind narrow store modules
 - pid-backed detached runtime control is sufficient for v0; tmux is deferred until operator workflows require attach or transcript handling
+- session records retain the original canonical branch as `baseBranch` so merge and merged-cleanup decisions do not silently retarget when config drifts later
 - the first merge workflow is manual-first: stop without cleanup, review the preserved branch, use the narrow `sy merge` path or explicit git to merge into the canonical branch, then clean up
 - broader runtime abstraction is deferred until the core lifecycle is real
 
 ## Open Decisions
 
 These still need to be resolved or confirmed:
-- Does merge and recovery work need richer session metadata beyond the current pid, branch, and worktree fields?
 - Should mail expand beyond the first durable unread-only path?
 
 ## Suggested Order For Our Next Sessions

@@ -31,15 +31,16 @@ Completed enough to count as minimally real:
 - read-only mailbox inspection inside the mail path
 - M7 first event inspection path
 - first merge and reintegration CLI path
+- merge-target metadata retention for canonical-branch drift
 - first readiness and early-failure handling as hardening work ahead of M8
 
 Not complete yet:
-- any session metadata that real merge or recovery work proves necessary
+- any broader mail semantics that real operator workflows prove necessary
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- only broaden session metadata if a real merge or recovery workflow needs it
+- only broaden mail semantics if a real operator workflow needs them
 - improve pid-backed lifecycle control only where the current operator loop is still concretely weak
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes

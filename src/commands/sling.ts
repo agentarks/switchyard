@@ -76,6 +76,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
           createdAt: spawnedAt,
           payload: {
             branch: managedWorktree.branch,
+            baseBranch: managedWorktree.baseBranch,
             worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
             runtimePid: spawnedRuntime.pid,
             runtimeCommand: formatRuntimeCommand(spawnedRuntime)
@@ -91,6 +92,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       id: sessionId,
       agentName: managedWorktree.agentName,
       branch: managedWorktree.branch,
+      baseBranch: managedWorktree.baseBranch,
       worktreePath: managedWorktree.path,
       state: "failed",
       createdAt,
@@ -123,6 +125,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       id: sessionId,
       agentName: managedWorktree.agentName,
       branch: managedWorktree.branch,
+      baseBranch: managedWorktree.baseBranch,
       worktreePath: managedWorktree.path,
       state: "starting",
       runtimePid: runtimeSession.pid,
@@ -163,6 +166,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     createdAt: completedAt,
     payload: {
       branch: managedWorktree.branch,
+      baseBranch: managedWorktree.baseBranch,
       worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
       runtimePid: runtimeSession.pid,
       runtimeCommand: formatRuntimeCommand(runtimeSession),
@@ -173,6 +177,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   process.stdout.write(`Spawned ${managedWorktree.agentName}\n`);
   process.stdout.write("State: starting\n");
   process.stdout.write(`Branch: ${managedWorktree.branch}\n`);
+  process.stdout.write(`Base: ${managedWorktree.baseBranch}\n`);
   process.stdout.write(`Worktree: ${formatRelativePath(config.project.root, managedWorktree.path)}\n`);
   process.stdout.write(`Runtime: ${formatRuntimeCommand(runtimeSession)}\n`);
   process.stdout.write(`Ready: initial launch check passed after ${runtimeSession.readyAfterMs}ms\n`);
