@@ -178,6 +178,23 @@ test("eventsCommand rejects a non-positive recent-event limit", async () => {
   }
 });
 
+test("eventsCommand preserves the original oversized limit in the validation error", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(
+      () => eventsCommand({ startDir: repoDir, limit: "9007199254740993" }),
+      (error: unknown) => {
+        assert.ok(error instanceof EventsError);
+        assert.match(error.message, /Invalid event limit '9007199254740993'\. Use a positive integer\./);
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("sy events parses --limit from the CLI", async () => {
   const repoDir = await createInitializedRepo();
 
@@ -209,6 +226,28 @@ test("sy events parses --limit from the CLI", async () => {
     assert.equal(stderr, "");
     assert.match(stdout, /2026-03-08T09:10:00.000Z\tmail.sent/);
     assert.doesNotMatch(stdout, /2026-03-08T09:00:00.000Z\tsling.spawned/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy events reports a missing --limit value through the Switchyard error contract", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(
+      () => execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "events", "--limit"], { cwd: repoDir }),
+      (error: unknown) => {
+        assert.ok(error && typeof error === "object");
+        assert.equal("code" in error ? error.code : undefined, 1);
+        assert.equal("stdout" in error ? error.stdout : undefined, "");
+        assert.match(
+          "stderr" in error && typeof error.stderr === "string" ? error.stderr : "",
+          /EVENTS_ERROR: Missing value for '--limit'\. Use '--limit <count>' with a positive integer\.\n/
+        );
+        return true;
+      }
+    );
   } finally {
     await removeTempDir(repoDir);
   }

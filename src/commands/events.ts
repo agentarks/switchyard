@@ -13,7 +13,7 @@ const DEFAULT_EVENT_LIMIT = 10;
 interface EventsCommandOptions {
   selector?: string;
   startDir?: string;
-  limit?: number | string;
+  limit?: number | string | boolean;
 }
 
 interface ResolvedEventSelection {
@@ -26,8 +26,8 @@ export function createEventsCommand(): Command {
   return new Command("events")
     .description("Show recent durable lifecycle events")
     .argument("[session]", "Optional session id or agent name")
-    .option("--limit <count>", "Show up to <count> recent events")
-    .action(async (selector: string | undefined, options: { limit?: string }) => {
+    .option("--limit [count]", "Show up to <count> recent events")
+    .action(async (selector: string | undefined, options: { limit?: string | boolean }) => {
       await eventsCommand({ selector, limit: options.limit });
     });
 }
@@ -192,8 +192,16 @@ function formatPayloadValue(value: string | number | boolean | null): string {
   return String(value);
 }
 
-function resolveEventLimit(limit: number | string | undefined): number {
+function resolveEventLimit(limit: number | string | boolean | undefined): number {
   if (typeof limit === "undefined") {
+    return DEFAULT_EVENT_LIMIT;
+  }
+
+  if (typeof limit === "boolean") {
+    if (limit) {
+      throw new EventsError("Missing value for '--limit'. Use '--limit <count>' with a positive integer.");
+    }
+
     return DEFAULT_EVENT_LIMIT;
   }
 
@@ -204,6 +212,12 @@ function resolveEventLimit(limit: number | string | undefined): number {
   const trimmedLimit = limit.trim();
 
   if (!/^\d+$/.test(trimmedLimit)) {
+    throw new EventsError(`Invalid event limit '${limit}'. Use a positive integer.`);
+  }
+
+  const parsedLimit = BigInt(trimmedLimit);
+
+  if (parsedLimit < 1n || parsedLimit > BigInt(Number.MAX_SAFE_INTEGER)) {
     throw new EventsError(`Invalid event limit '${limit}'. Use a positive integer.`);
   }
 
