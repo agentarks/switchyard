@@ -34,10 +34,11 @@ Completed enough to count as minimally real:
 - M7 first event inspection path
 - first merge and reintegration CLI path
 - merge-target metadata retention for canonical-branch drift
+- dirty-entry diagnostics for merge preflight failures
 - first readiness and early-failure handling as hardening work ahead of M8
 
 Not complete yet:
-- any additional event or merge diagnostic improvement that real operator workflows prove necessary
+- end-to-end coverage around `sy init`
 
 ## Current In-Scope Work
 

@@ -12,6 +12,7 @@ import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
 import { normalizeAgentName } from "../worktrees/naming.js";
 
 const execFileAsync = promisify(execFile);
+const MAX_DIRTY_ENTRY_DETAILS = 5;
 
 interface MergeCommandOptions {
   selector: string;
@@ -152,15 +153,12 @@ async function resolveSession(projectRoot: string, selector: string): Promise<Se
 
 async function ensureProjectRootIsClean(projectRoot: string): Promise<void> {
   const { stdout } = await runGit(projectRoot, ["status", "--porcelain", "--untracked-files=all"]);
-
-  const dirtyEntries = stdout
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0)
-    .filter((line) => !isSwitchyardStateEntry(line));
+  const dirtyEntries = parseDirtyEntries(stdout);
 
   if (dirtyEntries.length > 0) {
-    throw new MergeError("Canonical branch worktree is not clean. Commit, stash, or discard changes in the repo root before merging.");
+    throw new MergeError(
+      `Canonical branch worktree is not clean. Resolve these repo-root entries before merging: ${formatDirtyEntrySummary(dirtyEntries)}.`
+    );
   }
 }
 
@@ -182,15 +180,11 @@ async function ensurePreservedWorktreeIsClean(projectRoot: string, session: Sess
   }
 
   const { stdout } = await runGit(session.worktreePath, ["status", "--porcelain", "--untracked-files=all"]);
-  const dirtyEntries = stdout
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0)
-    .filter((line) => !isSwitchyardStateEntry(line));
+  const dirtyEntries = parseDirtyEntries(stdout);
 
   if (dirtyEntries.length > 0) {
     throw new MergeError(
-      `Preserved worktree for ${session.agentName} is not clean (${formatRelativePath(projectRoot, session.worktreePath)}). Commit, stash, or discard changes there before merging.`
+      `Preserved worktree for ${session.agentName} is not clean (${formatRelativePath(projectRoot, session.worktreePath)}). Resolve these entries there before merging: ${formatDirtyEntrySummary(dirtyEntries)}.`
     );
   }
 }
@@ -248,8 +242,8 @@ async function mergeFailureReason(projectRoot: string): Promise<string> {
 async function runGit(projectRoot: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   const { stdout, stderr } = await execFileAsync("git", args, { cwd: projectRoot });
   return {
-    stdout: stdout.trim(),
-    stderr: stderr.trim()
+    stdout: stdout.trimEnd(),
+    stderr: stderr.trimEnd()
   };
 }
 
@@ -280,6 +274,26 @@ function isSwitchyardStateEntry(entry: string): boolean {
   }
 
   return isSwitchyardPath(normalizedPath);
+}
+
+function parseDirtyEntries(stdout: string): string[] {
+  return stdout
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0)
+    .filter((line) => !isSwitchyardStateEntry(line));
+}
+
+function formatDirtyEntrySummary(entries: string[]): string {
+  const visibleEntries = entries.slice(0, MAX_DIRTY_ENTRY_DETAILS);
+
+  const remainingCount = entries.length - visibleEntries.length;
+
+  if (remainingCount > 0) {
+    visibleEntries.push(`+${remainingCount} more`);
+  }
+
+  return visibleEntries.join("; ");
 }
 
 function isSwitchyardPath(path: string): boolean {
