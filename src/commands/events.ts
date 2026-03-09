@@ -13,7 +13,7 @@ const DEFAULT_EVENT_LIMIT = 10;
 interface EventsCommandOptions {
   selector?: string;
   startDir?: string;
-  limit?: number;
+  limit?: number | string;
 }
 
 interface ResolvedEventSelection {
@@ -26,14 +26,15 @@ export function createEventsCommand(): Command {
   return new Command("events")
     .description("Show recent durable lifecycle events")
     .argument("[session]", "Optional session id or agent name")
-    .action(async (selector?: string) => {
-      await eventsCommand({ selector });
+    .option("--limit <count>", "Show up to <count> recent events")
+    .action(async (selector: string | undefined, options: { limit?: string }) => {
+      await eventsCommand({ selector, limit: options.limit });
     });
 }
 
 export async function eventsCommand(options: EventsCommandOptions = {}): Promise<void> {
   const config = await loadConfig(options.startDir);
-  const limit = options.limit ?? DEFAULT_EVENT_LIMIT;
+  const limit = resolveEventLimit(options.limit);
   const selection = options.selector
     ? await resolveEventSelection(config.project.root, options.selector, limit)
     : undefined;
@@ -189,4 +190,30 @@ function formatPayloadValue(value: string | number | boolean | null): string {
   }
 
   return String(value);
+}
+
+function resolveEventLimit(limit: number | string | undefined): number {
+  if (typeof limit === "undefined") {
+    return DEFAULT_EVENT_LIMIT;
+  }
+
+  if (typeof limit === "number") {
+    return validateEventLimit(limit);
+  }
+
+  const trimmedLimit = limit.trim();
+
+  if (!/^\d+$/.test(trimmedLimit)) {
+    throw new EventsError(`Invalid event limit '${limit}'. Use a positive integer.`);
+  }
+
+  return validateEventLimit(Number.parseInt(trimmedLimit, 10));
+}
+
+function validateEventLimit(limit: number): number {
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    throw new EventsError(`Invalid event limit '${limit}'. Use a positive integer.`);
+  }
+
+  return limit;
 }
