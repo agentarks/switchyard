@@ -4,11 +4,11 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Add end-to-end regression coverage around `sy init`
+1. Choose the next concrete operator-loop hardening slice only when a real gap appears
 
 ## Next
 
-2. Add another narrow inspection or lifecycle hardening slice only if operator workflows expose a concrete gap
+2. Add another narrow inspection or lifecycle hardening slice once operator workflows expose a concrete gap
 
 ## After That
 

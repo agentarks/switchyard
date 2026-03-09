@@ -18,6 +18,7 @@ Purpose:
 
 Expected behavior:
 - resolve the canonical repository root, even when invoked from a nested directory or worktree
+- write all bootstrap artifacts under that resolved canonical repo root rather than the invocation directory
 - detect a project name from the repo directory unless `--name` is provided
 - detect the canonical branch from `origin/HEAD` when available
 - create `.switchyard/`

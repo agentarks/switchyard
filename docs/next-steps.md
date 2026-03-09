@@ -4,65 +4,56 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Add end-to-end regression coverage around `sy init`.
+Choose the next concrete operator-loop hardening slice only after a real gap appears.
 
 Target outcome:
-- the repo bootstrap contract is covered by one realistic CLI-path test
-- root resolution, config creation, and bootstrap layout stay locked down as the operator loop evolves
-- the slice reduces risk without broadening product scope
+- avoid broadening the product without a proven operator need
+- keep the next slice tied to the current repo-local lifecycle
+- prefer the smallest test-backed change that removes a real blind spot or failure mode
 
 ## Why This Is Next
 
-The current merge inspection gap is resolved narrowly enough: dirty merge preflights now surface the blocking git status entries instead of only saying “not clean.”
+The repo bootstrap contract is now covered by one realistic CLI-path regression test around `sy init`.
 
-That means the next smallest meaningful risk is bootstrap confidence. `sy init` establishes the repo-local contract the rest of the operator loop depends on, but it still has no end-to-end coverage.
+That removes the current highest-confidence bootstrap risk. There is no equally obvious next slice that should be forced in advance.
 
-Without that coverage:
-- init regressions can break the whole operator loop before later commands even start
-- docs can claim bootstrap behavior that is no longer verified end to end
-- future hardening work loses the narrow, contract-first focus the repo is trying to preserve
+Without that discipline:
+- the project can drift into speculative surface area instead of hardening the operator loop
+- docs can start inventing priorities that are not grounded in current usage
+- narrow lifecycle work gets displaced by larger but less justified features
 
 ## Exact Order
 
-1. Add one realistic `sy init` path test
-   - invoke the command the way an operator would
-   - assert the config file and bootstrap layout that matter to later commands
+1. Identify one concrete operator pain point
+   - use the current loop (`init`, `sling`, `status`, `events`, `stop`, `merge`, `mail`) as the search space
+   - prefer a reproduced blind spot, unclear output, or failure mode over speculative cleanup
 
-2. Keep the assertions contract-focused
-   - cover root resolution and bootstrap outputs
-   - avoid speculative checks for implementation detail that operators do not rely on
+2. Choose the smallest fix that closes it
+   - prefer one narrow inspection or lifecycle hardening slice
+   - add or update tests in the same pass when behavior is involved
 
-3. Keep the scope narrow
-   - do not broaden `sy init` behavior in the same slice unless the test exposes a real bug
-   - do not mix in unrelated lifecycle features
-
-4. Update docs
-   - `docs/current-state.md`
-   - `docs/roadmap.md`
-   - `docs/cli-contract.md`
-   - any docs changed by the resulting contract clarification
+3. Update docs only where behavior or priorities truly changed
+   - keep `docs/current-state.md`, `docs/focus-tracker.md`, and this file aligned with reality
 
 ## What To Keep Small
 
-Do not build these in the same slice unless the implementation forces it:
-- broader bootstrap abstractions
-- unrelated status, events, or merge reporting
-- background watchdogs or daemons
+Do not build these unless a concrete operator workflow now requires them:
+- multiple runtimes beyond Codex
 - dashboard or TUI work
+- background daemons or watchdogs
+- broad analytics or reporting
+- speculative merge automation beyond the current explicit path
 
 ## Definition Of Done
 
-This slice is done when all of these are true:
+The next slice is done when all of these are true:
+- it addresses a real operator-loop risk or blind spot
+- tests and docs match the resulting behavior
 - `npm run check` passes
-- the repo has one realistic regression test around `sy init`
-- tests and docs reflect the resulting bootstrap contract
-- docs reflect the new reality
 
 ## If You Get Stuck
 
-Reduce scope instead of broadening design:
-- prefer one realistic init-path assertion over a broad harness
-- defer behavior changes unless the test reveals a real bootstrap bug
-- keep targeting one repo-local Codex lifecycle
-
-The point of this slice is to harden the operator loop at its entry point, not to broaden the product surface.
+Reduce scope instead of inventing a larger roadmap item:
+- if no concrete gap is visible, defer the slice
+- if two fixes are possible, choose the one that is smaller and more operator-readable
+- keep optimizing for the current single-repo, single-agent loop
