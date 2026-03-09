@@ -50,7 +50,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
   );
 
   process.stdout.write(`Sessions for ${config.project.name}:\n`);
-  process.stdout.write("STATE\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tRECENT\n");
+  process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tRECENT\n");
 
   for (const session of sessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
@@ -61,7 +61,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       reconciledEventsBySession.get(session.id) ?? latestEventsBySession.get(session.id)
     );
     process.stdout.write(
-      `${session.state}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${recentEvent}\n`
+      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${recentEvent}\n`
     );
   }
 }
