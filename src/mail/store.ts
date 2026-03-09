@@ -36,6 +36,11 @@ interface MailRow {
   read_at: string | null;
 }
 
+interface UnreadMailCountRow {
+  session_id: string;
+  unread_count: number;
+}
+
 export async function initializeMailStore(projectRoot: string): Promise<void> {
   await withMailDatabase(projectRoot, () => {
     // Schema creation happens in the shared database helper.
@@ -101,6 +106,27 @@ export async function readUnreadMailForSession(projectRoot: string, sessionId: s
     return rows
       .map(mapMailRow)
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+  });
+}
+
+export async function listUnreadMailCountsBySession(
+  projectRoot: string,
+  sessionIds: string[]
+): Promise<Map<string, number>> {
+  if (sessionIds.length === 0) {
+    return new Map();
+  }
+
+  return await withMailDatabase(projectRoot, (db) => {
+    const placeholders = sessionIds.map(() => "?").join(", ");
+    const rows = db.prepare(`
+      SELECT session_id, COUNT(*) AS unread_count
+      FROM mail_messages
+      WHERE read_at IS NULL AND session_id IN (${placeholders})
+      GROUP BY session_id
+    `).all(...sessionIds) as unknown as UnreadMailCountRow[];
+
+    return new Map(rows.map((row) => [row.session_id, Number(row.unread_count)]));
   });
 }
 

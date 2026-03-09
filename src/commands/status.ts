@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { listLatestEventsBySession, recordEventBestEffort, type EventRecorder } from "../events/store.js";
 import type { EventPayloadValue, EventRecord } from "../events/types.js";
+import { listUnreadMailCountsBySession } from "../mail/store.js";
 import { isProcessAlive } from "../runtimes/process.js";
 import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
 import { listSessions, updateSessionState } from "../sessions/store.js";
@@ -39,21 +40,23 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     return;
   }
 
-  const latestEventsBySession = await listLatestEventsBySession(
-    config.project.root,
-    sessions.map((session) => session.id)
-  );
+  const sessionIds = sessions.map((session) => session.id);
+  const [latestEventsBySession, unreadMailCountsBySession] = await Promise.all([
+    listLatestEventsBySession(config.project.root, sessionIds),
+    listUnreadMailCountsBySession(config.project.root, sessionIds)
+  ]);
 
   process.stdout.write(`Sessions for ${config.project.name}:\n`);
-  process.stdout.write("STATE\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tRECENT\n");
+  process.stdout.write("STATE\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tRECENT\n");
 
   for (const session of sessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
+    const unreadCount = unreadMailCountsBySession.get(session.id) ?? 0;
     const recentEvent = formatRecentEventSummary(
       reconciledEventsBySession.get(session.id) ?? latestEventsBySession.get(session.id)
     );
     process.stdout.write(
-      `${session.state}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${recentEvent}\n`
+      `${session.state}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${recentEvent}\n`
     );
   }
 }

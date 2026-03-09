@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { createEvent, listEvents } from "../events/store.js";
+import { createMail, readUnreadMailForSession } from "../mail/store.js";
 import { createSession, listSessions } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, removeTempDir } from "../test-helpers/git.js";
@@ -74,9 +75,9 @@ test("statusCommand prints stored sessions with relative worktree paths", async 
 
   const output = writes.join("");
   assert.match(output, /Sessions for .+:/);
-  assert.match(output, /STATE\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tRECENT/);
-  assert.match(output, /stopped\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-06T12:00:00.000Z\t-/);
-  assert.match(output, /running\tagent-one\tagents\/agent-one\t\.switchyard\/worktrees\/agent-one\t2026-03-06T10:00:00.000Z\t-/);
+  assert.match(output, /STATE\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tRECENT/);
+  assert.match(output, /stopped\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-06T12:00:00.000Z\t0\t-/);
+  assert.match(output, /running\tagent-one\tagents\/agent-one\t\.switchyard\/worktrees\/agent-one\t2026-03-06T10:00:00.000Z\t0\t-/);
   assert.ok(output.indexOf("agent-two") < output.indexOf("agent-one"));
 });
 
@@ -157,11 +158,11 @@ test("statusCommand prints the latest event summary for each session", async () 
   const output = writes.join("");
   assert.match(
     output,
-    /running\tagent-one\tagents\/agent-one\t\.switchyard\/worktrees\/agent-one\t2026-03-08T09:00:00.000Z\t2026-03-08T09:15:00.000Z mail\.sent sender=operator, bodyLength=18/
+    /running\tagent-one\tagents\/agent-one\t\.switchyard\/worktrees\/agent-one\t2026-03-08T09:00:00.000Z\t0\t2026-03-08T09:15:00.000Z mail\.sent sender=operator, bodyLength=18/
   );
   assert.match(
     output,
-    /stopped\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-08T09:05:00.000Z\t2026-03-08T09:20:00.000Z stop\.completed outcome=stopped, cleanupPerformed=true/
+    /stopped\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-08T09:05:00.000Z\t0\t2026-03-08T09:20:00.000Z stop\.completed outcome=stopped, cleanupPerformed=true/
   );
 });
 
@@ -209,7 +210,68 @@ test("statusCommand includes the readiness detail for a freshly launched session
 
   assert.match(
     writes.join(""),
-    /running\tagent-ready\tagents\/agent-ready\t\.switchyard\/worktrees\/agent-ready\t2026-03-08T11:00:00.000Z\t2026-03-08T11:01:00.000Z sling\.completed runtimePid=2222, baseBranch=main, readyAfterMs=500/
+    /running\tagent-ready\tagents\/agent-ready\t\.switchyard\/worktrees\/agent-ready\t2026-03-08T11:00:00.000Z\t0\t2026-03-08T11:01:00.000Z sling\.completed runtimePid=2222, baseBranch=main, readyAfterMs=500/
+  );
+});
+
+test("statusCommand shows unread mail counts alongside recent events", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-unread",
+    agentName: "agent-unread",
+    branch: "agents/agent-unread",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-unread"),
+    state: "running",
+    runtimePid: 2323,
+    createdAt: "2026-03-08T11:10:00.000Z",
+    updatedAt: "2026-03-08T11:10:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-unread",
+    sender: "operator",
+    recipient: "agent-unread",
+    body: "Unread one",
+    createdAt: "2026-03-08T11:11:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-unread",
+    sender: "operator",
+    recipient: "agent-unread",
+    body: "Unread two",
+    createdAt: "2026-03-08T11:12:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-unread",
+    agentName: "agent-unread",
+    eventType: "runtime.ready",
+    payload: {
+      signal: "pid_alive",
+      runtimePid: 2323
+    },
+    createdAt: "2026-03-08T11:13:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 2323
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /running\tagent-unread\tagents\/agent-unread\t\.switchyard\/worktrees\/agent-unread\t2026-03-08T11:10:00.000Z\t2\t2026-03-08T11:13:00.000Z runtime\.ready signal=pid_alive, runtimePid=2323/
   );
 });
 
@@ -257,7 +319,52 @@ test("statusCommand includes the mail list view in the recent event summary", as
 
   assert.match(
     writes.join(""),
-    /stopped\tagent-mail-view\tagents\/agent-mail-view\t\.switchyard\/worktrees\/agent-mail-view\t2026-03-08T11:30:00.000Z\t2026-03-08T11:31:00.000Z mail\.listed view=unread_only, messageCount=2, unreadCount=2/
+    /stopped\tagent-mail-view\tagents\/agent-mail-view\t\.switchyard\/worktrees\/agent-mail-view\t2026-03-08T11:30:00.000Z\t0\t2026-03-08T11:31:00.000Z mail\.listed view=unread_only, messageCount=2, unreadCount=2/
+  );
+});
+
+test("statusCommand drops the unread count after mail is consumed", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-read-mail",
+    agentName: "agent-read-mail",
+    branch: "agents/agent-read-mail",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-read-mail"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T11:40:00.000Z",
+    updatedAt: "2026-03-08T11:40:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-read-mail",
+    sender: "operator",
+    recipient: "agent-read-mail",
+    body: "Read me",
+    createdAt: "2026-03-08T11:41:00.000Z"
+  });
+  await readUnreadMailForSession(repoDir, "session-read-mail");
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /stopped\tagent-read-mail\tagents\/agent-read-mail\t\.switchyard\/worktrees\/agent-read-mail\t2026-03-08T11:40:00.000Z\t0\t-/
   );
 });
 
@@ -305,7 +412,7 @@ test("statusCommand does not leak unknown event payload fields into the recent s
   const output = writes.join("");
   assert.match(
     output,
-    /stopped\tagent-unknown\tagents\/agent-unknown\t\.switchyard\/worktrees\/agent-unknown\t2026-03-08T09:00:00.000Z\t2026-03-08T09:10:00.000Z runtime\.note/
+    /stopped\tagent-unknown\tagents\/agent-unknown\t\.switchyard\/worktrees\/agent-unknown\t2026-03-08T09:00:00.000Z\t0\t2026-03-08T09:10:00.000Z runtime\.note/
   );
   assert.doesNotMatch(output, /should-not-appear/);
   assert.doesNotMatch(output, /also-hidden/);
@@ -364,7 +471,7 @@ test("statusCommand marks stale running sessions as failed", async () => {
   const output = writes.join("");
   assert.match(
     output,
-    /failed\tagent-stale\tagents\/agent-stale\t\.switchyard\/worktrees\/agent-stale\t2026-03-08T09:45:00.000Z\t2026-03-08T09:45:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=9090/
+    /failed\tagent-stale\tagents\/agent-stale\t\.switchyard\/worktrees\/agent-stale\t2026-03-08T09:45:00.000Z\t0\t2026-03-08T09:45:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=9090/
   );
 });
 
@@ -424,7 +531,7 @@ test("statusCommand shows the reconciled recent event even when event persistenc
   const output = writes.join("");
   assert.match(
     output,
-    /failed\tagent-event-fail\tagents\/agent-event-fail\t\.switchyard\/worktrees\/agent-event-fail\t2026-03-08T10:00:00.000Z\t2026-03-08T10:00:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=9090/
+    /failed\tagent-event-fail\tagents\/agent-event-fail\t\.switchyard\/worktrees\/agent-event-fail\t2026-03-08T10:00:00.000Z\t0\t2026-03-08T10:00:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=9090/
   );
   assert.doesNotMatch(output, /failed\tagent-event-fail[^\n]*sling\.(started|completed)/);
 });
@@ -482,7 +589,7 @@ test("statusCommand marks starting sessions that die before readiness as failed"
   const output = writes.join("");
   assert.match(
     output,
-    /failed\tagent-booting\tagents\/agent-booting\t\.switchyard\/worktrees\/agent-booting\t2026-03-08T09:50:00.000Z\t2026-03-08T09:50:00.000Z runtime\.exited_early reason=pid_not_alive, runtimePid=8080/
+    /failed\tagent-booting\tagents\/agent-booting\t\.switchyard\/worktrees\/agent-booting\t2026-03-08T09:50:00.000Z\t0\t2026-03-08T09:50:00.000Z runtime\.exited_early reason=pid_not_alive, runtimePid=8080/
   );
 });
 
@@ -529,7 +636,7 @@ test("statusCommand marks legacy active sessions without a pid as failed", async
   const output = writes.join("");
   assert.match(
     output,
-    /failed\tagent-legacy\tagents\/agent-legacy\t\.switchyard\/worktrees\/agent-legacy\t2026-03-08T09:55:00.000Z\t2026-03-08T09:55:00.000Z runtime\.exited reason=missing_runtime_pid/
+    /failed\tagent-legacy\tagents\/agent-legacy\t\.switchyard\/worktrees\/agent-legacy\t2026-03-08T09:55:00.000Z\t0\t2026-03-08T09:55:00.000Z runtime\.exited reason=missing_runtime_pid/
   );
 });
 
