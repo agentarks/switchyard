@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { join } from "node:path";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { createEvent } from "../events/store.js";
 import { EventsError } from "../errors.js";
@@ -8,6 +11,10 @@ import { createSession } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, removeTempDir } from "../test-helpers/git.js";
 import { eventsCommand } from "./events.js";
+
+const execFileAsync = promisify(execFile);
+const tsxCliPath = fileURLToPath(new URL("../../node_modules/tsx/dist/cli.mjs", import.meta.url));
+const cliEntryPath = fileURLToPath(new URL("../index.ts", import.meta.url));
 
 test("eventsCommand prints an empty-state message when no events exist", async () => {
   const repoDir = await createInitializedRepo();
@@ -114,6 +121,133 @@ test("eventsCommand filters events for one resolved session", async () => {
     assert.match(output, /sling.completed/);
     assert.doesNotMatch(output, /agent-two/);
     assert.doesNotMatch(output, /stop.completed/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("eventsCommand respects an explicit recent-event limit", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createEvent(repoDir, {
+      sessionId: "session-1",
+      agentName: "agent-one",
+      eventType: "sling.spawned",
+      payload: {
+        runtimePid: 1111
+      },
+      createdAt: "2026-03-08T09:00:00.000Z"
+    });
+    await createEvent(repoDir, {
+      sessionId: "session-1",
+      agentName: "agent-one",
+      eventType: "sling.completed",
+      payload: {
+        runtimePid: 1111,
+        readyAfterMs: 500
+      },
+      createdAt: "2026-03-08T09:05:00.000Z"
+    });
+
+    const output = await captureStdout(async () => {
+      await eventsCommand({ startDir: repoDir, limit: 1 });
+    });
+
+    assert.match(output, /2026-03-08T09:05:00.000Z\tsling.completed/);
+    assert.doesNotMatch(output, /2026-03-08T09:00:00.000Z\tsling.spawned/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("eventsCommand rejects a non-positive recent-event limit", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(
+      () => eventsCommand({ startDir: repoDir, limit: 0 }),
+      (error: unknown) => {
+        assert.ok(error instanceof EventsError);
+        assert.match(error.message, /Invalid event limit '0'\. Use a positive integer\./);
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("eventsCommand preserves the original oversized limit in the validation error", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(
+      () => eventsCommand({ startDir: repoDir, limit: "9007199254740993" }),
+      (error: unknown) => {
+        assert.ok(error instanceof EventsError);
+        assert.match(error.message, /Invalid event limit '9007199254740993'\. Use a positive integer\./);
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy events parses --limit from the CLI", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createEvent(repoDir, {
+      sessionId: "session-1",
+      agentName: "agent-one",
+      eventType: "sling.spawned",
+      payload: {
+        runtimePid: 1111
+      },
+      createdAt: "2026-03-08T09:00:00.000Z"
+    });
+    await createEvent(repoDir, {
+      sessionId: "session-1",
+      agentName: "agent-one",
+      eventType: "mail.sent",
+      payload: {
+        sender: "operator",
+        bodyLength: 8
+      },
+      createdAt: "2026-03-08T09:10:00.000Z"
+    });
+
+    const { stdout, stderr } = await execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "events", "--limit", "1"], {
+      cwd: repoDir
+    });
+
+    assert.equal(stderr, "");
+    assert.match(stdout, /2026-03-08T09:10:00.000Z\tmail.sent/);
+    assert.doesNotMatch(stdout, /2026-03-08T09:00:00.000Z\tsling.spawned/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy events reports a missing --limit value through the Switchyard error contract", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(
+      () => execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "events", "--limit"], { cwd: repoDir }),
+      (error: unknown) => {
+        assert.ok(error && typeof error === "object");
+        assert.equal("code" in error ? error.code : undefined, 1);
+        assert.equal("stdout" in error ? error.stdout : undefined, "");
+        assert.match(
+          "stderr" in error && typeof error.stderr === "string" ? error.stderr : "",
+          /EVENTS_ERROR: Missing value for '--limit'\. Use '--limit <count>' with a positive integer\.\n/
+        );
+        return true;
+      }
+    );
   } finally {
     await removeTempDir(repoDir);
   }

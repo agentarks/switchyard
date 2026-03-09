@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with unread-mail visibility, stop, events with explicit selector disambiguation, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with unread-mail visibility, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
 
 ## What Exists
 
@@ -38,6 +38,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - durable runtime reconciliation events for `runtime.ready`, `runtime.exited_early`, and `runtime.exited`
 - first operator-facing event inspection path over `events.db`
 - explicit selector disambiguation in `sy events` when one raw selector could name different session-id, agent-name, or orphaned-event targets
+- operator-controlled recent-event window selection in `sy events --limit`
 - explicit selector disambiguation in `sy stop` and `sy merge` when one raw selector could name different sessions by session-id and agent-name
 - first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
 - merge preflight failures that now surface the blocking git status entries for dirty repo-root and preserved-worktree states
@@ -66,6 +67,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `sy events [session]`
   - loads config from the canonical repo root
   - prints the recent durable event timeline from `events.db`
+  - supports `--limit <count>` so operators can widen or narrow the recent-event window explicitly
   - optionally scopes the recent view to one resolved session
   - rejects ambiguous selectors when one raw value could refer to different session-id, agent-name, or orphaned-event targets
   - prints an empty-state message when no events exist
