@@ -74,6 +74,7 @@ export async function mergeCommand(options: MergeCommandOptions): Promise<void> 
 
   await ensureLocalBranchExists(config.project.root, branch);
   await ensurePreservedWorktreeIsClean(config.project.root, session);
+  await ensureNoMergeInProgress(config.project.root);
   await ensureProjectRootIsClean(config.project.root);
 
   const currentBranch = await getCurrentBranch(config.project.root);
@@ -150,6 +151,17 @@ async function ensureProjectRootIsClean(projectRoot: string): Promise<void> {
       `Canonical branch worktree is not clean. Resolve these repo-root entries before merging: ${formatDirtyEntrySummary(dirtyEntries)}.`
     );
   }
+}
+
+async function ensureNoMergeInProgress(projectRoot: string): Promise<void> {
+  try {
+    await runGit(projectRoot, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD"]);
+  } catch {
+    return;
+  }
+
+  const conflictPaths = await listMergeConflictPaths(projectRoot);
+  throw new MergeError(formatMergeAlreadyInProgressMessage(conflictPaths));
 }
 
 async function ensurePreservedWorktreeIsClean(projectRoot: string, session: SessionRecord): Promise<void> {
@@ -299,6 +311,16 @@ function formatMergeConflictMessage(canonicalBranch: string, branch: string, con
   }
 
   return `Merge stopped with conflicts between '${canonicalBranch}' and '${branch}'. Conflicting paths: ${summary}. Resolve them in the repo root or run 'git merge --abort'.`;
+}
+
+function formatMergeAlreadyInProgressMessage(conflictPaths: string[]): string {
+  const summary = formatConflictPathSummary(conflictPaths);
+
+  if (summary.length === 0) {
+    return "Canonical branch worktree already has an in-progress merge. Resolve it in the repo root or run 'git merge --abort' before running 'sy merge' again.";
+  }
+
+  return `Canonical branch worktree already has an in-progress merge. Conflicting paths: ${summary}. Resolve it in the repo root or run 'git merge --abort' before running 'sy merge' again.`;
 }
 
 function formatConflictPathSummary(paths: string[]): string {

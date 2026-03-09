@@ -330,6 +330,63 @@ test("mergeCommand refuses to merge when the preserved worktree has uncommitted 
   }
 });
 
+test("mergeCommand reports an in-progress repo-root merge before generic dirty-state preflight", async () => {
+  const repoDir = await createInitializedRepo();
+  const conflictPath = join(repoDir, "conflict.txt");
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-merge-progress");
+
+  try {
+    await writeFile(conflictPath, "shared\n", "utf8");
+    await git(repoDir, ["add", "conflict.txt"]);
+    await git(repoDir, ["commit", "-m", "Add merge-progress base"]);
+    await git(repoDir, ["switch", "-c", "agents/agent-merge-progress"]);
+    await writeFile(conflictPath, "agent version\n", "utf8");
+    await git(repoDir, ["add", "conflict.txt"]);
+    await git(repoDir, ["commit", "-m", "Agent merge-progress change"]);
+    await git(repoDir, ["switch", "main"]);
+    await writeFile(conflictPath, "main version\n", "utf8");
+    await git(repoDir, ["add", "conflict.txt"]);
+    await git(repoDir, ["commit", "-m", "Main merge-progress change"]);
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-merge-progress"]);
+
+    await createSession(repoDir, {
+      id: "session-merge-progress",
+      agentName: "agent-merge-progress",
+      branch: "agents/agent-merge-progress",
+      baseBranch: "main",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:19:00.000Z"
+    });
+
+    await assert.rejects(() => git(repoDir, ["merge", "--no-ff", "agents/agent-merge-progress"]));
+    assert.ok((await git(repoDir, ["rev-parse", "--verify", "MERGE_HEAD"])).length > 0);
+
+    await assert.rejects(
+      async () => {
+        await mergeCommand({
+          selector: "agent-merge-progress",
+          startDir: repoDir
+        });
+      },
+      (error: unknown) => {
+        assert.ok(error instanceof MergeError);
+        assert.match(error.message, /already has an in-progress merge/);
+        assert.match(error.message, /Conflicting paths: conflict\.txt\./);
+        assert.match(error.message, /git merge --abort/);
+        return true;
+      }
+    );
+
+    const events = await listEvents(repoDir, { sessionId: "session-merge-progress" });
+    assert.equal(events.length, 0);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("mergeCommand refuses to merge when session.worktreePath is not an actual git worktree", async () => {
   const repoDir = await createInitializedRepo();
   const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-replaced-worktree");
