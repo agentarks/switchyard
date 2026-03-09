@@ -59,6 +59,40 @@ test("mailSendCommand stores one durable message for the resolved session", asyn
   assert.match(output, /Mail id: [0-9a-f-]{36}/);
 });
 
+test("mailSendCommand resolves an exact session id even when the selector is not a valid agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    const session = await createSession(repoDir, {
+      id: "!!!",
+      agentName: "agent-bang",
+      branch: "agents/agent-bang",
+      worktreePath: `${repoDir}/.switchyard/worktrees/agent-bang`,
+      state: "running",
+      runtimePid: 1919,
+      createdAt: "2026-03-06T09:30:00.000Z",
+      updatedAt: "2026-03-06T09:30:00.000Z"
+    });
+
+    await mailSendCommand({
+      selector: "!!!",
+      body: "Route through exact session id.",
+      startDir: repoDir
+    });
+
+    const mail = await listMailForSession(repoDir, session.id);
+    assert.equal(mail.length, 1);
+    assert.equal(mail[0]?.body, "Route through exact session id.");
+    assert.equal(mail[0]?.recipient, "agent-bang");
+
+    const events = await listEvents(repoDir, { sessionId: session.id });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "mail.sent");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("mailCheckCommand prints unread mail and marks it read", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
@@ -119,6 +153,27 @@ test("mailCheckCommand prints unread mail and marks it read", async () => {
   }
 
   assert.match(writes.join(""), /No unread mail for agent-two\./);
+});
+
+test("mailCheckCommand reports no session found for an invalid selector that is not an exact session id", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(
+      () =>
+        mailCheckCommand({
+          selector: "!!!",
+          startDir: repoDir
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof MailError);
+        assert.equal(error.message, "No session found for '!!!'.");
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
 });
 
 test("mailSendCommand keeps queued mail when event persistence fails", async () => {

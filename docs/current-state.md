@@ -116,6 +116,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - leaves review, conflict resolution, validation, and cleanup explicit for the operator
 - `sy mail send <session> <body>`
   - resolves one session by id or normalized agent name
+  - accepts an exact session id before agent-name normalization, even when the raw selector is not a valid agent name
   - writes one durable message into `mail.db`
   - defaults the sender to `operator`
 - `sy mail check <session>`

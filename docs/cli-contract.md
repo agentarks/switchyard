@@ -150,6 +150,7 @@ Future target:
 Current contract:
 - command has `send`, `check`, and `list` subcommands
 - `sy mail send <session> <body>` resolves one session by id or normalized agent name
+- mail commands accept an exact session id even when that selector would not be a valid normalized agent name
 - `sy mail send` writes one durable record into `mail.db`
 - `sy mail check <session>` reads unread mail for one resolved session
 - `sy mail check` marks returned messages as read
