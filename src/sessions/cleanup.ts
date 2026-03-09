@@ -31,20 +31,20 @@ export async function determineCleanupDecision(options: CleanupDecisionOptions):
   const canonicalBranch = sessionBaseBranch;
   const branch = options.session.branch.trim();
 
+  if (options.abandon) {
+    return {
+      kind: "perform",
+      mode: "abandoned",
+      canonicalBranch: sessionBaseBranch || options.canonicalBranch
+    };
+  }
+
   if (branch.length === 0) {
     return {
       kind: "blocked",
       reason: "missing_branch_metadata",
       canonicalBranch,
       message: `Refusing cleanup for ${options.session.agentName}: no preserved branch metadata is available. Rerun with '--cleanup --abandon' to discard the remaining artifacts explicitly.`
-    };
-  }
-
-  if (options.abandon) {
-    return {
-      kind: "perform",
-      mode: "abandoned",
-      canonicalBranch: sessionBaseBranch || options.canonicalBranch
     };
   }
 
@@ -98,25 +98,29 @@ export function formatCleanupMessage(cleanupMode: CleanupMode | undefined, canon
 }
 
 export async function getCleanupReadinessLabel(options: CleanupDecisionOptions): Promise<string> {
-  if (isActiveSessionState(options.session.state)) {
-    return "stop-first";
-  }
-
   const decision = await determineCleanupDecision({
     ...options,
     abandon: false
   });
 
-  return formatCleanupReadinessLabel(decision);
+  const outcomeLabel = formatCleanupOutcomeLabel(decision);
+
+  if (isActiveSessionState(options.session.state)) {
+    return `stop-then:${outcomeLabel}`;
+  }
+
+  return outcomeLabel === "merged" || outcomeLabel === "absent"
+    ? `ready:${outcomeLabel}`
+    : outcomeLabel;
 }
 
-function formatCleanupReadinessLabel(decision: CleanupDecision): string {
+function formatCleanupOutcomeLabel(decision: CleanupDecision): string {
   if (decision.kind === "perform") {
-    return "ready:merged";
+    return "merged";
   }
 
   if (decision.kind === "already_absent") {
-    return "ready:absent";
+    return "absent";
   }
 
   switch (decision.reason) {
@@ -129,7 +133,7 @@ function formatCleanupReadinessLabel(decision: CleanupDecision): string {
     case "not_merged":
       return "abandon-only:not-merged";
     case "artifacts_missing":
-      return "ready:absent";
+      return "absent";
   }
 }
 

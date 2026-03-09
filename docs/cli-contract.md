@@ -81,6 +81,7 @@ Current contract:
 - command includes one best-effort unread-mail count per session from `mail.db`
 - if unread mail counts cannot be loaded, command still renders status and prints `?` in the unread column instead of failing
 - command includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`
+- active sessions show the post-stop cleanup result with a `stop-then:` prefix instead of hiding whether cleanup would be merged-safe or abandon-only
 - if cleanup readiness cannot be evaluated for a session, command still renders status and prints `?` in the cleanup column instead of failing
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
 - when sessions exist, print a concise tab-separated table ordered by most recent update

@@ -104,7 +104,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - prints a tab-separated session table ordered by most recent update
   - includes the durable session id in that table for exact follow-up selectors
   - includes one unread-mail count per session from `mail.db`
-  - includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`
+  - includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`, with active sessions showing the post-stop outcome as `stop-then:*`
   - includes one concise recent-event summary per session when event history exists, including `readyAfterMs` for fresh `sling.completed` events and compact merge-conflict details for `merge.failed`
   - records runtime reconciliation events when it changes session state
 - `sy stop <session>`

@@ -146,7 +146,7 @@ test("statusCommand promotes a started session to running after the first succes
     assert.equal(readyEvent?.payload.signal, "pid_alive");
     assert.match(
       output,
-      /running\t[0-9a-f-]+\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-09T09:10:00.000Z\t0\tstop-first\t2026-03-09T09:10:00.000Z runtime\.ready signal=pid_alive, runtimePid=31337/
+      /running\t[0-9a-f-]+\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-09T09:10:00.000Z\t0\tstop-then:merged\t2026-03-09T09:10:00.000Z runtime\.ready signal=pid_alive, runtimePid=31337/
     );
   } finally {
     await removeTempDir(repoDir);

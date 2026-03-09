@@ -94,6 +94,7 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
   const originalWrite = process.stdout.write.bind(process.stdout);
 
   try {
+    await git(repoDir, ["branch", "agents/agent-active"]);
     await git(repoDir, ["branch", "agents/merged-ready"]);
     await git(repoDir, ["switch", "-c", "agents/not-ready"]);
     await writeFile(join(repoDir, "not-ready.txt"), "pending merge\n", "utf8");
@@ -171,7 +172,7 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
   }
 
   const output = writes.join("");
-  assert.match(output, /running\tsession-active\tagent-active[^\n]*\tstop-first\t-/);
+  assert.match(output, /running\tsession-active\tagent-active[^\n]*\tstop-then:merged\t-/);
   assert.match(output, /stopped\tsession-merged\tagent-merged[^\n]*\tready:merged\t-/);
   assert.match(output, /stopped\tsession-absent\tagent-absent[^\n]*\tready:absent\t-/);
   assert.match(output, /stopped\tsession-unmerged\tagent-unmerged[^\n]*\tabandon-only:not-merged\t-/);
