@@ -41,16 +41,18 @@ Completed enough to count as minimally real:
 - explicit selector disambiguation in `stop` and `merge`
 - explicit reused-agent selector disambiguation across session-targeting commands
 - first readiness and early-failure handling as hardening work ahead of M8
+- detached `sy sling` launch compatibility hardening for TTY-requiring Codex builds on supported Unix platforms
 - end-to-end coverage around `sy init`
 
 Not complete yet:
-- the next hardening slice is intentionally not preselected; wait for a concrete operator-loop gap
+- the next concrete operator-loop hardening gap still needs selection and reproduction
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
 - improve operator inspection only where a real operator workflow still has a blind spot
 - improve pid-backed lifecycle control only where the current operator loop is still concretely weak
+- harden launch, status, stop, merge, mail, or event behavior only when a real operator blind spot is reproduced
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
 - broaden event or merge inspection further only if the current operator loop proves insufficient
