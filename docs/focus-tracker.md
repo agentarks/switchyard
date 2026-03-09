@@ -32,6 +32,7 @@ Completed enough to count as minimally real:
 - read-only unread-only mailbox inspection inside the mail path
 - unread mailbox visibility in `sy status`
 - session-id visibility in `sy status`
+- exact per-session inspection in `sy status`
 - M7 first event inspection path
 - operator-controlled recent-event window selection in `sy events`
 - first merge and reintegration CLI path

@@ -4,12 +4,15 @@ import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { listLatestEventsBySession, recordEventBestEffort, type EventRecorder } from "../events/store.js";
 import type { EventPayloadValue, EventRecord } from "../events/types.js";
+import { StatusError } from "../errors.js";
 import { listUnreadMailCountsBySession } from "../mail/store.js";
 import { isProcessAlive } from "../runtimes/process.js";
 import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
-import { listSessions, updateSessionState } from "../sessions/store.js";
+import { getSessionById, listSessions, updateSessionState } from "../sessions/store.js";
+import { resolveSessionByIdOrAgent } from "./session-selector.js";
 
 interface StatusOptions {
+  selector?: string;
   startDir?: string;
   isRuntimeAlive?: (pid: number) => boolean;
   listUnreadMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
@@ -20,26 +23,41 @@ interface StatusOptions {
 export function createStatusCommand(): Command {
   return new Command("status")
     .description("Show active and recent agent sessions")
-    .argument("[args...]", "Arguments reserved for future filter support")
-    .action(async () => {
-      await statusCommand();
+    .argument("[session]", "Optional session id or agent name")
+    .action(async (selector: string | undefined) => {
+      await statusCommand({ selector });
     });
 }
 
 export async function statusCommand(options: StatusOptions = {}): Promise<void> {
   const config = await loadConfig(options.startDir);
+  const selectedSession = options.selector
+    ? await resolveSession(config.project.root, options.selector)
+    : undefined;
+
+  if (options.selector && !selectedSession) {
+    throw new StatusError(`No session found for '${options.selector}'.`);
+  }
+
+  const initialSessions = selectedSession
+    ? [selectedSession]
+    : await listSessions(config.project.root);
+
+  if (initialSessions.length === 0) {
+    process.stdout.write("No Switchyard sessions recorded yet.\n");
+    return;
+  }
+
   const reconciledEventsBySession = await reconcileSessionLifecycles(
     config.project.root,
+    initialSessions,
     options.isRuntimeAlive ?? isProcessAlive,
     options.recordEvent ?? recordEventBestEffort,
     options.now ?? (() => new Date().toISOString())
   );
-  const sessions = await listSessions(config.project.root);
-
-  if (sessions.length === 0) {
-    process.stdout.write("No Switchyard sessions recorded yet.\n");
-    return;
-  }
+  const sessions = selectedSession
+    ? [await reloadSession(config.project.root, selectedSession.id)]
+    : await listSessions(config.project.root);
 
   const sessionIds = sessions.map((session) => session.id);
   const latestEventsBySession = await listLatestEventsBySession(config.project.root, sessionIds);
@@ -49,7 +67,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     options.listUnreadMailCounts ?? listUnreadMailCountsBySession
   );
 
-  process.stdout.write(`Sessions for ${config.project.name}:\n`);
+  process.stdout.write(`${formatStatusHeading(config.project.name, sessions.length === 1 ? sessions[0] : undefined, selectedSession !== undefined)}\n`);
   process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tRECENT\n");
 
   for (const session of sessions) {
@@ -87,11 +105,11 @@ async function loadUnreadMailCountsBestEffort(
 
 async function reconcileSessionLifecycles(
   projectRoot: string,
+  sessions: SessionRecord[],
   isRuntimeAlive: (pid: number) => boolean,
   recordEvent: EventRecorder,
   now: () => string
 ): Promise<Map<string, EventRecord>> {
-  const sessions = await listSessions(projectRoot);
   const reconciledEventsBySession = new Map<string, EventRecord>();
 
   for (const session of sessions) {
@@ -126,6 +144,32 @@ async function reconcileSessionLifecycles(
   }
 
   return reconciledEventsBySession;
+}
+
+async function resolveSession(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
+  return await resolveSessionByIdOrAgent(projectRoot, selector, (byId, byAgent) => {
+    return new StatusError(
+      `Selector '${selector}' is ambiguous: it matches session '${byId.id}' by id and session '${byAgent.id}' by agent name.`
+    );
+  });
+}
+
+async function reloadSession(projectRoot: string, sessionId: string): Promise<SessionRecord> {
+  const session = await getSessionById(projectRoot, sessionId);
+
+  if (!session) {
+    throw new StatusError(`Session '${sessionId}' disappeared while rendering status.`);
+  }
+
+  return session;
+}
+
+function formatStatusHeading(projectName: string, session: SessionRecord | undefined, selected: boolean): string {
+  if (selected && session) {
+    return `Status for ${session.agentName} (${session.id}):`;
+  }
+
+  return `Sessions for ${projectName}:`;
 }
 
 function formatWorktreePath(projectRoot: string, worktreePath: string): string {
