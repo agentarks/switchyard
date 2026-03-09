@@ -160,10 +160,14 @@ test("mergeCommand refuses legacy sessions without stored base branch metadata",
 
 test("mergeCommand refuses to run when the canonical worktree is dirty", async () => {
   const repoDir = await createInitializedRepo();
+  const trackedPath = join(repoDir, "tracked.txt");
   const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-dirty");
 
   try {
     await createBranchFromMain(repoDir, "agents/agent-dirty", "dirty.txt", "agent branch\n", "Agent dirty branch");
+    await writeFile(trackedPath, "base\n", "utf8");
+    await git(repoDir, ["add", "tracked.txt"]);
+    await git(repoDir, ["commit", "-m", "Add tracked file"]);
     await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-dirty"]);
     await createSession(repoDir, {
       id: "session-dirty",
@@ -176,7 +180,7 @@ test("mergeCommand refuses to run when the canonical worktree is dirty", async (
       createdAt: "2026-03-08T09:00:00.000Z",
       updatedAt: "2026-03-08T09:10:00.000Z"
     });
-    await writeFile(join(repoDir, "uncommitted.txt"), "dirty\n", "utf8");
+    await writeFile(trackedPath, "dirty\n", "utf8");
 
     await assert.rejects(
       async () => {
@@ -188,7 +192,7 @@ test("mergeCommand refuses to run when the canonical worktree is dirty", async (
       (error: unknown) => {
         assert.ok(error instanceof Error);
         assert.match(error.message, /Canonical branch worktree is not clean/);
-        assert.match(error.message, /\?\? uncommitted\.txt/);
+        assert.match(error.message, /Resolve these repo-root entries before merging:  M tracked\.txt\./);
         return true;
       }
     );
@@ -210,7 +214,7 @@ test("mergeCommand refuses to merge when the preserved worktree has uncommitted 
       "Agent dirty worktree branch"
     );
     await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-worktree-dirty"]);
-    await writeFile(join(worktreePath, "draft.txt"), "not committed\n", "utf8");
+    await writeFile(join(worktreePath, "feature.txt"), "changed but not committed\n", "utf8");
 
     await createSession(repoDir, {
       id: "session-worktree-dirty",
@@ -234,7 +238,7 @@ test("mergeCommand refuses to merge when the preserved worktree has uncommitted 
       (error: unknown) => {
         assert.ok(error instanceof Error);
         assert.match(error.message, /Preserved worktree.*not clean/);
-        assert.match(error.message, /\?\? draft\.txt/);
+        assert.match(error.message, /Resolve these entries there before merging:  M feature\.txt\./);
         return true;
       }
     );

@@ -242,8 +242,8 @@ async function mergeFailureReason(projectRoot: string): Promise<string> {
 async function runGit(projectRoot: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   const { stdout, stderr } = await execFileAsync("git", args, { cwd: projectRoot });
   return {
-    stdout: stdout.trim(),
-    stderr: stderr.trim()
+    stdout: stdout.trimEnd(),
+    stderr: stderr.trimEnd()
   };
 }
 
@@ -285,9 +285,7 @@ function parseDirtyEntries(stdout: string): string[] {
 }
 
 function formatDirtyEntrySummary(entries: string[]): string {
-  const visibleEntries = entries
-    .slice(0, MAX_DIRTY_ENTRY_DETAILS)
-    .map((entry) => entry.trimStart());
+  const visibleEntries = entries.slice(0, MAX_DIRTY_ENTRY_DETAILS);
 
   const remainingCount = entries.length - visibleEntries.length;
 
