@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with unread-mail visibility, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
 
 ## What Exists
 
@@ -45,6 +45,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - merge and merged-cleanup guards that now refuse to silently retarget preserved work when the configured canonical branch changes after launch
 - first operator-facing cleanup guard that only removes preserved merge artifacts automatically when the branch is confirmed merged, and otherwise requires explicit `--abandon`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
+- status output that now also surfaces each session id in the main overview so later commands can target an exact preserved session without guesswork
 - status output that now also surfaces unread mail counts so operators can spot pending mailbox work without checking each session individually
 - merge lifecycle events for `merge.completed`, `merge.failed`, and `merge.skipped`
 - first-readiness reconciliation in `sy status` that promotes launched sessions to `running` or marks them failed with a durable reason
@@ -88,6 +89,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - marks obviously stale `running` pid-backed sessions as `failed`
   - prints an empty-state message when no sessions exist
   - prints a tab-separated session table ordered by most recent update
+  - includes the durable session id in that table for exact follow-up selectors
   - includes one unread-mail count per session from `mail.db`
   - includes one concise recent-event summary per session when event history exists, including `readyAfterMs` for fresh `sling.completed` events
   - records runtime reconciliation events when it changes session state
