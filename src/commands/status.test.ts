@@ -404,6 +404,56 @@ test("statusCommand includes the readiness detail for a freshly launched session
   );
 });
 
+test("statusCommand includes merge conflict details in the recent event summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-merge-conflict",
+    agentName: "agent-merge-conflict",
+    branch: "agents/agent-merge-conflict",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-merge-conflict"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T11:05:00.000Z",
+    updatedAt: "2026-03-08T11:05:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-merge-conflict",
+    agentName: "agent-merge-conflict",
+    eventType: "merge.failed",
+    payload: {
+      branch: "agents/agent-merge-conflict",
+      canonicalBranch: "main",
+      reason: "merge_conflict",
+      conflictCount: 2,
+      firstConflictPath: "src/conflict.ts"
+    },
+    createdAt: "2026-03-08T11:06:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /stopped\tsession-merge-conflict\tagent-merge-conflict\tagents\/agent-merge-conflict\t\.switchyard\/worktrees\/agent-merge-conflict\t2026-03-08T11:05:00.000Z\t0\t2026-03-08T11:06:00.000Z merge\.failed reason=merge_conflict, conflictCount=2, firstConflictPath=src\/conflict\.ts, bran\.\.\./
+  );
+});
+
 test("statusCommand shows unread mail counts alongside recent events", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];

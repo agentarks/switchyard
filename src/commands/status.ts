@@ -309,7 +309,7 @@ const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "mail.listed": ["view", "messageCount", "unreadCount"],
   "mail.sent": ["sender", "bodyLength"],
   "merge.completed": ["canonicalBranch", "branch"],
-  "merge.failed": ["reason", "branch"],
+  "merge.failed": ["reason", "conflictCount", "firstConflictPath", "branch"],
   "merge.skipped": ["reason", "branch"],
   "runtime.exited": ["reason", "runtimePid"],
   "runtime.exited_early": ["reason", "runtimePid"],

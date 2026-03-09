@@ -38,6 +38,7 @@ Completed enough to count as minimally real:
 - first merge and reintegration CLI path
 - merge-target metadata retention for canonical-branch drift
 - dirty-entry diagnostics for merge preflight failures
+- merge-conflict path diagnostics in `sy merge` and recent status context
 - explicit selector disambiguation in `stop` and `merge`
 - explicit reused-agent selector disambiguation across session-targeting commands
 - first readiness and early-failure handling as hardening work ahead of M8

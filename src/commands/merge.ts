@@ -12,6 +12,7 @@ import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_DIRTY_ENTRY_DETAILS = 5;
+const MAX_CONFLICT_PATH_DETAILS = 5;
 
 interface MergeCommandOptions {
   selector: string;
@@ -103,22 +104,16 @@ export async function mergeCommand(options: MergeCommandOptions): Promise<void> 
   try {
     await runGit(config.project.root, ["merge", "--no-ff", branch]);
   } catch (error) {
-    const reason = await mergeFailureReason(config.project.root);
+    const failure = await inspectMergeFailure(config.project.root);
     await recordEventWithFallback(recordEvent, config.project.root, {
       sessionId: session.id,
       agentName: session.agentName,
       eventType: "merge.failed",
-      payload: {
-        branch,
-        canonicalBranch,
-        reason
-      }
+      payload: buildMergeFailurePayload(branch, canonicalBranch, failure)
     });
 
-    if (reason === "merge_conflict") {
-      throw new MergeError(
-        `Merge stopped with conflicts between '${canonicalBranch}' and '${branch}'. Resolve them in the repo root or run 'git merge --abort'.`
-      );
+    if (failure.reason === "merge_conflict") {
+      throw new MergeError(formatMergeConflictMessage(canonicalBranch, branch, failure.conflictPaths));
     }
 
     throw new MergeError(`Failed to merge '${branch}' into '${canonicalBranch}': ${formatGitError(error)}`);
@@ -225,12 +220,33 @@ async function isBranchAlreadyMerged(projectRoot: string, branch: string): Promi
   }
 }
 
-async function mergeFailureReason(projectRoot: string): Promise<string> {
+async function inspectMergeFailure(projectRoot: string): Promise<{
+  reason: string;
+  conflictPaths: string[];
+}> {
   try {
     await runGit(projectRoot, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD"]);
-    return "merge_conflict";
+    return {
+      reason: "merge_conflict",
+      conflictPaths: await listMergeConflictPaths(projectRoot)
+    };
   } catch {
-    return "git_error";
+    return {
+      reason: "git_error",
+      conflictPaths: []
+    };
+  }
+}
+
+async function listMergeConflictPaths(projectRoot: string): Promise<string[]> {
+  try {
+    const { stdout } = await runGit(projectRoot, ["diff", "--name-only", "--diff-filter=U"]);
+    return stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  } catch {
+    return [];
   }
 }
 
@@ -254,6 +270,46 @@ function formatGitError(error: unknown): string {
   }
 
   return error instanceof Error ? error.message : String(error);
+}
+
+function buildMergeFailurePayload(
+  branch: string,
+  canonicalBranch: string,
+  failure: { reason: string; conflictPaths: string[] }
+): Record<string, string | number> {
+  const payload: Record<string, string | number> = {
+    branch,
+    canonicalBranch,
+    reason: failure.reason
+  };
+
+  if (failure.conflictPaths.length > 0) {
+    payload.conflictCount = failure.conflictPaths.length;
+    payload.firstConflictPath = failure.conflictPaths[0] ?? "";
+  }
+
+  return payload;
+}
+
+function formatMergeConflictMessage(canonicalBranch: string, branch: string, conflictPaths: string[]): string {
+  const summary = formatConflictPathSummary(conflictPaths);
+
+  if (summary.length === 0) {
+    return `Merge stopped with conflicts between '${canonicalBranch}' and '${branch}'. Resolve them in the repo root or run 'git merge --abort'.`;
+  }
+
+  return `Merge stopped with conflicts between '${canonicalBranch}' and '${branch}'. Conflicting paths: ${summary}. Resolve them in the repo root or run 'git merge --abort'.`;
+}
+
+function formatConflictPathSummary(paths: string[]): string {
+  const visiblePaths = paths.slice(0, MAX_CONFLICT_PATH_DETAILS);
+  const remainingCount = paths.length - visiblePaths.length;
+
+  if (remainingCount > 0) {
+    visiblePaths.push(`+${remainingCount} more`);
+  }
+
+  return visiblePaths.join("; ");
 }
 
 function isSwitchyardStateEntry(entry: string): boolean {
