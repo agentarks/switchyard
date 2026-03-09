@@ -77,7 +77,8 @@ Future target:
 Current contract:
 - command exists and accepts one optional session id or agent name selector
 - without a selector, command reads the recent durable event timeline from `events.db`
-- with a selector, command resolves one session and reads recent events for that session
+- with a selector, command resolves one session or one orphaned session-id event stream and reads recent events for that target
+- command rejects selectors that could refer to different session-id, agent-name, or orphaned-event targets
 - when no events exist globally, print `No Switchyard events recorded yet.`
 - when events exist, print a concise tab-separated table ordered chronologically across the recent window
 

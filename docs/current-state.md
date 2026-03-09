@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events, durable mail with both unread reads and read-only mailbox inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events with explicit selector disambiguation, durable mail with both unread reads and read-only mailbox inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end.
 
 ## What Exists
 
@@ -34,6 +34,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - spawn lifecycle events that now distinguish `sling.spawned` from `sling.completed`
 - durable runtime reconciliation events for `runtime.ready`, `runtime.exited_early`, and `runtime.exited`
 - first operator-facing event inspection path over `events.db`
+- explicit selector disambiguation in `sy events` when one raw selector could name different session-id, agent-name, or orphaned-event targets
 - first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
 - first operator-facing cleanup guard that only removes preserved merge artifacts automatically when the branch is confirmed merged, and otherwise requires explicit `--abandon`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
@@ -59,6 +60,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - loads config from the canonical repo root
   - prints the recent durable event timeline from `events.db`
   - optionally scopes the recent view to one resolved session
+  - rejects ambiguous selectors when one raw value could refer to different session-id, agent-name, or orphaned-event targets
   - prints an empty-state message when no events exist
 - `sy sling [args...]`
   - requires an agent name
@@ -128,16 +130,15 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - the current runtime-control model intentionally omits live attach and transcript capture, so debugging still relies on durable events and external process inspection.
 - the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.
 - older pre-pid session rows cannot be liveness-checked automatically.
-- `sy events <selector>` currently resolves in this order: exact session row by id, orphaned events by raw `session_id`, then latest session by normalized agent name. That preserves orphaned event readability, but it means a raw selector that could plausibly match both an orphaned session id and an agent name will prefer the orphaned session-id path until the CLI grows explicit selector disambiguation.
 - the merge and cleanup paths are intentionally narrow: they preflight obvious unsafe states and keep review, conflict resolution, post-merge validation, and explicit abandon decisions manual-first.
 
 ## Recommended Next Task
 
-Pay down the current selector ambiguity in inspection paths:
-- make operator-facing selector behavior more explicit where raw ids and agent names can overlap
+Validate whether merge or recovery work needs richer session metadata:
+- add metadata only when a concrete operator workflow proves the current pid, branch, worktree, and event context are insufficient
 - keep the change narrow and grounded in the current single-repo lifecycle
 
-The merge path and cleanup guard now cover the main reintegration risk in the current loop. The next slice should stay small and operator-facing.
+The selector ambiguity in the current inspection path is now explicit instead of silently guessed. The next slice should stay small and only broaden state if real recovery work proves a gap.
 
 ## How To Use This File
 

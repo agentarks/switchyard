@@ -34,7 +34,7 @@ Completed enough to count as minimally real:
 - first readiness and early-failure handling as hardening work ahead of M8
 
 Not complete yet:
-- selector disambiguation in inspection paths and any metadata that real recovery work proves necessary
+- any session metadata that real merge or recovery work proves necessary
 
 ## Current In-Scope Work
 
@@ -43,7 +43,6 @@ These are the right kinds of tasks right now:
 - improve pid-backed lifecycle control only where the current operator loop is still concretely weak
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
-- pay down small operator-facing ambiguities, such as selector precedence, before adding broader inspection features
 - broaden mail semantics further only if the current send/check/list split proves insufficient
 
 ## Current Out-Of-Scope Work

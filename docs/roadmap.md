@@ -30,21 +30,21 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Clarify selector behavior in operator inspection paths:
-- make ambiguous session selectors more explicit where raw ids and agent names can overlap
-- keep the change narrow and operator-readable instead of adding broader filtering
+Validate whether merge or recovery work needs richer session metadata:
+- add metadata only when a concrete operator workflow proves the current stored state is insufficient
+- keep the change narrow and operator-readable instead of broadening schema or reporting preemptively
 - avoid broad inspection features while the current repo-local loop is still the target
 
 Why this is next:
-- the mail path is now less awkward, so the most concrete remaining operator ambiguity is selector precedence
-- the ambiguity already appears in the current `sy events <selector>` behavior and can mislead inspection work
-- tightening selector semantics is a better next use of scope than adding broader metadata or filtering without evidence
+- selector precedence is now explicit in the inspection path, so the next question is whether recovery work still lacks any concrete context
+- broader metadata should be justified by real merge or recovery pressure, not added speculatively
+- validating the current state shape is a better next use of scope than expanding schema without evidence
 
 ## Order After That
 
-1. add richer session metadata only if merge or recovery work truly needs it
-2. broader mail semantics only if the current send/check/list split still proves insufficient
-3. improve diagnostics only if operator workflows require them
+1. broader mail semantics only if the current send/check/list split still proves insufficient
+2. improve diagnostics only if operator workflows require them
+3. broader runtime breadth only if the current Codex-first loop stops being the right constraint
 
 ## Explicitly Deferred
 

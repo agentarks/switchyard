@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { createEvent } from "../events/store.js";
+import { EventsError } from "../errors.js";
 import { createSession } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, removeTempDir } from "../test-helpers/git.js";
@@ -138,6 +139,87 @@ test("eventsCommand reads events for a direct session id even when the session r
 
     assert.match(output, /Recent events for session session-orphan:/);
     assert.match(output, /2026-03-08T11:00:00.000Z\tstop.completed\tagent-orphan\tsession-orphan\toutcome=stopped/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("eventsCommand rejects selectors that match different sessions by id and agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createSession(repoDir, {
+      id: "shared-name",
+      agentName: "other-agent",
+      branch: "agents/other-agent",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "other-agent"),
+      state: "running",
+      runtimePid: 2111,
+      createdAt: "2026-03-08T12:00:00.000Z",
+      updatedAt: "2026-03-08T12:00:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-shared-agent",
+      agentName: "shared-name",
+      branch: "agents/shared-name",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "shared-name"),
+      state: "running",
+      runtimePid: 2112,
+      createdAt: "2026-03-08T12:05:00.000Z",
+      updatedAt: "2026-03-08T12:05:00.000Z"
+    });
+
+    await assert.rejects(
+      () => eventsCommand({ startDir: repoDir, selector: "shared-name" }),
+      (error: unknown) => {
+        assert.ok(error instanceof EventsError);
+        assert.match(
+          error.message,
+          /Selector 'shared-name' is ambiguous: it matches session 'shared-name' by id and session 'session-shared-agent' by agent name\./
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("eventsCommand rejects selectors that match orphaned events and a session by agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createSession(repoDir, {
+      id: "session-agent-shared",
+      agentName: "shared-name",
+      branch: "agents/shared-name",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "shared-name"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T13:00:00.000Z",
+      updatedAt: "2026-03-08T13:00:00.000Z"
+    });
+    await createEvent(repoDir, {
+      sessionId: "shared-name",
+      agentName: "agent-orphan",
+      eventType: "stop.completed",
+      payload: {
+        outcome: "stopped"
+      },
+      createdAt: "2026-03-08T13:05:00.000Z"
+    });
+
+    await assert.rejects(
+      () => eventsCommand({ startDir: repoDir, selector: "shared-name" }),
+      (error: unknown) => {
+        assert.ok(error instanceof EventsError);
+        assert.match(
+          error.message,
+          /Selector 'shared-name' is ambiguous: it matches orphaned events for session 'shared-name' and session 'session-agent-shared' by agent name\./
+        );
+        return true;
+      }
+    );
   } finally {
     await removeTempDir(repoDir);
   }

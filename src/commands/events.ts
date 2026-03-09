@@ -63,14 +63,22 @@ export async function eventsCommand(options: EventsCommandOptions = {}): Promise
   }
 }
 
-async function resolveSession(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
-  const byId = await getSessionById(projectRoot, selector);
+interface ResolvedSessionSelector {
+  byId?: SessionRecord;
+  byAgent?: SessionRecord;
+}
 
-  if (byId) {
-    return byId;
+async function resolveSessionSelector(projectRoot: string, selector: string): Promise<ResolvedSessionSelector> {
+  const byId = await getSessionById(projectRoot, selector);
+  const byAgent = await findLatestSessionByAgent(projectRoot, normalizeAgentName(selector));
+
+  if (byId && byAgent && byId.id !== byAgent.id) {
+    throw new EventsError(
+      `Selector '${selector}' is ambiguous: it matches session '${byId.id}' by id and session '${byAgent.id}' by agent name.`
+    );
   }
 
-  return await findLatestSessionByAgent(projectRoot, normalizeAgentName(selector));
+  return { byId, byAgent };
 }
 
 async function resolveEventSelection(
@@ -78,7 +86,8 @@ async function resolveEventSelection(
   selector: string,
   limit: number
 ): Promise<ResolvedEventSelection | undefined> {
-  const session = await resolveSessionById(projectRoot, selector);
+  const { byId, byAgent } = await resolveSessionSelector(projectRoot, selector);
+  const session = byId;
 
   if (session) {
     const events = await listEvents(projectRoot, {
@@ -99,32 +108,32 @@ async function resolveEventSelection(
   });
 
   if (directSessionEvents.length > 0) {
+    if (byAgent) {
+      throw new EventsError(
+        `Selector '${selector}' is ambiguous: it matches orphaned events for session '${selector}' and session '${byAgent.id}' by agent name.`
+      );
+    }
+
     return {
       sessionId: selector,
       events: directSessionEvents
     };
   }
 
-  const sessionByAgent = await findLatestSessionByAgent(projectRoot, normalizeAgentName(selector));
-
-  if (!sessionByAgent) {
+  if (!byAgent) {
     return undefined;
   }
 
   const agentEvents = await listEvents(projectRoot, {
-    sessionId: sessionByAgent.id,
+    sessionId: byAgent.id,
     limit
   });
 
   return {
-    session: sessionByAgent,
-    sessionId: sessionByAgent.id,
+    session: byAgent,
+    sessionId: byAgent.id,
     events: agentEvents
   };
-}
-
-async function resolveSessionById(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
-  return await getSessionById(projectRoot, selector);
 }
 
 function formatHeading(projectName: string, session?: SessionRecord, sessionId?: string): string {
