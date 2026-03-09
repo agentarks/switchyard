@@ -45,6 +45,7 @@ git merge --no-ff agents/<agent-name>
    - If you decide not to keep the work, treat that as an explicit abandon decision.
 
 5. Clean up only after the outcome is known.
+   - `sy status` now shows a cleanup-readiness label for each session, using the same merged-cleanup rules as `sy stop --cleanup`. Active sessions show the post-stop result as `stop-then:*`.
    - After a successful merge, remove the preserved branch and worktree with `sy stop <session> --cleanup`.
    - After an explicit abandon decision, discard the preserved branch and worktree with `sy stop <session> --cleanup --abandon`.
 

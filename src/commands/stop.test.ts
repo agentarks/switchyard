@@ -507,6 +507,61 @@ test("stopCommand refuses merged cleanup for legacy sessions without stored base
   assert.equal(writes.join(""), "");
 });
 
+test("stopCommand allows explicit abandon cleanup when branch metadata is missing", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-missing-branch");
+  const removedWorktrees: Array<{ agentName: string; branch: string; path: string; baseBranch: string }> = [];
+
+  try {
+    await createSession(repoDir, {
+      id: "session-missing-branch",
+      agentName: "agent-missing-branch",
+      branch: "",
+      baseBranch: "main",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:18:00.000Z"
+    });
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await stopCommand({
+      selector: "agent-missing-branch",
+      cleanup: true,
+      abandon: true,
+      startDir: repoDir,
+      removeSessionWorktree: async (_projectRoot, worktree) => {
+        removedWorktrees.push(worktree);
+      }
+    });
+
+    const events = await listEvents(repoDir, { sessionId: "session-missing-branch" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "stop.completed");
+    assert.equal(events[0]?.payload.cleanupPerformed, true);
+    assert.equal(events[0]?.payload.cleanupMode, "abandoned");
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.equal(removedWorktrees.length, 1);
+  assert.deepEqual(removedWorktrees[0], {
+    agentName: "agent-missing-branch",
+    branch: "",
+    path: worktreePath,
+    baseBranch: "main"
+  });
+  assert.match(writes.join(""), /Cleanup: removed worktree and branch after explicit abandon\./);
+});
+
 test("stopCommand still stops an active unmerged session when cleanup is refused", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];

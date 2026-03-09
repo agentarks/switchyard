@@ -7,6 +7,7 @@ import type { EventPayloadValue, EventRecord } from "../events/types.js";
 import { StatusError } from "../errors.js";
 import { listUnreadMailCountsBySession } from "../mail/store.js";
 import { isProcessAlive } from "../runtimes/process.js";
+import { getCleanupReadinessLabel } from "../sessions/cleanup.js";
 import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
 import { getSessionById, listSessions, updateSessionState } from "../sessions/store.js";
 import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
@@ -17,6 +18,11 @@ interface StatusOptions {
   isRuntimeAlive?: (pid: number) => boolean;
   listUnreadMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
   recordEvent?: EventRecorder;
+  getCleanupReadiness?: (options: {
+    projectRoot: string;
+    canonicalBranch: string;
+    session: SessionRecord;
+  }) => Promise<string>;
   now?: () => string;
 }
 
@@ -66,20 +72,27 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     sessionIds,
     options.listUnreadMailCounts ?? listUnreadMailCountsBySession
   );
+  const cleanupReadiness = await loadCleanupReadinessBestEffort(
+    config.project.root,
+    config.project.canonicalBranch,
+    sessions,
+    options.getCleanupReadiness ?? getCleanupReadinessLabel
+  );
 
   process.stdout.write(`${formatStatusHeading(config.project.name, sessions.length === 1 ? sessions[0] : undefined, selectedSession !== undefined)}\n`);
-  process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tRECENT\n");
+  process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tRECENT\n");
 
   for (const session of sessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
     const unreadCount = unreadMailCounts.available
       ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
       : "?";
+    const cleanup = cleanupReadiness.get(session.id) ?? "?";
     const recentEvent = formatRecentEventSummary(
       reconciledEventsBySession.get(session.id) ?? latestEventsBySession.get(session.id)
     );
     process.stdout.write(
-      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${recentEvent}\n`
+      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${cleanup}\t${recentEvent}\n`
     );
   }
 }
@@ -101,6 +114,36 @@ async function loadUnreadMailCountsBestEffort(
       available: false
     };
   }
+}
+
+async function loadCleanupReadinessBestEffort(
+  projectRoot: string,
+  canonicalBranch: string,
+  sessions: SessionRecord[],
+  getCleanupReadiness: (options: {
+    projectRoot: string;
+    canonicalBranch: string;
+    session: SessionRecord;
+  }) => Promise<string>
+): Promise<Map<string, string>> {
+  const cleanupReadinessBySession = new Map<string, string>();
+
+  for (const session of sessions) {
+    try {
+      cleanupReadinessBySession.set(session.id, await getCleanupReadiness({
+        projectRoot,
+        canonicalBranch,
+        session
+      }));
+    } catch (error) {
+      process.stderr.write(
+        `WARN: failed to evaluate cleanup readiness for session '${session.id}': ${formatErrorMessage(error)}\n`
+      );
+      cleanupReadinessBySession.set(session.id, "?");
+    }
+  }
+
+  return cleanupReadinessBySession;
 }
 
 async function reconcileSessionLifecycles(

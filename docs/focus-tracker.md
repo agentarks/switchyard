@@ -31,6 +31,7 @@ Completed enough to count as minimally real:
 - read-only mailbox inspection inside the mail path
 - read-only unread-only mailbox inspection inside the mail path
 - unread mailbox visibility in `sy status`
+- cleanup-readiness visibility in `sy status`
 - session-id visibility in `sy status`
 - exact per-session inspection in `sy status`
 - M7 first event inspection path
