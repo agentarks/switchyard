@@ -9,6 +9,7 @@ Switchyard is through the first operator-loop milestones:
 - M4 agent spawn is now minimally real for one Codex session
 - M5 lifecycle control is minimally real
 - M6 messaging is now minimally real
+- read-only mailbox inspection is now minimally real inside the messaging path
 - M7 event inspection is now minimally real
 - first merge and reintegration CLI path is now minimally real
 - first readiness and early-failure handling are now minimally real as hardening work ahead of M8
@@ -29,20 +30,20 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Expand mail semantics beyond the first durable unread-only path:
-- keep the message model small, durable, and operator-readable
-- add only the narrowest behavior that removes a concrete operator friction point
-- avoid broad coordination logic while the current repo-local loop is still the target
+Clarify selector behavior in operator inspection paths:
+- make ambiguous session selectors more explicit where raw ids and agent names can overlap
+- keep the change narrow and operator-readable instead of adding broader filtering
+- avoid broad inspection features while the current repo-local loop is still the target
 
 Why this is next:
-- the merge and cleanup paths now cover the main reintegration risk in the current loop
-- mail is the remaining intentionally thin operator-facing path
-- broadening messaging carefully is a better next use of scope than adding more merge machinery without evidence
+- the mail path is now less awkward, so the most concrete remaining operator ambiguity is selector precedence
+- the ambiguity already appears in the current `sy events <selector>` behavior and can mislead inspection work
+- tightening selector semantics is a better next use of scope than adding broader metadata or filtering without evidence
 
 ## Order After That
 
 1. add richer session metadata only if merge or recovery work truly needs it
-2. broader mail semantics after the next narrow improvement only if operator usage still demands them
+2. broader mail semantics only if the current send/check/list split still proves insufficient
 3. improve diagnostics only if operator workflows require them
 
 ## Explicitly Deferred

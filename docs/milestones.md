@@ -74,6 +74,7 @@ Deliverables:
 - mail store
 - `sy mail send`
 - `sy mail check`
+- `sy mail list`
 - message formatting
 
 Definition of done:

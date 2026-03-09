@@ -136,16 +136,18 @@ Future target:
 ## `sy mail`
 
 Current contract:
-- command has `send` and `check` subcommands
+- command has `send`, `check`, and `list` subcommands
 - `sy mail send <session> <body>` resolves one session by id or normalized agent name
 - `sy mail send` writes one durable record into `mail.db`
 - `sy mail check <session>` reads unread mail for one resolved session
 - `sy mail check` marks returned messages as read
+- `sy mail list <session>` reads the full mailbox for one resolved session
+- `sy mail list` does not change read state
 
 Future target:
 - support simple durable operator/agent messaging
 - keep the early surface intentionally small
-- expand beyond unread-only reads only when operator usage justifies it
+- broaden beyond the current send/check/list split only when operator usage justifies it
 
 ## Priority Order
 

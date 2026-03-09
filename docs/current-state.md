@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events, basic durable mail, and a narrow merge path for the documented reintegration workflow all exist end-to-end.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events, durable mail with both unread reads and read-only mailbox inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end.
 
 ## What Exists
 
@@ -16,6 +16,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - implemented `sy merge`
 - implemented `sy mail send`
 - implemented `sy mail check`
+- implemented `sy mail list`
 - repo root detection that handles nested directories and git worktrees
 - canonical branch detection that prefers `origin/HEAD`
 - config loading that normalizes `project.root` to the canonical repo root
@@ -29,7 +30,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - narrow Codex runtime seam that builds and spawns one detached command
 - initial readiness waiting that requires the spawned Codex process to survive a short launch window before the session is marked usable
 - narrow process liveness and stop helpers for detached Codex sessions
-- durable lifecycle event appends around `sy sling`, `sy stop`, `sy mail send`, and `sy mail check`
+- durable lifecycle event appends around `sy sling`, `sy stop`, `sy mail send`, `sy mail check`, and `sy mail list`
 - spawn lifecycle events that now distinguish `sling.spawned` from `sling.completed`
 - durable runtime reconciliation events for `runtime.ready`, `runtime.exited_early`, and `runtime.exited`
 - first operator-facing event inspection path over `events.db`
@@ -103,6 +104,10 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - resolves one session by id or normalized agent name
   - reads unread mail for that session in creation order
   - marks returned messages as read
+- `sy mail list <session>`
+  - resolves one session by id or normalized agent name
+  - prints the full mailbox for that session in creation order
+  - leaves read/unread state unchanged
 
 ## Current Merge Workflow
 
@@ -127,9 +132,9 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## Recommended Next Task
 
-Expand mail semantics beyond the first durable unread-only path:
-- keep the message model operator-readable and repo-local
-- only broaden the surface where current mail usage is concretely awkward
+Pay down the current selector ambiguity in inspection paths:
+- make operator-facing selector behavior more explicit where raw ids and agent names can overlap
+- keep the change narrow and grounded in the current single-repo lifecycle
 
 The merge path and cleanup guard now cover the main reintegration risk in the current loop. The next slice should stay small and operator-facing.
 
