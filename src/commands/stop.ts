@@ -296,7 +296,12 @@ function formatRelativePath(projectRoot: string, path: string): string {
 
 type CleanupMode = "abandoned" | "merged";
 
-type CleanupReason = "artifacts_missing" | "branch_missing" | "missing_branch_metadata" | "not_merged";
+type CleanupReason =
+  | "artifacts_missing"
+  | "branch_missing"
+  | "missing_base_branch_metadata"
+  | "missing_branch_metadata"
+  | "not_merged";
 
 async function determineCleanupDecision(options: {
   projectRoot: string;
@@ -308,11 +313,8 @@ async function determineCleanupDecision(options: {
   | { kind: "blocked"; reason: CleanupReason; message: string; canonicalBranch: string }
   | { kind: "already_absent" }
 > {
-  const canonicalBranch = resolveSessionCanonicalBranch(options.session, options.canonicalBranch);
-
-  if (options.abandon) {
-    return { kind: "perform", mode: "abandoned", canonicalBranch };
-  }
+  const sessionBaseBranch = options.session.baseBranch?.trim() ?? "";
+  const canonicalBranch = sessionBaseBranch;
 
   const branch = options.session.branch.trim();
 
@@ -322,6 +324,23 @@ async function determineCleanupDecision(options: {
       reason: "missing_branch_metadata",
       canonicalBranch,
       message: `Refusing cleanup for ${options.session.agentName}: no preserved branch metadata is available. Rerun with '--cleanup --abandon' to discard the remaining artifacts explicitly.`
+    };
+  }
+
+  if (options.abandon) {
+    return {
+      kind: "perform",
+      mode: "abandoned",
+      canonicalBranch: sessionBaseBranch || options.canonicalBranch
+    };
+  }
+
+  if (sessionBaseBranch.length === 0) {
+    return {
+      kind: "blocked",
+      reason: "missing_base_branch_metadata",
+      canonicalBranch: options.canonicalBranch,
+      message: `Refusing cleanup for ${options.session.agentName}: no stored base branch metadata is available for this legacy session, so Switchyard cannot safely confirm where '${branch}' should have been merged. Rerun without '--cleanup' to preserve it, or pass '--cleanup --abandon' to discard it explicitly.`
     };
   }
 
@@ -363,11 +382,6 @@ function formatCleanupMessage(cleanupMode: CleanupMode | undefined, canonicalBra
   }
 
   return "Cleanup: removed worktree and branch.";
-}
-
-function resolveSessionCanonicalBranch(session: SessionRecord, configuredCanonicalBranch: string): string {
-  const sessionBaseBranch = session.baseBranch?.trim() ?? "";
-  return sessionBaseBranch.length > 0 ? sessionBaseBranch : configuredCanonicalBranch;
 }
 
 async function localBranchExists(projectRoot: string, branch: string): Promise<boolean> {

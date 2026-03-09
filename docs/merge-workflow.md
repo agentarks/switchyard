@@ -29,7 +29,7 @@ For the current v0 loop, reintegration is still manual-first even though `sy mer
 
 3. Reintegrate from the canonical branch in the main repository.
    - Prefer `sy merge <session>` once review is complete.
-   - The command checks that the session is no longer active, verifies the preserved branch still exists, refuses to silently retarget a session whose stored `baseBranch` no longer matches `.switchyard/config.yaml`, verifies that the preserved worktree path still resolves to the expected git worktree root, requires both the preserved agent worktree and the repo-root worktree to be clean, switches to the intended canonical branch, and then runs the explicit git merge.
+   - The command checks that the session is no longer active, refuses legacy rows that do not have stored `baseBranch` metadata, verifies the preserved branch still exists, refuses to silently retarget a session whose stored `baseBranch` no longer matches `.switchyard/config.yaml`, verifies that the preserved worktree path still resolves to the expected git worktree root, requires both the preserved agent worktree and the repo-root worktree to be clean, switches to the intended canonical branch, and then runs the explicit git merge.
    - The equivalent git path remains:
 
 ```bash
@@ -75,4 +75,4 @@ The current `sy merge <session>` path:
 - runs the same explicit merge contract from this document
 
 It does not replace operator review, manual conflict resolution, post-merge validation, or explicit cleanup.
-The corresponding cleanup path is also intentionally narrow: plain `--cleanup` is safe cleanup after merge, while `--cleanup --abandon` is explicit discard.
+The corresponding cleanup path is also intentionally narrow: plain `--cleanup` is safe cleanup after merge only when Switchyard has stored `baseBranch` metadata for that session, while `--cleanup --abandon` is explicit discard.

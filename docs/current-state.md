@@ -88,12 +88,14 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - stops one active pid-backed runtime and updates durable session state
   - preserves the worktree by default so the operator can review or merge the branch later
   - still stops active sessions when `--cleanup` is requested, even if cleanup is later refused
-  - removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch` when available, or the configured canonical branch for older rows
+  - removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch`
+  - refuses plain merged-cleanup for legacy rows that do not have stored `baseBranch` metadata
   - requires `--cleanup --abandon` to discard preserved work that is not confirmed merged
   - reports when preserved cleanup artifacts were already absent instead of claiming removal
 - `sy merge <session>`
   - resolves one session by id or normalized agent name
   - refuses active sessions so merge only runs against preserved work
+  - refuses legacy rows that do not have stored `baseBranch` metadata
   - refuses to silently retarget preserved work when the session `baseBranch` disagrees with the current configured canonical branch
   - verifies the preserved worktree path still resolves to the expected git worktree root
   - refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
@@ -130,7 +132,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `src/config.ts` is carrying both config logic and git root-resolution behavior; that should eventually split once lifecycle code grows further.
 - `node:sqlite` is still experimental in Node 25, so the SQLite choice may need revision if core API churn becomes painful.
 - there is no end-to-end test around `sy init`.
-- older session rows created before `baseBranch` was added still fall back to the current configured canonical branch during merge and merged-cleanup checks
+- older session rows created before `baseBranch` was added now fail closed for `sy merge` and plain merged-cleanup, so operators must use manual git review/merge or explicit `--abandon`
 - the current readiness model is intentionally narrow: `sy sling` only proves the process survived a short launch window, and `sy status` promotes the session to `running` on the first later successful pid liveness check.
 - the current runtime-control model intentionally omits live attach and transcript capture, so debugging still relies on durable events and external process inspection.
 - the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.

@@ -94,7 +94,8 @@ Current contract:
 - command updates durable session state in `sessions.db`
 - command preserves the worktree by default so the operator can still review or merge the branch later
 - command still stops an active session even when a requested cleanup cannot proceed safely
-- command removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch` when available, or the configured canonical branch for older rows
+- command removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch`
+- command refuses plain merged-cleanup for legacy rows that do not have stored `baseBranch` metadata
 - command requires `--cleanup --abandon` to discard work that is not confirmed merged
 - command rejects `--abandon` unless `--cleanup` is also set
 - command reports already-absent artifacts as already absent instead of reporting a removal that did not happen
@@ -108,6 +109,7 @@ Future target:
 Current contract:
 - command resolves one session by id or normalized agent name
 - command refuses active sessions and only merges preserved work
+- command refuses legacy rows that do not have stored `baseBranch` metadata
 - command refuses to silently retarget preserved work when the session `baseBranch` differs from the current configured canonical branch
 - command verifies that the preserved worktree path still resolves to the expected git worktree root
 - command refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
