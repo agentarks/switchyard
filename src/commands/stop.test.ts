@@ -4,6 +4,7 @@ import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
+import { StopError } from "../errors.js";
 import { createSession, listSessions, updateSessionState } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
@@ -67,6 +68,52 @@ test("stopCommand stops an active session and preserves the worktree by default"
   const output = writes.join("");
   assert.match(output, /Stopped agent-one/);
   assert.match(output, /Worktree preserved: \.switchyard\/worktrees\/agent-one/);
+});
+
+test("stopCommand rejects selectors that match different sessions by id and agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createSession(repoDir, {
+      id: "shared-name",
+      agentName: "other-agent",
+      branch: "agents/other-agent",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "other-agent"),
+      state: "running",
+      runtimePid: 2111,
+      createdAt: "2026-03-08T12:00:00.000Z",
+      updatedAt: "2026-03-08T12:00:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-shared-agent",
+      agentName: "shared-name",
+      branch: "agents/shared-name",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "shared-name"),
+      state: "running",
+      runtimePid: 2112,
+      createdAt: "2026-03-08T12:05:00.000Z",
+      updatedAt: "2026-03-08T12:05:00.000Z"
+    });
+
+    await assert.rejects(
+      () => stopCommand({ selector: "shared-name", startDir: repoDir }),
+      (error: unknown) => {
+        assert.ok(error instanceof StopError);
+        assert.match(
+          error.message,
+          /Selector 'shared-name' is ambiguous: it matches session 'shared-name' by id and session 'session-shared-agent' by agent name\./
+        );
+        return true;
+      }
+    );
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions.length, 2);
+    assert.equal(sessions[0]?.runtimePid, 2112);
+    assert.equal(sessions[1]?.runtimePid, 2111);
+  } finally {
+    await removeTempDir(repoDir);
+  }
 });
 
 test("stopCommand removes the worktree and branch when cleanup is explicitly abandoned", async () => {

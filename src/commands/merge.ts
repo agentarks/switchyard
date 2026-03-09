@@ -7,9 +7,8 @@ import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { MergeError } from "../errors.js";
-import { findLatestSessionByAgent, getSessionById } from "../sessions/store.js";
+import { resolveSessionByIdOrAgent } from "./session-selector.js";
 import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
-import { normalizeAgentName } from "../worktrees/naming.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_DIRTY_ENTRY_DETAILS = 5;
@@ -142,13 +141,11 @@ export async function mergeCommand(options: MergeCommandOptions): Promise<void> 
 }
 
 async function resolveSession(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
-  const byId = await getSessionById(projectRoot, selector);
-
-  if (byId) {
-    return byId;
-  }
-
-  return await findLatestSessionByAgent(projectRoot, normalizeAgentName(selector));
+  return await resolveSessionByIdOrAgent(projectRoot, selector, (byId, byAgent) => {
+    return new MergeError(
+      `Selector '${selector}' is ambiguous: it matches session '${byId.id}' by id and session '${byAgent.id}' by agent name.`
+    );
+  });
 }
 
 async function ensureProjectRootIsClean(projectRoot: string): Promise<void> {
