@@ -66,6 +66,7 @@ Current contract:
 - with a selector, command resolves one session by id or normalized agent name and renders only that session
 - command accepts an exact session id before agent-name normalization, even when that selector is not a valid normalized agent name
 - command rejects selectors that match one session by id and a different session by normalized agent name
+- command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
 - command promotes `starting` sessions to `running` when the first pid liveness check succeeds
 - command marks early-dead `starting` sessions as `failed`
 - command marks obviously stale pid-backed `running` sessions as `failed`
@@ -89,6 +90,7 @@ Current contract:
 - without a selector, command reads the recent durable event timeline from `events.db`
 - with a selector, command resolves one session or one orphaned session-id event stream and reads recent events for that target
 - command rejects selectors that could refer to different session-id, agent-name, or orphaned-event targets
+- command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
 - command rejects non-positive or non-integer `--limit` values with an explicit events-style error
 - when no events exist globally, print `No Switchyard events recorded yet.`
 - when events exist, print a concise tab-separated table ordered chronologically across the recent window
@@ -102,6 +104,7 @@ Future target:
 Current contract:
 - command resolves one session by id or normalized agent name
 - command rejects selectors that match one session by id and a different session by normalized agent name
+- command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
 - command stops one active pid-backed runtime cleanly
 - command updates durable session state in `sessions.db`
 - command preserves the worktree by default so the operator can still review or merge the branch later
@@ -121,6 +124,7 @@ Future target:
 Current contract:
 - command resolves one session by id or normalized agent name
 - command rejects selectors that match one session by id and a different session by normalized agent name
+- command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
 - command refuses active sessions and only merges preserved work
 - command refuses legacy rows that do not have stored `baseBranch` metadata
 - command refuses to silently retarget preserved work when the session `baseBranch` differs from the current configured canonical branch
@@ -159,6 +163,7 @@ Current contract:
 - command has `send`, `check`, and `list` subcommands
 - `sy mail send <session> <body>` resolves one session by id or normalized agent name
 - mail commands accept an exact session id even when that selector would not be a valid normalized agent name
+- mail commands reject selectors that match multiple sessions by normalized agent name and require an exact session id instead
 - `sy mail send` writes one durable record into `mail.db`
 - `sy mail check <session>` reads unread mail for one resolved session
 - `sy mail check` marks returned messages as read

@@ -10,8 +10,10 @@ The current target is a reliable single-agent operator loop:
 - `sy status`
 - `sy events`
 - `sy stop`
+- `sy merge`
 - `sy mail send`
 - `sy mail check`
+- `sy mail list`
 
 Favor small vertical slices that make this loop more reliable or easier to understand.
 

@@ -7,7 +7,7 @@ import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { StopError } from "../errors.js";
-import { resolveSessionByIdOrAgent } from "./session-selector.js";
+import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 import { stopProcess, isProcessAlive } from "../runtimes/process.js";
 import { updateSessionState } from "../sessions/store.js";
 import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
@@ -189,10 +189,8 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
 }
 
 async function resolveSession(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
-  return await resolveSessionByIdOrAgent(projectRoot, selector, (byId, byAgent) => {
-    return new StopError(
-      `Selector '${selector}' is ambiguous: it matches session '${byId.id}' by id and session '${byAgent.id}' by agent name.`
-    );
+  return await resolveSessionByIdOrAgent(projectRoot, selector, (ambiguity) => {
+    return new StopError(formatSessionSelectorAmbiguousMessage(selector, ambiguity));
   });
 }
 

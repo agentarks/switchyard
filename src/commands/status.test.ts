@@ -230,6 +230,47 @@ test("statusCommand rejects selectors that match different sessions by id and ag
   }
 });
 
+test("statusCommand rejects selectors that match multiple sessions by agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  await createSession(repoDir, {
+    id: "session-latest",
+    agentName: "shared-agent",
+    branch: "agents/shared-agent",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "shared-agent-latest"),
+    state: "running",
+    runtimePid: 3333,
+    createdAt: "2026-03-08T09:05:00.000Z",
+    updatedAt: "2026-03-08T10:00:00.000Z"
+  });
+  await createSession(repoDir, {
+    id: "session-earlier",
+    agentName: "shared-agent",
+    branch: "agents/shared-agent",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "shared-agent-earlier"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T09:00:00.000Z",
+    updatedAt: "2026-03-08T09:30:00.000Z"
+  });
+
+  try {
+    await assert.rejects(
+      () => statusCommand({ startDir: repoDir, selector: "shared-agent" }),
+      (error) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal(
+          (error as Error).message,
+          "Selector 'shared-agent' is ambiguous: it matches multiple sessions by agent name ('session-latest', 'session-earlier'). Use an exact session id from 'sy status'."
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("statusCommand prints the latest event summary for each session", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];

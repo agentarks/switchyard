@@ -107,6 +107,47 @@ test("mergeCommand rejects selectors that match different sessions by id and age
   }
 });
 
+test("mergeCommand rejects selectors that match multiple sessions by agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createSession(repoDir, {
+      id: "session-latest",
+      agentName: "shared-agent",
+      branch: "agents/shared-agent",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "shared-agent-latest"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T12:05:00.000Z",
+      updatedAt: "2026-03-08T12:10:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-earlier",
+      agentName: "shared-agent",
+      branch: "agents/shared-agent",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "shared-agent-earlier"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T12:00:00.000Z",
+      updatedAt: "2026-03-08T12:00:00.000Z"
+    });
+
+    await assert.rejects(
+      () => mergeCommand({ selector: "shared-agent", startDir: repoDir }),
+      (error: unknown) => {
+        assert.ok(error instanceof MergeError);
+        assert.equal(
+          error.message,
+          "Selector 'shared-agent' is ambiguous: it matches multiple sessions by agent name ('session-latest', 'session-earlier'). Use an exact session id from 'sy status'."
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("mergeCommand refuses to merge an active session", async () => {
   const repoDir = await createInitializedRepo();
 

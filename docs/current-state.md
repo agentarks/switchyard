@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts and exact per-session inspection, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts and exact per-session inspection, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
 
 ## What Exists
 
@@ -38,6 +38,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - durable runtime reconciliation events for `runtime.ready`, `runtime.exited_early`, and `runtime.exited`
 - first operator-facing event inspection path over `events.db`
 - explicit selector disambiguation in `sy events` when one raw selector could name different session-id, agent-name, or orphaned-event targets
+- explicit selector disambiguation across session-targeting commands when one normalized agent name matches multiple preserved sessions
 - operator-controlled recent-event window selection in `sy events --limit`
 - exact per-session inspection in `sy status`, including explicit selector disambiguation between session-id and agent-name matches
 - explicit selector disambiguation in `sy stop` and `sy merge` when one raw selector could name different sessions by session-id and agent-name
@@ -72,6 +73,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - supports `--limit <count>` so operators can widen or narrow the recent-event window explicitly
   - optionally scopes the recent view to one resolved session
   - rejects ambiguous selectors when one raw value could refer to different session-id, agent-name, or orphaned-event targets
+  - rejects reused agent-name selectors when multiple sessions share that normalized agent name, and requires an exact session id instead
   - prints an empty-state message when no events exist
 - `sy sling [args...]`
   - requires an agent name
@@ -88,6 +90,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - optionally resolves one session by id or normalized agent name and renders only that session
   - accepts an exact session id before agent-name normalization, even when the raw selector is not a valid agent name
   - rejects ambiguous selectors that would match different sessions by id and agent name
+  - rejects reused agent-name selectors when multiple sessions share that normalized agent name, and requires an exact session id instead
   - promotes `starting` sessions to `running` when the pid survives the first liveness check
   - marks early-dead `starting` sessions as `failed`
   - marks obviously stale `running` pid-backed sessions as `failed`
@@ -101,6 +104,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `sy stop <session>`
   - resolves one session by id or normalized agent name
   - rejects ambiguous selectors that would match different sessions by id and agent name
+  - rejects reused agent-name selectors when multiple sessions share that normalized agent name, and requires an exact session id instead
   - stops one active pid-backed runtime and updates durable session state
   - preserves the worktree by default so the operator can review or merge the branch later
   - still stops active sessions when `--cleanup` is requested, even if cleanup is later refused
@@ -111,6 +115,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `sy merge <session>`
   - resolves one session by id or normalized agent name
   - rejects ambiguous selectors that would match different sessions by id and agent name
+  - rejects reused agent-name selectors when multiple sessions share that normalized agent name, and requires an exact session id instead
   - refuses active sessions so merge only runs against preserved work
   - refuses legacy rows that do not have stored `baseBranch` metadata
   - refuses to silently retarget preserved work when the session `baseBranch` disagrees with the current configured canonical branch
@@ -126,10 +131,12 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `sy mail send <session> <body>`
   - resolves one session by id or normalized agent name
   - accepts an exact session id before agent-name normalization, even when the raw selector is not a valid agent name
+  - rejects reused agent-name selectors when multiple sessions share that normalized agent name, and requires an exact session id instead
   - writes one durable message into `mail.db`
   - defaults the sender to `operator`
 - `sy mail check <session>`
   - resolves one session by id or normalized agent name
+  - rejects reused agent-name selectors when multiple sessions share that normalized agent name, and requires an exact session id instead
   - reads unread mail for that session in creation order
   - marks returned messages as read
 - `sy mail list <session>`
@@ -138,6 +145,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - supports `--unread` to print only unread mail without consuming it
   - leaves read/unread state unchanged
   - rejects ambiguous selectors that would match different sessions by id and agent name
+  - rejects reused agent-name selectors when multiple sessions share that normalized agent name, and requires an exact session id instead
 
 ## Current Merge Workflow
 
