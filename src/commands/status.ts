@@ -9,7 +9,7 @@ import { listUnreadMailCountsBySession } from "../mail/store.js";
 import { isProcessAlive } from "../runtimes/process.js";
 import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
 import { getSessionById, listSessions, updateSessionState } from "../sessions/store.js";
-import { resolveSessionByIdOrAgent } from "./session-selector.js";
+import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 
 interface StatusOptions {
   selector?: string;
@@ -147,10 +147,8 @@ async function reconcileSessionLifecycles(
 }
 
 async function resolveSession(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
-  return await resolveSessionByIdOrAgent(projectRoot, selector, (byId, byAgent) => {
-    return new StatusError(
-      `Selector '${selector}' is ambiguous: it matches session '${byId.id}' by id and session '${byAgent.id}' by agent name.`
-    );
+  return await resolveSessionByIdOrAgent(projectRoot, selector, (ambiguity) => {
+    return new StatusError(formatSessionSelectorAmbiguousMessage(selector, ambiguity));
   });
 }
 

@@ -379,6 +379,47 @@ test("eventsCommand rejects selectors that match different sessions by id and ag
   }
 });
 
+test("eventsCommand rejects selectors that match multiple sessions by agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createSession(repoDir, {
+      id: "session-latest",
+      agentName: "shared-agent",
+      branch: "agents/shared-agent",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "shared-agent-latest"),
+      state: "running",
+      runtimePid: 2112,
+      createdAt: "2026-03-08T12:05:00.000Z",
+      updatedAt: "2026-03-08T12:10:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-earlier",
+      agentName: "shared-agent",
+      branch: "agents/shared-agent",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "shared-agent-earlier"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T12:00:00.000Z",
+      updatedAt: "2026-03-08T12:00:00.000Z"
+    });
+
+    await assert.rejects(
+      () => eventsCommand({ startDir: repoDir, selector: "shared-agent" }),
+      (error: unknown) => {
+        assert.ok(error instanceof EventsError);
+        assert.equal(
+          error.message,
+          "Selector 'shared-agent' is ambiguous: it matches multiple sessions by agent name ('session-latest', 'session-earlier'). Use an exact session id from 'sy status'."
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("eventsCommand rejects selectors that match orphaned events and a session by agent name", async () => {
   const repoDir = await createInitializedRepo();
 

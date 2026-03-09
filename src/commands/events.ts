@@ -3,10 +3,13 @@ import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
 import type { EventPayload, EventRecord } from "../events/types.js";
-import { EventsError, WorktreeError } from "../errors.js";
-import { findLatestSessionByAgent, getSessionById } from "../sessions/store.js";
+import { EventsError } from "../errors.js";
 import type { SessionRecord } from "../sessions/types.js";
-import { normalizeAgentName } from "../worktrees/naming.js";
+import {
+  findSessionSelectorMatches,
+  formatSessionIdList,
+  formatSessionSelectorAmbiguousMessage
+} from "./session-selector.js";
 
 const DEFAULT_EVENT_LIMIT = 10;
 
@@ -66,35 +69,28 @@ export async function eventsCommand(options: EventsCommandOptions = {}): Promise
 
 interface ResolvedSessionSelector {
   byId?: SessionRecord;
-  byAgent?: SessionRecord;
+  byAgent: SessionRecord[];
 }
 
 async function resolveSessionSelector(projectRoot: string, selector: string): Promise<ResolvedSessionSelector> {
-  const byId = await getSessionById(projectRoot, selector);
-  const normalizedSelector = normalizeSelectorAsAgentName(selector);
-  const byAgent = normalizedSelector
-    ? await findLatestSessionByAgent(projectRoot, normalizedSelector)
-    : undefined;
+  const matches = await findSessionSelectorMatches(projectRoot, selector);
+  const conflictingAgentMatches = matches.byId
+    ? matches.byAgent.filter((session) => session.id !== matches.byId?.id)
+    : matches.byAgent;
 
-  if (byId && byAgent && byId.id !== byAgent.id) {
+  if (matches.byId && conflictingAgentMatches.length > 0) {
     throw new EventsError(
-      `Selector '${selector}' is ambiguous: it matches session '${byId.id}' by id and session '${byAgent.id}' by agent name.`
+      formatSessionSelectorAmbiguousMessage(selector, {
+        byId: matches.byId,
+        byAgent: conflictingAgentMatches
+      })
     );
   }
 
-  return { byId, byAgent };
-}
-
-function normalizeSelectorAsAgentName(selector: string): string | undefined {
-  try {
-    return normalizeAgentName(selector);
-  } catch (error) {
-    if (error instanceof WorktreeError) {
-      return undefined;
-    }
-
-    throw error;
-  }
+  return {
+    byId: matches.byId,
+    byAgent: conflictingAgentMatches
+  };
 }
 
 async function resolveEventSelection(
@@ -103,17 +99,16 @@ async function resolveEventSelection(
   limit: number
 ): Promise<ResolvedEventSelection | undefined> {
   const { byId, byAgent } = await resolveSessionSelector(projectRoot, selector);
-  const session = byId;
 
-  if (session) {
+  if (byId) {
     const events = await listEvents(projectRoot, {
-      sessionId: session.id,
+      sessionId: byId.id,
       limit
     });
 
     return {
-      session,
-      sessionId: session.id,
+      session: byId,
+      sessionId: byId.id,
       events
     };
   }
@@ -124,9 +119,15 @@ async function resolveEventSelection(
   });
 
   if (directSessionEvents.length > 0) {
-    if (byAgent) {
+    if (byAgent.length === 1) {
       throw new EventsError(
-        `Selector '${selector}' is ambiguous: it matches orphaned events for session '${selector}' and session '${byAgent.id}' by agent name.`
+        `Selector '${selector}' is ambiguous: it matches orphaned events for session '${selector}' and session '${byAgent[0]?.id}' by agent name.`
+      );
+    }
+
+    if (byAgent.length > 1) {
+      throw new EventsError(
+        `Selector '${selector}' is ambiguous: it matches orphaned events for session '${selector}' and multiple sessions by agent name (${formatSessionIdList(byAgent)}). Use an exact session id from 'sy status'.`
       );
     }
 
@@ -136,18 +137,32 @@ async function resolveEventSelection(
     };
   }
 
-  if (!byAgent) {
+  if (byAgent.length === 0) {
+    return undefined;
+  }
+
+  if (byAgent.length > 1) {
+    throw new EventsError(
+      formatSessionSelectorAmbiguousMessage(selector, {
+        byAgent
+      })
+    );
+  }
+
+  const session = byAgent[0];
+
+  if (!session) {
     return undefined;
   }
 
   const agentEvents = await listEvents(projectRoot, {
-    sessionId: byAgent.id,
+    sessionId: session.id,
     limit
   });
 
   return {
-    session: byAgent,
-    sessionId: byAgent.id,
+    session,
+    sessionId: session.id,
     events: agentEvents
   };
 }

@@ -109,6 +109,19 @@ export async function findLatestSessionByAgent(projectRoot: string, agentName: s
   });
 }
 
+export async function listSessionsByAgent(projectRoot: string, agentName: string): Promise<SessionRecord[]> {
+  return await withSessionDatabase(projectRoot, (db) => {
+    const rows = db.prepare(`
+      SELECT id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
+      FROM sessions
+      WHERE agent_name = ?
+      ORDER BY updated_at DESC, created_at DESC, id ASC
+    `).all(agentName) as unknown as SessionRow[];
+
+    return rows.map(mapSessionRow);
+  });
+}
+
 export async function updateSessionState(projectRoot: string, input: UpdateSessionStateInput): Promise<SessionRecord> {
   const updatedAt = input.updatedAt ?? new Date().toISOString();
   const runtimePid = input.runtimePid ?? null;

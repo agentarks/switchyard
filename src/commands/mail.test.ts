@@ -598,6 +598,54 @@ test("mailSendCommand rejects selectors that match different sessions by id and 
   }
 });
 
+test("mailCheckCommand rejects selectors that match multiple sessions by agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createSession(repoDir, {
+      id: "session-latest",
+      agentName: "shared-agent",
+      branch: "agents/shared-agent",
+      worktreePath: `${repoDir}/.switchyard/worktrees/shared-agent-latest`,
+      state: "running",
+      runtimePid: 9991,
+      createdAt: "2026-03-06T16:05:00.000Z",
+      updatedAt: "2026-03-06T16:10:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-earlier",
+      agentName: "shared-agent",
+      branch: "agents/shared-agent",
+      worktreePath: `${repoDir}/.switchyard/worktrees/shared-agent-earlier`,
+      state: "running",
+      runtimePid: 9992,
+      createdAt: "2026-03-06T16:00:00.000Z",
+      updatedAt: "2026-03-06T16:00:00.000Z"
+    });
+
+    await assert.rejects(
+      () =>
+        mailCheckCommand({
+          selector: "shared-agent",
+          startDir: repoDir
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof MailError);
+        assert.equal(
+          error.message,
+          "Selector 'shared-agent' is ambiguous: it matches multiple sessions by agent name ('session-latest', 'session-earlier'). Use an exact session id from 'sy status'."
+        );
+        return true;
+      }
+    );
+
+    const events = await listEvents(repoDir, { limit: 10 });
+    assert.deepEqual(events, []);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createInitializedRepo(): Promise<string> {
   const repoDir = await createTempGitRepo("switchyard-mail-command-test-");
   await bootstrapSwitchyardLayout(repoDir);

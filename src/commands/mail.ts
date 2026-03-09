@@ -5,7 +5,7 @@ import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } fr
 import { MailError } from "../errors.js";
 import { createMail, listMailForSession, readUnreadMailForSession } from "../mail/store.js";
 import type { SessionRecord } from "../sessions/types.js";
-import { resolveSessionByIdOrAgent } from "./session-selector.js";
+import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 
 interface MailSendCliOptions {
   from?: string;
@@ -203,9 +203,7 @@ export async function mailListCommand(options: MailListOptions): Promise<void> {
 }
 
 async function resolveSession(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
-  return await resolveSessionByIdOrAgent(projectRoot, selector, (byId, byAgent) => {
-    return new MailError(
-      `Selector '${selector}' is ambiguous: it matches session '${byId.id}' by id and session '${byAgent.id}' by agent name.`
-    );
+  return await resolveSessionByIdOrAgent(projectRoot, selector, (ambiguity) => {
+    return new MailError(formatSessionSelectorAmbiguousMessage(selector, ambiguity));
   });
 }

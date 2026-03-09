@@ -1,38 +1,57 @@
 import { WorktreeError } from "../errors.js";
-import { findLatestSessionByAgent, getSessionById } from "../sessions/store.js";
+import { getSessionById, listSessionsByAgent } from "../sessions/store.js";
 import type { SessionRecord } from "../sessions/types.js";
 import { normalizeAgentName } from "../worktrees/naming.js";
+
+export interface SessionSelectorAmbiguity {
+  byId?: SessionRecord;
+  byAgent: SessionRecord[];
+}
+
+export async function findSessionSelectorMatches(
+  projectRoot: string,
+  selector: string
+): Promise<SessionSelectorAmbiguity> {
+  const byId = await getSessionById(projectRoot, selector);
+  const normalizedSelector = tryNormalizeAgentName(selector);
+  const byAgent = normalizedSelector
+    ? await listSessionsByAgent(projectRoot, normalizedSelector)
+    : [];
+
+  return { byId, byAgent };
+}
 
 export async function resolveSessionByIdOrAgent(
   projectRoot: string,
   selector: string,
-  createAmbiguousError: (byId: SessionRecord, byAgent: SessionRecord) => Error
+  createAmbiguousError: (ambiguity: SessionSelectorAmbiguity) => Error
 ): Promise<SessionRecord | undefined> {
-  const byId = await getSessionById(projectRoot, selector);
+  const { byId, byAgent } = await findSessionSelectorMatches(projectRoot, selector);
 
   if (byId) {
-    const normalizedSelector = tryNormalizeAgentName(selector);
+    const conflictingAgentMatches = byAgent.filter((session) => session.id !== byId.id);
 
-    if (!normalizedSelector) {
+    if (conflictingAgentMatches.length === 0) {
       return byId;
     }
 
-    const byAgent = await findLatestSessionByAgent(projectRoot, normalizedSelector);
-
-    if (byAgent && byAgent.id !== byId.id) {
-      throw createAmbiguousError(byId, byAgent);
-    }
-
-    return byId;
+    throw createAmbiguousError({
+      byId,
+      byAgent: conflictingAgentMatches
+    });
   }
 
-  const normalizedSelector = tryNormalizeAgentName(selector);
-
-  if (!normalizedSelector) {
+  if (byAgent.length === 0) {
     return undefined;
   }
 
-  return await findLatestSessionByAgent(projectRoot, normalizedSelector);
+  if (byAgent.length > 1) {
+    throw createAmbiguousError({
+      byAgent
+    });
+  }
+
+  return byAgent[0];
 }
 
 function tryNormalizeAgentName(selector: string): string | undefined {
@@ -45,4 +64,23 @@ function tryNormalizeAgentName(selector: string): string | undefined {
 
     throw error;
   }
+}
+
+export function formatSessionSelectorAmbiguousMessage(
+  selector: string,
+  ambiguity: SessionSelectorAmbiguity
+): string {
+  if (ambiguity.byId && ambiguity.byAgent.length === 1) {
+    return `Selector '${selector}' is ambiguous: it matches session '${ambiguity.byId.id}' by id and session '${ambiguity.byAgent[0]?.id}' by agent name.`;
+  }
+
+  if (ambiguity.byId) {
+    return `Selector '${selector}' is ambiguous: it matches session '${ambiguity.byId.id}' by id and multiple sessions by agent name (${formatSessionIdList(ambiguity.byAgent)}). Use an exact session id from 'sy status'.`;
+  }
+
+  return `Selector '${selector}' is ambiguous: it matches multiple sessions by agent name (${formatSessionIdList(ambiguity.byAgent)}). Use an exact session id from 'sy status'.`;
+}
+
+export function formatSessionIdList(sessions: SessionRecord[]): string {
+  return sessions.map((session) => `'${session.id}'`).join(", ");
 }

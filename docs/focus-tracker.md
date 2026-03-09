@@ -39,6 +39,7 @@ Completed enough to count as minimally real:
 - merge-target metadata retention for canonical-branch drift
 - dirty-entry diagnostics for merge preflight failures
 - explicit selector disambiguation in `stop` and `merge`
+- explicit reused-agent selector disambiguation across session-targeting commands
 - first readiness and early-failure handling as hardening work ahead of M8
 - end-to-end coverage around `sy init`
 

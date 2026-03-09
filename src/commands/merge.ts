@@ -7,7 +7,7 @@ import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { MergeError } from "../errors.js";
-import { resolveSessionByIdOrAgent } from "./session-selector.js";
+import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
 
 const execFileAsync = promisify(execFile);
@@ -141,10 +141,8 @@ export async function mergeCommand(options: MergeCommandOptions): Promise<void> 
 }
 
 async function resolveSession(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
-  return await resolveSessionByIdOrAgent(projectRoot, selector, (byId, byAgent) => {
-    return new MergeError(
-      `Selector '${selector}' is ambiguous: it matches session '${byId.id}' by id and session '${byAgent.id}' by agent name.`
-    );
+  return await resolveSessionByIdOrAgent(projectRoot, selector, (ambiguity) => {
+    return new MergeError(formatSessionSelectorAmbiguousMessage(selector, ambiguity));
   });
 }
 
