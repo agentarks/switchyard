@@ -12,6 +12,7 @@ import { listSessions, updateSessionState } from "../sessions/store.js";
 interface StatusOptions {
   startDir?: string;
   isRuntimeAlive?: (pid: number) => boolean;
+  listUnreadMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
   recordEvent?: EventRecorder;
   now?: () => string;
 }
@@ -41,23 +42,46 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
   }
 
   const sessionIds = sessions.map((session) => session.id);
-  const [latestEventsBySession, unreadMailCountsBySession] = await Promise.all([
-    listLatestEventsBySession(config.project.root, sessionIds),
-    listUnreadMailCountsBySession(config.project.root, sessionIds)
-  ]);
+  const latestEventsBySession = await listLatestEventsBySession(config.project.root, sessionIds);
+  const unreadMailCounts = await loadUnreadMailCountsBestEffort(
+    config.project.root,
+    sessionIds,
+    options.listUnreadMailCounts ?? listUnreadMailCountsBySession
+  );
 
   process.stdout.write(`Sessions for ${config.project.name}:\n`);
   process.stdout.write("STATE\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tRECENT\n");
 
   for (const session of sessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
-    const unreadCount = unreadMailCountsBySession.get(session.id) ?? 0;
+    const unreadCount = unreadMailCounts.available
+      ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
+      : "?";
     const recentEvent = formatRecentEventSummary(
       reconciledEventsBySession.get(session.id) ?? latestEventsBySession.get(session.id)
     );
     process.stdout.write(
       `${session.state}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${recentEvent}\n`
     );
+  }
+}
+
+async function loadUnreadMailCountsBestEffort(
+  projectRoot: string,
+  sessionIds: string[],
+  listUnreadMailCounts: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>
+): Promise<{ countsBySession: Map<string, number>; available: boolean }> {
+  try {
+    return {
+      countsBySession: await listUnreadMailCounts(projectRoot, sessionIds),
+      available: true
+    };
+  } catch (error) {
+    process.stderr.write(`WARN: failed to load unread mail counts: ${formatErrorMessage(error)}\n`);
+    return {
+      countsBySession: new Map(),
+      available: false
+    };
   }
 }
 
