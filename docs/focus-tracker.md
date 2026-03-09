@@ -17,6 +17,7 @@ That means the project should reliably support:
 - `sy merge`
 - `sy mail send`
 - `sy mail check`
+- `sy mail list`
 
 ## Where We Are
 
@@ -27,22 +28,23 @@ Completed enough to count as minimally real:
 - M4 one-agent spawn
 - M5 lifecycle control
 - M6 messaging
+- read-only mailbox inspection inside the mail path
 - M7 first event inspection path
 - first merge and reintegration CLI path
 - first readiness and early-failure handling as hardening work ahead of M8
 
 Not complete yet:
-- broader mail semantics and any metadata that real recovery work proves necessary
+- selector disambiguation in inspection paths and any metadata that real recovery work proves necessary
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- expand mail semantics where the current durable path is still concretely awkward
 - only broaden session metadata if a real merge or recovery workflow needs it
 - improve pid-backed lifecycle control only where the current operator loop is still concretely weak
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
 - pay down small operator-facing ambiguities, such as selector precedence, before adding broader inspection features
+- broaden mail semantics further only if the current send/check/list split proves insufficient
 
 ## Current Out-Of-Scope Work
 

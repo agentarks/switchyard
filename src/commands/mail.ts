@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { MailError } from "../errors.js";
-import { createMail, readUnreadMailForSession } from "../mail/store.js";
+import { createMail, listMailForSession, readUnreadMailForSession } from "../mail/store.js";
 import { findLatestSessionByAgent, getSessionById } from "../sessions/store.js";
 import type { SessionRecord } from "../sessions/types.js";
 import { normalizeAgentName } from "../worktrees/naming.js";
@@ -21,6 +21,12 @@ interface MailSendOptions {
 }
 
 interface MailCheckOptions {
+  selector: string;
+  startDir?: string;
+  recordEvent?: EventRecorder;
+}
+
+interface MailListOptions {
   selector: string;
   startDir?: string;
   recordEvent?: EventRecorder;
@@ -50,6 +56,14 @@ export function createMailCommand(): Command {
         .argument("<session>", "Session id or agent name")
         .action(async (selector: string) => {
           await mailCheckCommand({ selector });
+        })
+    )
+    .addCommand(
+      new Command("list")
+        .description("List session mail without changing read state")
+        .argument("<session>", "Session id or agent name")
+        .action(async (selector: string) => {
+          await mailListCommand({ selector });
         })
     );
 
@@ -130,12 +144,60 @@ export async function mailCheckCommand(options: MailCheckOptions): Promise<void>
   process.stdout.write(`Marked ${unreadMail.length} message${unreadMail.length === 1 ? "" : "s"} as read.\n`);
 }
 
+export async function mailListCommand(options: MailListOptions): Promise<void> {
+  const config = await loadConfig(options.startDir);
+  const session = await resolveSession(config.project.root, options.selector);
+  const recordEvent = options.recordEvent ?? recordEventBestEffort;
+
+  if (!session) {
+    throw new MailError(`No session found for '${options.selector}'.`);
+  }
+
+  const mailbox = await listMailForSession(config.project.root, session.id);
+  const unreadCount = mailbox.filter((message) => message.readAt === null).length;
+
+  await recordEventWithFallback(recordEvent, config.project.root, {
+    sessionId: session.id,
+    agentName: session.agentName,
+    eventType: "mail.listed",
+    payload: {
+      messageCount: mailbox.length,
+      unreadCount
+    }
+  });
+
+  if (mailbox.length === 0) {
+    process.stdout.write(`No mail for ${session.agentName}.\n`);
+    return;
+  }
+
+  process.stdout.write(`Mailbox for ${session.agentName} (read-only):\n`);
+
+  for (const message of mailbox) {
+    const state = message.readAt ? "read" : "unread";
+    const readDetail = message.readAt ? `\treadAt=${message.readAt}` : "";
+    process.stdout.write(`${state}\t${message.createdAt}\t${message.sender}\t${message.id}${readDetail}\n`);
+    process.stdout.write(`${message.body}\n`);
+  }
+
+  process.stdout.write(
+    `Listed ${mailbox.length} message${mailbox.length === 1 ? "" : "s"}; ${unreadCount} unread.\n`
+  );
+}
+
 async function resolveSession(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
   const byId = await getSessionById(projectRoot, selector);
+  const byAgent = await findLatestSessionByAgent(projectRoot, normalizeAgentName(selector));
+
+  if (byId && byAgent && byId.id !== byAgent.id) {
+    throw new MailError(
+      `Selector '${selector}' is ambiguous: it matches session '${byId.id}' by id and session '${byAgent.id}' by agent name.`
+    );
+  }
 
   if (byId) {
     return byId;
   }
 
-  return await findLatestSessionByAgent(projectRoot, normalizeAgentName(selector));
+  return byAgent;
 }

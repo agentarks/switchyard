@@ -21,6 +21,7 @@ For the current v0 loop, reintegration is still manual-first even though `sy mer
 
 2. Review the preserved branch and worktree.
    - Use `sy events <session>` if you need lifecycle context.
+   - Use `sy mail list <session>` when you want the mailbox history without changing read state.
    - Use `sy mail check <session>` only when you intentionally want to consume unread mail; it marks the returned messages as read.
    - Inspect the agent worktree and branch with normal git commands.
    - Run the project checks you expect before reintegration.

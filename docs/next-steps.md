@@ -4,37 +4,37 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Expand mail semantics beyond the first durable unread-only path.
+Clarify selector behavior in operator inspection paths.
 
 Target outcome:
-- the repo keeps mail operator-readable and durable while reducing friction in common follow-up checks
-- any broader mail behavior is justified by current operator usage, not by speculative messaging features
-- docs state clearly what mail reads, writes, and state transitions now mean
+- the repo makes session selection more explicit where a raw selector could plausibly mean either a session id or an agent name
+- inspection commands stay operator-readable without broad new filtering features
+- docs state clearly how selector resolution works after the change
 
 ## Why This Is Next
 
-The reintegration path now has both a narrow merge command and a cleanup guard, so the next useful gap is the still-minimal mail surface.
+The mail path now has both unread-consuming reads and a read-only mailbox listing path, so the next concrete operator risk is selector ambiguity.
 
-Mail already works durably, but it is intentionally thin. If operators need anything more, the next step should be a small usability expansion inside that existing path rather than more merge machinery.
+Today `sy events <selector>` preserves orphaned event readability by preferring direct session ids before normalized agent names, but that can still surprise the operator when a raw selector could match both.
 
-Without that discipline:
-- the repo risks broadening recovery state even though the current merge and cleanup fields are sufficient
-- operator messaging stays awkward longer than necessary
-- the CLI accumulates more lifecycle policy before the basic communication loop is comfortable
+Without tightening that behavior:
+- inspection output can be correct but still misleading
+- operator recovery work stays harder than it needs to be
+- the CLI keeps carrying an avoidable ambiguity in a core read path
 
 ## Exact Order
 
-1. Audit the current mail path
-   - confirm exactly which operator actions feel awkward today: unread-only reads, sender semantics, output shape, and event details
-   - stay grounded in the current single-repo Codex workflow
+1. Audit the current selector paths
+   - confirm which commands still have ambiguous id-vs-agent resolution
+   - stay grounded in the current single-repo operator loop
 
-2. Implement one narrow mail improvement
-   - prefer one explicit operator-readable behavior over a broader messaging system
-   - keep read/write side effects clear in both output and docs
+2. Implement one narrow clarification
+   - prefer one explicit operator-readable selector rule over broader filtering
+   - keep backward compatibility when the existing behavior is already unambiguous
 
 3. Keep the scope narrow
-   - do not add broad coordination or workflow automation
-   - avoid turning mail into a general chat subsystem
+   - do not add dashboards, reporting, or broad query syntax
+   - avoid unrelated metadata expansion unless the implementation forces it
 
 4. Update docs
    - `docs/current-state.md`
@@ -55,15 +55,15 @@ Do not build these in the same slice unless the implementation forces it:
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- the repo has one concrete mail improvement that reduces operator friction
-- tests and docs reflect the new mail behavior
+- the repo has one concrete selector clarification that reduces operator ambiguity
+- tests and docs reflect the new selector behavior
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- prefer one explicit operator-readable mail behavior over a broader messaging system
-- defer bigger message semantics unless the current narrow path proves insufficient
+- prefer one explicit selector rule over a broader query language
+- defer richer metadata unless the current ambiguity cannot be resolved without it
 - keep targeting one repo-local Codex lifecycle
 
-The point of this slice is to make the existing mail path more usable, not to invent a broader coordination layer.
+The point of this slice is to make inspection behavior clearer, not to invent a broader discovery surface.

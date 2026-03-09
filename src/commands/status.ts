@@ -237,6 +237,7 @@ function formatErrorMessage(error: unknown): string {
 
 const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "mail.checked": ["unreadCount"],
+  "mail.listed": ["messageCount", "unreadCount"],
   "mail.sent": ["sender", "bodyLength"],
   "merge.completed": ["canonicalBranch", "branch"],
   "merge.failed": ["reason", "branch"],

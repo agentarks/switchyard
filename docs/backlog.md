@@ -4,7 +4,7 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Expand mail semantics beyond the first durable path
+1. Pay down selector ambiguity in operator inspection paths
 
 ## Next
 
