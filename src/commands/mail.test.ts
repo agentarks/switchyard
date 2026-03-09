@@ -252,6 +252,7 @@ test("mailListCommand prints mailbox history without changing read state", async
     const events = await listEvents(repoDir, { sessionId: session.id });
     assert.equal(events.length, 1);
     assert.equal(events[0]?.eventType, "mail.listed");
+    assert.equal(events[0]?.payload.view, "full");
     assert.equal(events[0]?.payload.messageCount, 3);
     assert.equal(events[0]?.payload.unreadCount, 1);
 
@@ -308,6 +309,7 @@ test("mailListCommand reports an empty mailbox without mutating state", async ()
     const events = await listEvents(repoDir, { sessionId: session.id });
     assert.equal(events.length, 1);
     assert.equal(events[0]?.eventType, "mail.listed");
+    assert.equal(events[0]?.payload.view, "full");
     assert.equal(events[0]?.payload.messageCount, 0);
     assert.equal(events[0]?.payload.unreadCount, 0);
   } finally {
@@ -316,6 +318,131 @@ test("mailListCommand reports an empty mailbox without mutating state", async ()
   }
 
   assert.match(writes.join(""), /No mail for agent-six\./);
+});
+
+test("mailListCommand can show only unread mail without changing read state", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  try {
+    const session = await createSession(repoDir, {
+      id: "session-agent-seven",
+      agentName: "agent-seven",
+      branch: "agents/agent-seven",
+      worktreePath: `${repoDir}/.switchyard/worktrees/agent-seven`,
+      state: "running",
+      runtimePid: 7777,
+      createdAt: "2026-03-06T15:00:00.000Z",
+      updatedAt: "2026-03-06T15:00:00.000Z"
+    });
+
+    await createMail(repoDir, {
+      sessionId: session.id,
+      sender: "operator",
+      recipient: session.agentName,
+      body: "Already read mailbox message.",
+      createdAt: "2026-03-06T15:05:00.000Z"
+    });
+    await readUnreadMailForSession(repoDir, session.id);
+    const unreadMessage = await createMail(repoDir, {
+      sessionId: session.id,
+      sender: session.agentName,
+      recipient: "operator",
+      body: "Unread-only mailbox message.",
+      createdAt: "2026-03-06T15:10:00.000Z"
+    });
+    const mailBeforeList = await listMailForSession(repoDir, session.id);
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await mailListCommand({
+      selector: session.id,
+      unreadOnly: true,
+      startDir: repoDir
+    });
+
+    const mailAfterList = await listMailForSession(repoDir, session.id);
+    assert.deepEqual(mailAfterList, mailBeforeList);
+
+    const events = await listEvents(repoDir, { sessionId: session.id });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "mail.listed");
+    assert.equal(events[0]?.payload.view, "unread_only");
+    assert.equal(events[0]?.payload.messageCount, 1);
+    assert.equal(events[0]?.payload.unreadCount, 1);
+
+    assert.equal(mailAfterList[1]?.id, unreadMessage.id);
+    assert.equal(mailAfterList[1]?.readAt, null);
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Unread mail for agent-seven \(read-only\):/);
+  assert.doesNotMatch(output, /Already read mailbox message\./);
+  assert.match(output, /unread\t2026-03-06T15:10:00.000Z\tagent-seven\t[0-9a-f-]{36}/);
+  assert.match(output, /Unread-only mailbox message\./);
+  assert.match(output, /Listed 1 message; unread-only view, read state unchanged\./);
+});
+
+test("mailListCommand with unreadOnly reports no unread mail without mutating state", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  try {
+    const session = await createSession(repoDir, {
+      id: "session-agent-eight",
+      agentName: "agent-eight",
+      branch: "agents/agent-eight",
+      worktreePath: `${repoDir}/.switchyard/worktrees/agent-eight`,
+      state: "running",
+      runtimePid: 8888,
+      createdAt: "2026-03-06T16:00:00.000Z",
+      updatedAt: "2026-03-06T16:00:00.000Z"
+    });
+
+    await createMail(repoDir, {
+      sessionId: session.id,
+      sender: "operator",
+      recipient: session.agentName,
+      body: "Read mailbox message.",
+      createdAt: "2026-03-06T16:05:00.000Z"
+    });
+    await readUnreadMailForSession(repoDir, session.id);
+    const mailBeforeList = await listMailForSession(repoDir, session.id);
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await mailListCommand({
+      selector: "agent-eight",
+      unreadOnly: true,
+      startDir: repoDir
+    });
+
+    const mailAfterList = await listMailForSession(repoDir, session.id);
+    assert.deepEqual(mailAfterList, mailBeforeList);
+
+    const events = await listEvents(repoDir, { sessionId: session.id });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "mail.listed");
+    assert.equal(events[0]?.payload.view, "unread_only");
+    assert.equal(events[0]?.payload.messageCount, 0);
+    assert.equal(events[0]?.payload.unreadCount, 0);
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(writes.join(""), /No unread mail for agent-eight\./);
 });
 
 test("mailListCommand rejects selectors that match different sessions by id and agent name", async () => {

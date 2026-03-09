@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events with explicit selector disambiguation, durable mail with both unread reads and read-only mailbox inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status, stop, events with explicit selector disambiguation, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
 
 ## What Exists
 
@@ -17,6 +17,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - implemented `sy mail send`
 - implemented `sy mail check`
 - implemented `sy mail list`
+- implemented read-only unread-only mailbox inspection via `sy mail list --unread`
 - repo root detection that handles nested directories and git worktrees
 - canonical branch detection that prefers `origin/HEAD`
 - config loading that normalizes `project.root` to the canonical repo root
@@ -115,6 +116,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `sy mail list <session>`
   - resolves one session by id or normalized agent name
   - prints the full mailbox for that session in creation order
+  - supports `--unread` to print only unread mail without consuming it
   - leaves read/unread state unchanged
   - rejects ambiguous selectors that would match different sessions by id and agent name
 
@@ -141,11 +143,11 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## Recommended Next Task
 
-Validate whether the current `sy mail send` / `sy mail check` / `sy mail list` split needs one more narrow operator-facing behavior:
-- add semantics only if a concrete operator workflow is still awkward with the current send, unread-consume, and read-only-inspect paths
+Validate whether the current status, events, and merge inspection paths need one more narrow operator-facing diagnostic improvement:
+- prefer clearer operator-readable inspection over broader automation
 - keep the change narrow and grounded in the current single-repo lifecycle
 
-The merge/recovery metadata question is now resolved with one stored `baseBranch` field. The next slice should stay equally small and avoid broadening mail or inspection semantics without clear operator pressure.
+The mail question is now resolved narrowly enough for the current loop: operators can send, consume unread mail, inspect full history, or inspect only unread mail without changing state. The next slice should stay equally small and avoid broader automation without clear operator pressure.
 
 ## How To Use This File
 

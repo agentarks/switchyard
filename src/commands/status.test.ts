@@ -213,6 +213,54 @@ test("statusCommand includes the readiness detail for a freshly launched session
   );
 });
 
+test("statusCommand includes the mail list view in the recent event summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-mail-view",
+    agentName: "agent-mail-view",
+    branch: "agents/agent-mail-view",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-mail-view"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T11:30:00.000Z",
+    updatedAt: "2026-03-08T11:30:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-mail-view",
+    agentName: "agent-mail-view",
+    eventType: "mail.listed",
+    payload: {
+      view: "unread_only",
+      messageCount: 2,
+      unreadCount: 2
+    },
+    createdAt: "2026-03-08T11:31:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /stopped\tagent-mail-view\tagents\/agent-mail-view\t\.switchyard\/worktrees\/agent-mail-view\t2026-03-08T11:30:00.000Z\t2026-03-08T11:31:00.000Z mail\.listed view=unread_only, messageCount=2, unreadCount=2/
+  );
+});
+
 test("statusCommand does not leak unknown event payload fields into the recent summary", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];

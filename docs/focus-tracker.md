@@ -29,22 +29,23 @@ Completed enough to count as minimally real:
 - M5 lifecycle control
 - M6 messaging
 - read-only mailbox inspection inside the mail path
+- read-only unread-only mailbox inspection inside the mail path
 - M7 first event inspection path
 - first merge and reintegration CLI path
 - merge-target metadata retention for canonical-branch drift
 - first readiness and early-failure handling as hardening work ahead of M8
 
 Not complete yet:
-- any broader mail semantics that real operator workflows prove necessary
+- any broader diagnostic improvement that real operator workflows prove necessary
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- only broaden mail semantics if a real operator workflow needs them
+- improve operator inspection only where a real operator workflow still has a blind spot
 - improve pid-backed lifecycle control only where the current operator loop is still concretely weak
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
-- broaden mail semantics further only if the current send/check/list split proves insufficient
+- broaden inspection semantics further only if the current operator loop proves insufficient
 
 ## Current Out-Of-Scope Work
 
