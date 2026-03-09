@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
+import process from "node:process";
 import { RuntimeError } from "../../errors.js";
 
 const DEFAULT_READY_TIMEOUT_MS = 500;
+const SCRIPT_TYPESCRIPT_PATH = "/dev/null";
 
 export interface RuntimeCommand {
   command: string;
@@ -24,6 +26,7 @@ export interface SpawnCodexSessionOptions {
   readyTimeoutMs?: number;
   onSpawned?: (runtime: SpawnedRuntimeProcess) => void | Promise<void>;
   spawnProcess?: typeof spawn;
+  platform?: NodeJS.Platform;
 }
 
 export function buildCodexCommand(runtimeArgs: string[] = []): RuntimeCommand {
@@ -35,23 +38,50 @@ export function buildCodexCommand(runtimeArgs: string[] = []): RuntimeCommand {
 
 export async function spawnCodexSession(options: SpawnCodexSessionOptions): Promise<SpawnedRuntimeSession> {
   const command = buildCodexCommand(options.runtimeArgs);
+  const launchCommand = buildCodexLaunchCommand(command, options.platform ?? process.platform);
   const spawnProcess = options.spawnProcess ?? spawn;
-  const child = spawnProcess(command.command, command.args, {
+  const child = spawnProcess(launchCommand.command, launchCommand.args, {
     cwd: options.worktreePath,
     detached: true,
     stdio: "ignore"
   });
 
-  return await waitForChildReady(child, command, {
+  return await waitForChildReady(child, {
+    command,
+    launchCommand,
     readyTimeoutMs: options.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS,
     onSpawned: options.onSpawned
   });
 }
 
+function buildCodexLaunchCommand(command: RuntimeCommand, platform: NodeJS.Platform): RuntimeCommand {
+  switch (platform) {
+    case "darwin":
+    case "freebsd":
+    case "netbsd":
+    case "openbsd":
+      return {
+        command: "script",
+        args: ["-q", "-e", SCRIPT_TYPESCRIPT_PATH, command.command, ...command.args]
+      };
+    case "linux":
+      return {
+        command: "script",
+        args: ["-q", "-e", SCRIPT_TYPESCRIPT_PATH, "--", command.command, ...command.args]
+      };
+    default:
+      return command;
+  }
+}
+
 async function waitForChildReady(
   child: ChildProcess,
-  command: RuntimeCommand,
-  options: { readyTimeoutMs: number; onSpawned?: (runtime: SpawnedRuntimeProcess) => void | Promise<void> }
+  options: {
+    command: RuntimeCommand;
+    launchCommand: RuntimeCommand;
+    readyTimeoutMs: number;
+    onSpawned?: (runtime: SpawnedRuntimeProcess) => void | Promise<void>;
+  }
 ): Promise<SpawnedRuntimeSession> {
   return await new Promise<SpawnedRuntimeSession>((resolve, reject) => {
     let settled = false;
@@ -87,14 +117,14 @@ async function waitForChildReady(
       cleanup();
       child.unref();
       resolve({
-        command,
+        command: options.command,
         pid,
         readyAfterMs: Math.max(0, Date.now() - readinessStartedAt)
       });
     };
 
     const handleError = (error: Error): void => {
-      fail(new RuntimeError(`Failed to start Codex: ${error.message}`));
+      fail(new RuntimeError(formatSpawnError(error, options.launchCommand, options.command)));
     };
 
     const handleExit = (code: number | null, signal: NodeJS.Signals | null): void => {
@@ -112,7 +142,7 @@ async function waitForChildReady(
       readinessStartedAt = Date.now();
 
       const runtime = {
-        command,
+        command: options.command,
         pid: child.pid
       };
 
@@ -142,4 +172,12 @@ function formatEarlyExitMessage(code: number | null, signal: NodeJS.Signals | nu
       : `exit code ${code}`;
 
   return `Codex exited before Switchyard marked the session ready (${outcome}).`;
+}
+
+function formatSpawnError(error: Error, launchCommand: RuntimeCommand, command: RuntimeCommand): string {
+  if (launchCommand.command !== command.command && "code" in error && error.code === "ENOENT") {
+    return "Failed to start Codex: pseudo-terminal wrapper 'script' is not available on PATH.";
+  }
+
+  return `Failed to start Codex: ${error.message}`;
 }

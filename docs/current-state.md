@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts and exact per-session inspection, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts and exact per-session inspection, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop.
 
 ## What Exists
 
@@ -31,6 +31,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - session records that distinguish launch-time `starting` from confirmed `running`
 - worktree manager with deterministic branch and path naming
 - narrow Codex runtime seam that builds and spawns one detached command
+- pseudo-terminal-backed detached Codex launch compatibility on supported Unix platforms via `script`
 - initial readiness waiting that requires the spawned Codex process to survive a short launch window before the session is marked usable
 - narrow process liveness and stop helpers for detached Codex sessions
 - durable lifecycle event appends around `sy sling`, `sy stop`, `sy mail send`, `sy mail check`, and `sy mail list`
@@ -80,11 +81,13 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - creates one deterministic branch under `agents/`
   - creates one worktree under `.switchyard/worktrees/`
   - spawns one Codex process from that worktree
+  - uses the system `script` utility on macOS, Linux, and BSD platforms so detached Codex startup still gets a pseudo-terminal
   - persists the original canonical branch as session `baseBranch`
   - records `sling.spawned` once the runtime pid exists
   - waits for one short initial readiness window before persisting the session as `starting`
   - records `sling.completed` after that launch window succeeds, including `readyAfterMs`
   - records `sling.failed` when the runtime exits during that launch window
+  - falls back to direct detached Codex spawn on other platforms
 - `sy status [session]`
   - loads config and session state
   - optionally resolves one session by id or normalized agent name and renders only that session
@@ -164,15 +167,16 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - the current readiness model is intentionally narrow: `sy sling` only proves the process survived a short launch window, and `sy status` promotes the session to `running` on the first later successful pid liveness check.
 - the current runtime-control model intentionally omits live attach and transcript capture, so debugging still relies on durable events and external process inspection.
 - the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.
+- the detached `sy sling` launch compatibility fix currently depends on the system `script` utility on supported Unix platforms; unsupported platforms still fall back to direct detached Codex spawn and may need a follow-up if Codex requires a TTY there too.
 - older pre-pid session rows cannot be liveness-checked automatically.
 - the merge and cleanup paths are intentionally narrow: they preflight obvious unsafe states and keep review, conflict resolution, post-merge validation, and explicit abandon decisions manual-first.
 
 ## Recommended Next Task
 
-Do not pick a broad new surface area yet:
-- wait for the next concrete operator-loop blind spot before fixing a new slice
-- prefer another narrow inspection or lifecycle hardening task only when a real workflow exposes it
-- keep prioritizing operator-readable behavior inside the current repo-local loop over new subsystems
+Pick the next reproduced operator-loop hardening gap before broadening scope:
+- keep the slice inside the current `init -> sling -> status -> stop -> merge -> mail -> events` loop
+- prefer one concrete inspection or lifecycle blind spot over broader runtime redesign or new surface area
+- keep prioritizing operator-readable behavior, durable state, and regression coverage over new subsystems
 
 ## How To Use This File
 

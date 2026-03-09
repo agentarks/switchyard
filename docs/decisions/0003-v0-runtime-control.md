@@ -41,8 +41,9 @@ Positive:
 Negative:
 - operators cannot attach to a live Codex terminal through Switchyard
 - Switchyard does not yet capture a runtime transcript or terminal session for later inspection
+- the detached launch path now depends on the system `script` utility on supported Unix platforms to allocate a pseudo-terminal for Codex startup
 - if Codex workflows later need interactive supervision, adding tmux or another wrapper will require a focused follow-up slice
 
 ## Follow-Up
 
-The next lifecycle-adjacent work should not be "add tmux by default." The next work should be the smallest concrete workflow gap that remains after this decision, which is merge and reintegration.
+The next lifecycle-adjacent work should not be "add tmux by default." The next work should be the smallest concrete workflow gap that remains in the current operator loop after detached launch compatibility, not a broad runtime redesign.
