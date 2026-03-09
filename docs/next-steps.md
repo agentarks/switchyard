@@ -4,7 +4,7 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Validate whether the current inspection paths need one more narrow operator-facing diagnostic improvement.
+Validate whether `sy events` or merge inspection needs one more narrow operator-facing diagnostic improvement.
 
 Target outcome:
 - the repo stays readable from `status`, `events`, merge inspection, and the existing mail commands
@@ -13,9 +13,9 @@ Target outcome:
 
 ## Why This Is Next
 
-The merge/recovery metadata question is resolved with one stored `baseBranch` field, and the mail audit is now resolved narrowly enough with unread-only read-only inspection.
+The merge/recovery metadata question is resolved with one stored `baseBranch` field, the mail audit is resolved narrowly enough with unread-only read-only inspection, and `sy status` now surfaces unread mailbox counts directly.
 
-Right now the repo has durable mail send, unread consumption, full read-only mailbox inspection, and unread-only read-only inspection. That is enough unless another concrete operator blind spot shows up elsewhere in the loop.
+Right now the repo has durable mail send, unread consumption, full read-only mailbox inspection, unread-only read-only inspection, and status-level unread visibility. That is enough unless another concrete operator blind spot shows up in `events` or merge inspection.
 
 Without a concrete diagnostics audit:
 - the project may add reporting surface that does not improve the current operator loop
@@ -25,7 +25,7 @@ Without a concrete diagnostics audit:
 ## Exact Order
 
 1. Audit real operator inspection friction
-   - confirm whether `status`, `events`, merge inspection, and the current mail commands still leave an operator blind or awkward in the current loop
+   - confirm whether `sy events` or merge inspection still leaves an operator blind or awkward in the current loop now that status shows unread mail counts
    - stay grounded in the current single-repo operator loop
 
 2. Add one narrow diagnostic behavior only if needed

@@ -66,6 +66,7 @@ Current contract:
 - command marks obviously stale pid-backed `running` sessions as `failed`
 - command records durable runtime reconciliation events when it changes session state
 - command prefers the freshly reconciled lifecycle event in the current table output even if event persistence fails
+- command includes one unread-mail count per session from `mail.db`
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
 - when sessions exist, print a concise tab-separated table ordered by most recent update
 

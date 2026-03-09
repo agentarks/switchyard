@@ -2,7 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, removeTempDir } from "../test-helpers/git.js";
-import { createMail, initializeMailStore, listMailForSession, readUnreadMailForSession } from "./store.js";
+import {
+  createMail,
+  initializeMailStore,
+  listMailForSession,
+  listUnreadMailCountsBySession,
+  readUnreadMailForSession
+} from "./store.js";
 
 test("initializeMailStore creates the mail schema without records", async () => {
   const repoDir = await createTempGitRepo("switchyard-mail-store-test-");
@@ -124,6 +130,46 @@ test("readUnreadMailForSession delivers unread mail to only one concurrent reade
 
     const storedMail = await listMailForSession(repoDir, "session-1");
     assert.ok(storedMail[0]?.readAt);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("listUnreadMailCountsBySession returns unread counts for the requested sessions only", async () => {
+  const repoDir = await createTempGitRepo("switchyard-mail-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "operator",
+      recipient: "agent-one",
+      body: "Unread one",
+      createdAt: "2026-03-06T09:00:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "operator",
+      recipient: "agent-one",
+      body: "Unread two",
+      createdAt: "2026-03-06T09:05:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-2",
+      sender: "operator",
+      recipient: "agent-two",
+      body: "Unread elsewhere",
+      createdAt: "2026-03-06T09:10:00.000Z"
+    });
+
+    await readUnreadMailForSession(repoDir, "session-2");
+
+    const unreadCounts = await listUnreadMailCountsBySession(repoDir, ["session-1", "session-2", "session-3"]);
+
+    assert.equal(unreadCounts.get("session-1"), 2);
+    assert.equal(unreadCounts.get("session-2"), undefined);
+    assert.equal(unreadCounts.get("session-3"), undefined);
   } finally {
     await removeTempDir(repoDir);
   }

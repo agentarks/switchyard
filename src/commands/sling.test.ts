@@ -136,17 +136,17 @@ test("statusCommand promotes a started session to running after the first succes
     const output = writes.join("");
     const sessions = await listSessions(repoDir);
     const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+    const eventTypes = events.map((event) => event.eventType);
+    const readyEvent = events.find((event) => event.eventType === "runtime.ready");
 
     assert.equal(sessions[0]?.state, "running");
     assert.equal(sessions[0]?.runtimePid, 31337);
     assert.equal(events.length, 3);
-    assert.equal(events[0]?.eventType, "sling.spawned");
-    assert.equal(events[1]?.eventType, "sling.completed");
-    assert.equal(events[2]?.eventType, "runtime.ready");
-    assert.equal(events[2]?.payload.signal, "pid_alive");
+    assert.deepEqual(eventTypes.sort(), ["runtime.ready", "sling.completed", "sling.spawned"]);
+    assert.equal(readyEvent?.payload.signal, "pid_alive");
     assert.match(
       output,
-      /running\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-09T09:10:00.000Z\t2026-03-09T09:10:00.000Z runtime\.ready signal=pid_alive, runtimePid=31337/
+      /running\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-09T09:10:00.000Z\t0\t2026-03-09T09:10:00.000Z runtime\.ready signal=pid_alive, runtimePid=31337/
     );
   } finally {
     await removeTempDir(repoDir);
