@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts and exact per-session inspection, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop. Merge conflicts now also surface the conflicting paths directly in `sy merge`, with compact conflict metadata carried into durable events and recent status context, and repo-root merge-in-progress preflight now fails with an explicit recovery message instead of a generic dirty-worktree error.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts, cleanup-readiness inspection, and exact per-session inspection, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop. Merge conflicts now also surface the conflicting paths directly in `sy merge`, with compact conflict metadata carried into durable events and recent status context, and repo-root merge-in-progress preflight now fails with an explicit recovery message instead of a generic dirty-worktree error.
 
 ## What Exists
 
@@ -52,6 +52,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
 - status output that now also surfaces each session id in the main overview so later commands can target an exact preserved session without guesswork
 - status output that now also surfaces unread mail counts so operators can spot pending mailbox work without checking each session individually
+- status output that now also surfaces one cleanup-readiness label per session so operators can see whether plain `--cleanup` is currently safe, already unnecessary, or requires explicit `--abandon`
 - merge lifecycle events for `merge.completed`, `merge.failed`, and `merge.skipped`
 - first-readiness reconciliation in `sy status` that promotes launched sessions to `running` or marks them failed with a durable reason
 - explicit v0 decision to keep runtime control pid-backed and defer tmux unless operator workflows require attach or transcript handling
@@ -103,6 +104,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - prints a tab-separated session table ordered by most recent update
   - includes the durable session id in that table for exact follow-up selectors
   - includes one unread-mail count per session from `mail.db`
+  - includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`
   - includes one concise recent-event summary per session when event history exists, including `readyAfterMs` for fresh `sling.completed` events and compact merge-conflict details for `merge.failed`
   - records runtime reconciliation events when it changes session state
 - `sy stop <session>`
