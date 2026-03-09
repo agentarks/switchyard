@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts and exact per-session inspection, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop. Merge conflicts now also surface the conflicting paths directly in `sy merge`, with compact conflict metadata carried into durable events and recent status context.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts and exact per-session inspection, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop. Merge conflicts now also surface the conflicting paths directly in `sy merge`, with compact conflict metadata carried into durable events and recent status context, and repo-root merge-in-progress preflight now fails with an explicit recovery message instead of a generic dirty-worktree error.
 
 ## What Exists
 
@@ -45,6 +45,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - explicit selector disambiguation in `sy stop` and `sy merge` when one raw selector could name different sessions by session-id and agent-name
 - first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
 - merge preflight failures that now surface the blocking git status entries for dirty repo-root and preserved-worktree states
+- merge preflight now also detects an in-progress repo-root merge and points the operator to resolve it or run `git merge --abort`
 - merge conflict failures that now surface the conflicting paths directly in `sy merge` and durable `merge.failed` events
 - merge and merged-cleanup guards that now refuse to silently retarget preserved work when the configured canonical branch changes after launch
 - first operator-facing cleanup guard that only removes preserved merge artifacts automatically when the branch is confirmed merged, and otherwise requires explicit `--abandon`
@@ -126,6 +127,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
   - reports the blocking git status entries when the preserved worktree is dirty
   - requires the repo root worktree to be clean before it switches to the configured canonical branch
+  - refuses to start when the repo root already has an in-progress merge, and points the operator to resolve it or run `git merge --abort`
   - reports the blocking git status entries when the repo root is dirty
   - verifies the preserved local `agents/*` branch still exists
   - runs `git merge --no-ff <branch>` from the canonical repo root worktree

@@ -135,6 +135,7 @@ Current contract:
 - command verifies that the preserved worktree path still resolves to the expected git worktree root
 - command refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
 - command reports the blocking git status entries when the preserved worktree is dirty
+- command refuses to start when the canonical repo-root worktree already has an in-progress merge and points the operator to resolve it or run `git merge --abort`
 - command requires the canonical repo-root worktree to be clean before it switches branches
 - command reports the blocking git status entries when the repo root is dirty
 - command verifies the preserved local branch still exists
