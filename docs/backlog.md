@@ -4,7 +4,7 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Add richer mail semantics only if operator workflows expose a concrete gap
+1. Add one more diagnostic improvement only if operator workflows expose a concrete gap
 
 ## Next
 

@@ -171,7 +171,7 @@ These are the current project decisions and should be treated as the default unt
 ## Open Decisions
 
 These still need to be resolved or confirmed:
-- Should mail expand beyond the first durable unread-only path?
+- Which additional diagnostic improvement, if any, is still justified inside the current operator loop?
 
 ## Suggested Order For Our Next Sessions
 

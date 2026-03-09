@@ -28,6 +28,7 @@ interface MailCheckOptions {
 
 interface MailListOptions {
   selector: string;
+  unreadOnly?: boolean;
   startDir?: string;
   recordEvent?: EventRecorder;
 }
@@ -62,8 +63,12 @@ export function createMailCommand(): Command {
       new Command("list")
         .description("List session mail without changing read state")
         .argument("<session>", "Session id or agent name")
-        .action(async (selector: string) => {
-          await mailListCommand({ selector });
+        .option("--unread", "Show only unread mail without marking it read")
+        .action(async (selector: string, options: { unread?: boolean }) => {
+          await mailListCommand({
+            selector,
+            unreadOnly: options.unread
+          });
         })
     );
 
@@ -153,25 +158,35 @@ export async function mailListCommand(options: MailListOptions): Promise<void> {
     throw new MailError(`No session found for '${options.selector}'.`);
   }
 
-  const mailbox = await listMailForSession(config.project.root, session.id);
+  const mailbox = await listMailForSession(config.project.root, session.id, {
+    unreadOnly: options.unreadOnly
+  });
   const unreadCount = mailbox.filter((message) => message.readAt === null).length;
+  const view = options.unreadOnly ? "unread_only" : "full";
 
   await recordEventWithFallback(recordEvent, config.project.root, {
     sessionId: session.id,
     agentName: session.agentName,
     eventType: "mail.listed",
     payload: {
+      view,
       messageCount: mailbox.length,
       unreadCount
     }
   });
 
   if (mailbox.length === 0) {
-    process.stdout.write(`No mail for ${session.agentName}.\n`);
+    process.stdout.write(
+      options.unreadOnly ? `No unread mail for ${session.agentName}.\n` : `No mail for ${session.agentName}.\n`
+    );
     return;
   }
 
-  process.stdout.write(`Mailbox for ${session.agentName} (read-only):\n`);
+  process.stdout.write(
+    options.unreadOnly
+      ? `Unread mail for ${session.agentName} (read-only):\n`
+      : `Mailbox for ${session.agentName} (read-only):\n`
+  );
 
   for (const message of mailbox) {
     const state = message.readAt ? "read" : "unread";
@@ -180,8 +195,11 @@ export async function mailListCommand(options: MailListOptions): Promise<void> {
     process.stdout.write(`${message.body}\n`);
   }
 
+  const countSummary = `Listed ${mailbox.length} message${mailbox.length === 1 ? "" : "s"}`;
   process.stdout.write(
-    `Listed ${mailbox.length} message${mailbox.length === 1 ? "" : "s"}; ${unreadCount} unread.\n`
+    options.unreadOnly
+      ? `${countSummary}; unread-only view, read state unchanged.\n`
+      : `${countSummary}; ${unreadCount} unread.\n`
   );
 }
 
