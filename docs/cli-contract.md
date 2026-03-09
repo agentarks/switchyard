@@ -46,10 +46,10 @@ Current contract:
 - command loads config from the canonical repo root
 - command creates one deterministic branch and worktree under `.switchyard/worktrees/`
 - command starts one detached Codex process from that worktree
-- command persists one `starting` session record in `sessions.db`
+- command persists one `starting` session record in `sessions.db`, including the original canonical branch as session `baseBranch`
 - command records `sling.spawned` when the runtime pid exists
 - command records `sling.completed` after the initial launch window succeeds
-- command prints the launch state, created branch, worktree path, runtime command line, and initial readiness delay
+- command prints the launch state, created branch, base branch, worktree path, runtime command line, and initial readiness delay
 
 Future target:
 - add richer task/instruction inputs
@@ -94,7 +94,8 @@ Current contract:
 - command updates durable session state in `sessions.db`
 - command preserves the worktree by default so the operator can still review or merge the branch later
 - command still stops an active session even when a requested cleanup cannot proceed safely
-- command removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the configured canonical branch
+- command removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch`
+- command refuses plain merged-cleanup for legacy rows that do not have stored `baseBranch` metadata
 - command requires `--cleanup --abandon` to discard work that is not confirmed merged
 - command rejects `--abandon` unless `--cleanup` is also set
 - command reports already-absent artifacts as already absent instead of reporting a removal that did not happen
@@ -108,6 +109,8 @@ Future target:
 Current contract:
 - command resolves one session by id or normalized agent name
 - command refuses active sessions and only merges preserved work
+- command refuses legacy rows that do not have stored `baseBranch` metadata
+- command refuses to silently retarget preserved work when the session `baseBranch` differs from the current configured canonical branch
 - command verifies that the preserved worktree path still resolves to the expected git worktree root
 - command refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
 - command requires the canonical repo-root worktree to be clean before it switches branches
@@ -127,6 +130,7 @@ Current contract:
 - operators should stop sessions without `--cleanup` before reintegration
 - operators should review the preserved `agents/*` branch and worktree with normal git and project checks
 - operators may run `sy merge <session>` to execute the documented repo-root merge path
+- each preserved session retains its original target branch as `baseBranch`, and Switchyard refuses to silently retarget it if `.switchyard/config.yaml` now points somewhere else
 - operators may still use normal git directly when they intentionally want the manual path
 - operators should run `sy stop <session> --cleanup` only after a successful merge
 - operators should run `sy stop <session> --cleanup --abandon` only after an explicit abandon decision

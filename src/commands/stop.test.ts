@@ -373,6 +373,52 @@ test("stopCommand refuses cleanup for an unmerged stopped session without explic
   assert.equal(writes.join(""), "");
 });
 
+test("stopCommand refuses merged cleanup for legacy sessions without stored base branch metadata", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-legacy-target");
+
+  try {
+    await git(repoDir, ["switch", "-c", "agents/agent-legacy-target"]);
+    await git(repoDir, ["commit", "--allow-empty", "-m", "Agent legacy target change"]);
+    await git(repoDir, ["switch", "main"]);
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-legacy-target"]);
+    await createSession(repoDir, {
+      id: "session-legacy-target",
+      agentName: "agent-legacy-target",
+      branch: "agents/agent-legacy-target",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:16:00.000Z"
+    });
+    await git(repoDir, ["merge", "--no-ff", "agents/agent-legacy-target", "-m", "Merge legacy target branch"]);
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await assert.rejects(async () => {
+      await stopCommand({
+        selector: "agent-legacy-target",
+        cleanup: true,
+        startDir: repoDir
+      });
+    }, /no stored base branch metadata.*--cleanup --abandon/);
+
+    await access(worktreePath);
+    await git(repoDir, ["rev-parse", "--verify", "agents/agent-legacy-target"]);
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.equal(writes.join(""), "");
+});
+
 test("stopCommand still stops an active unmerged session when cleanup is refused", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
@@ -565,6 +611,65 @@ test("stopCommand removes the worktree and branch after confirmed merge cleanup"
 
   const output = writes.join("");
   assert.match(output, /Session agent-merged-cleanup is already stopped\./);
+  assert.match(output, /Cleanup: removed worktree and branch after confirming merge into main\./);
+});
+
+test("stopCommand uses the session base branch for merged cleanup when config drifts later", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-target-drift");
+
+  try {
+    await slingCommand({
+      agentName: "Agent Target Drift",
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 9091,
+          command: {
+            command: "codex",
+            args: []
+          },
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    await stopCommand({
+      selector: "agent-target-drift",
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 9091,
+      stopRuntime: async () => true
+    });
+
+    await git(repoDir, ["merge", "--no-ff", "agents/agent-target-drift", "-m", "Merge agent target drift"]);
+    await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "release"));
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await stopCommand({
+      selector: "agent-target-drift",
+      cleanup: true,
+      startDir: repoDir
+    });
+
+    await assert.rejects(async () => {
+      await access(worktreePath);
+    });
+    await assert.rejects(async () => {
+      await git(repoDir, ["rev-parse", "--verify", "agents/agent-target-drift"]);
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Session agent-target-drift is already stopped\./);
   assert.match(output, /Cleanup: removed worktree and branch after confirming merge into main\./);
 });
 

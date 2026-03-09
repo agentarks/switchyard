@@ -4,37 +4,37 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Validate whether merge or recovery work needs richer session metadata.
+Validate whether the current mail split needs one more narrow operator-facing behavior.
 
 Target outcome:
-- the repo stays readable with the current metadata unless a real operator workflow proves otherwise
-- any new metadata field is justified by a concrete recovery or reintegration gap
-- docs state clearly what new metadata exists and why it was added
+- the repo stays readable with `send`, `check`, and `list` unless a real operator workflow proves they are insufficient
+- any mail change is justified by a concrete operator gap instead of speculative messaging breadth
+- docs state clearly what mail semantics exist and why
 
 ## Why This Is Next
 
-Selector ambiguity in the inspection path is now explicit, so the next open question is whether the current stored session context is enough for real recovery work.
+The merge/recovery metadata question is now resolved with one stored `baseBranch` field. The next open question is whether the current mail path is already enough for the single-repo operator loop.
 
-Right now the repo keeps session id, agent name, branch, worktree path, runtime pid, durable events, and mail. That may already be sufficient.
+Right now the repo has durable mail send, unread consumption, and read-only mailbox inspection. That may already be sufficient.
 
-Without a concrete recovery-driven audit:
-- the project may add metadata that does not improve the current operator loop
-- docs can drift toward speculative structure instead of proven operator value
+Without a concrete mail-driven audit:
+- the project may add messaging semantics that do not improve the current operator loop
+- docs can drift toward speculative collaboration features instead of proven operator value
 - future slices lose the narrow vertical focus the repo is trying to preserve
 
 ## Exact Order
 
-1. Audit real recovery and merge friction
-   - confirm whether the current pid, branch, worktree, mail, and event context actually leave an operator blind
+1. Audit real mail friction
+   - confirm whether `send`, `check`, and `list` leave an operator blind or awkward in the current loop
    - stay grounded in the current single-repo operator loop
 
-2. Add one narrow piece of metadata only if needed
-   - prefer one explicit field with a clear operator use over a broader metadata expansion
-   - keep the current schema unchanged if the audit does not surface a concrete gap
+2. Add one narrow mail behavior only if needed
+   - prefer one explicit operator-readable behavior over broader mailbox state or coordination semantics
+   - keep the current semantics unchanged if the audit does not surface a concrete gap
 
 3. Keep the scope narrow
    - do not add dashboards, reporting, or broad query syntax
-   - avoid speculative metadata that is not tied to a real recovery task
+   - avoid speculative messaging features that are not tied to a real operator task
 
 4. Update docs
    - `docs/current-state.md`
@@ -55,15 +55,15 @@ Do not build these in the same slice unless the implementation forces it:
 
 This slice is done when all of these are true:
 - `npm run check` passes
-- the repo either adds one justified metadata improvement or explicitly confirms the current metadata is enough for now
-- tests and docs reflect the resulting metadata behavior
+- the repo either adds one justified mail improvement or explicitly confirms the current mail split is enough for now
+- tests and docs reflect the resulting mail behavior
 - docs reflect the new reality
 
 ## If You Get Stuck
 
 Reduce scope instead of broadening design:
-- prefer one explicit metadata field over a broader schema expansion
-- defer changes entirely unless the current recovery workflow cannot be understood with the existing state
+- prefer one explicit mail behavior over a broader message-state expansion
+- defer changes entirely unless the current operator mail workflow is genuinely awkward
 - keep targeting one repo-local Codex lifecycle
 
-The point of this slice is to improve real recovery confidence when needed, not to invent a broader metadata surface.
+The point of this slice is to improve real operator communication when needed, not to invent a broader messaging surface.

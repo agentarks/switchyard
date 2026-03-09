@@ -42,15 +42,30 @@ export async function mergeCommand(options: MergeCommandOptions): Promise<void> 
   }
 
   const branch = session.branch.trim();
-  const canonicalBranch = config.project.canonicalBranch.trim();
+  const configuredCanonicalBranch = config.project.canonicalBranch.trim();
+  const sessionBaseBranch = session.baseBranch?.trim() ?? "";
 
   if (branch.length === 0) {
     throw new MergeError(`Session ${session.id} has no preserved branch metadata.`);
   }
 
-  if (canonicalBranch.length === 0) {
+  if (configuredCanonicalBranch.length === 0) {
     throw new MergeError("Configured canonical branch is empty.");
   }
+
+  if (sessionBaseBranch.length === 0) {
+    throw new MergeError(
+      `Session ${session.id} has no stored base branch metadata. Switchyard cannot safely choose a merge target for this legacy session; review it and merge manually with git.`
+    );
+  }
+
+  if (sessionBaseBranch.length > 0 && sessionBaseBranch !== configuredCanonicalBranch) {
+    throw new MergeError(
+      `Session ${session.id} was created against '${sessionBaseBranch}', but Switchyard is now configured to merge into '${configuredCanonicalBranch}'. Review the session and either restore that config target or merge manually with git.`
+    );
+  }
+
+  const canonicalBranch = sessionBaseBranch;
 
   if (branch === canonicalBranch) {
     throw new MergeError(`Session ${session.id} points at '${branch}', which matches the canonical branch.`);

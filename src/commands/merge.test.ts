@@ -30,6 +30,7 @@ test("mergeCommand merges a stopped session branch into the canonical branch", a
       id: "session-agent-one",
       agentName: "agent-one",
       branch: "agents/agent-one",
+      baseBranch: "main",
       worktreePath,
       state: "stopped",
       runtimePid: null,
@@ -90,6 +91,73 @@ test("mergeCommand refuses to merge an active session", async () => {
   }
 });
 
+test("mergeCommand refuses to retarget a preserved session when canonical config drifted", async () => {
+  const repoDir = await createInitializedRepo();
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-drift");
+
+  try {
+    await createBranchFromMain(repoDir, "agents/agent-drift", "drift.txt", "agent branch\n", "Agent drift branch");
+    await git(repoDir, ["branch", "release"]);
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-drift"]);
+    await createSession(repoDir, {
+      id: "session-drift",
+      agentName: "agent-drift",
+      branch: "agents/agent-drift",
+      baseBranch: "main",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:12:00.000Z"
+    });
+    await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "release"));
+
+    await assert.rejects(async () => {
+      await mergeCommand({
+        selector: "agent-drift",
+        startDir: repoDir
+      });
+    }, /created against 'main'.*configured to merge into 'release'/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("mergeCommand refuses legacy sessions without stored base branch metadata", async () => {
+  const repoDir = await createInitializedRepo();
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-legacy-target");
+
+  try {
+    await createBranchFromMain(
+      repoDir,
+      "agents/agent-legacy-target",
+      "legacy.txt",
+      "agent branch\n",
+      "Agent legacy target branch"
+    );
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-legacy-target"]);
+    await createSession(repoDir, {
+      id: "session-legacy-target",
+      agentName: "agent-legacy-target",
+      branch: "agents/agent-legacy-target",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:14:00.000Z"
+    });
+
+    await assert.rejects(async () => {
+      await mergeCommand({
+        selector: "agent-legacy-target",
+        startDir: repoDir
+      });
+    }, /no stored base branch metadata.*merge manually with git/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("mergeCommand refuses to run when the canonical worktree is dirty", async () => {
   const repoDir = await createInitializedRepo();
   const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-dirty");
@@ -101,6 +169,7 @@ test("mergeCommand refuses to run when the canonical worktree is dirty", async (
       id: "session-dirty",
       agentName: "agent-dirty",
       branch: "agents/agent-dirty",
+      baseBranch: "main",
       worktreePath,
       state: "stopped",
       runtimePid: null,
@@ -139,6 +208,7 @@ test("mergeCommand refuses to merge when the preserved worktree has uncommitted 
       id: "session-worktree-dirty",
       agentName: "agent-worktree-dirty",
       branch: "agents/agent-worktree-dirty",
+      baseBranch: "main",
       worktreePath,
       state: "stopped",
       runtimePid: null,
@@ -176,6 +246,7 @@ test("mergeCommand refuses to merge when session.worktreePath is not an actual g
       id: "session-replaced-worktree",
       agentName: "agent-replaced-worktree",
       branch: "agents/agent-replaced-worktree",
+      baseBranch: "main",
       worktreePath,
       state: "stopped",
       runtimePid: null,
@@ -217,6 +288,7 @@ test("mergeCommand surfaces merge conflicts and records a failed merge event", a
       id: "session-conflict",
       agentName: "agent-conflict",
       branch: "agents/agent-conflict",
+      baseBranch: "main",
       worktreePath,
       state: "stopped",
       runtimePid: null,
@@ -263,6 +335,7 @@ test("mergeCommand reports already-integrated branches without recording merge.c
       id: "session-repeat",
       agentName: "agent-repeat",
       branch: "agents/agent-repeat",
+      baseBranch: "main",
       worktreePath,
       state: "stopped",
       runtimePid: null,

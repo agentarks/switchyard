@@ -4,6 +4,7 @@ export interface SessionRecord {
   id: string;
   agentName: string;
   branch: string;
+  baseBranch: string | null;
   worktreePath: string;
   state: SessionState;
   runtimePid: number | null;
@@ -15,6 +16,7 @@ export interface CreateSessionInput {
   id: string;
   agentName: string;
   branch: string;
+  baseBranch?: string | null;
   worktreePath: string;
   state: SessionState;
   runtimePid?: number | null;

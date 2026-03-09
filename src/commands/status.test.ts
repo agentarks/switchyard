@@ -185,6 +185,7 @@ test("statusCommand includes the readiness detail for a freshly launched session
     agentName: "agent-ready",
     eventType: "sling.completed",
     payload: {
+      baseBranch: "main",
       runtimePid: 2222,
       readyAfterMs: 500
     },
@@ -208,7 +209,7 @@ test("statusCommand includes the readiness detail for a freshly launched session
 
   assert.match(
     writes.join(""),
-    /running\tagent-ready\tagents\/agent-ready\t\.switchyard\/worktrees\/agent-ready\t2026-03-08T11:00:00.000Z\t2026-03-08T11:01:00.000Z sling\.completed runtimePid=2222, readyAfterMs=500/
+    /running\tagent-ready\tagents\/agent-ready\t\.switchyard\/worktrees\/agent-ready\t2026-03-08T11:00:00.000Z\t2026-03-08T11:01:00.000Z sling\.completed runtimePid=2222, baseBranch=main, readyAfterMs=500/
   );
 });
 

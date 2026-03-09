@@ -59,6 +59,7 @@ test("slingCommand creates a worktree and persists a started session", async () 
   assert.equal(sessions[0]?.state, "starting");
   assert.equal(sessions[0]?.runtimePid, 4242);
   assert.equal(sessions[0]?.branch, "agents/agent-one");
+  assert.equal(sessions[0]?.baseBranch, "main");
   assert.equal(sessions[0]?.worktreePath, join(repoDir, ".switchyard", "worktrees", "agent-one"));
 
   const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
@@ -68,9 +69,11 @@ test("slingCommand creates a worktree and persists a started session", async () 
   assert.equal(spawnedEvent?.agentName, "agent-one");
   assert.equal(spawnedEvent?.payload.runtimePid, 4242);
   assert.equal(spawnedEvent?.payload.branch, "agents/agent-one");
+  assert.equal(spawnedEvent?.payload.baseBranch, "main");
   assert.equal(completedEvent?.agentName, "agent-one");
   assert.equal(completedEvent?.payload.runtimePid, 4242);
   assert.equal(completedEvent?.payload.branch, "agents/agent-one");
+  assert.equal(completedEvent?.payload.baseBranch, "main");
   assert.equal(completedEvent?.payload.readyAfterMs, 500);
   assert.ok(
     typeof spawnedEvent?.createdAt === "string"
@@ -80,6 +83,7 @@ test("slingCommand creates a worktree and persists a started session", async () 
 
   assert.match(writes.join(""), /Spawned agent-one/);
   assert.match(writes.join(""), /State: starting/);
+  assert.match(writes.join(""), /Base: main/);
   assert.match(writes.join(""), /Runtime: codex --model gpt-5/);
   assert.match(writes.join(""), /Ready: initial launch check passed after 500ms/);
 

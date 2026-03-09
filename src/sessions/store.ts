@@ -8,6 +8,7 @@ const CREATE_SESSIONS_TABLE_SQL = `
     id TEXT PRIMARY KEY,
     agent_name TEXT NOT NULL,
     branch TEXT NOT NULL,
+    base_branch TEXT,
     worktree_path TEXT NOT NULL,
     state TEXT NOT NULL,
     runtime_pid INTEGER,
@@ -20,6 +21,7 @@ interface SessionRow {
   id: string;
   agent_name: string;
   branch: string;
+  base_branch: string | null;
   worktree_path: string;
   state: SessionRecord["state"];
   runtime_pid: number | null;
@@ -36,7 +38,7 @@ export async function initializeSessionStore(projectRoot: string): Promise<void>
 export async function listSessions(projectRoot: string): Promise<SessionRecord[]> {
   return await withSessionDatabase(projectRoot, (db) => {
     const rows = db.prepare(`
-      SELECT id, agent_name, branch, worktree_path, state, runtime_pid, created_at, updated_at
+      SELECT id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
       FROM sessions
       ORDER BY updated_at DESC, created_at DESC, id ASC
     `).all() as unknown as SessionRow[];
@@ -48,19 +50,31 @@ export async function listSessions(projectRoot: string): Promise<SessionRecord[]
 export async function createSession(projectRoot: string, input: CreateSessionInput): Promise<SessionRecord> {
   const createdAt = input.createdAt ?? new Date().toISOString();
   const updatedAt = input.updatedAt ?? createdAt;
+  const baseBranch = input.baseBranch ?? null;
   const runtimePid = input.runtimePid ?? null;
 
   await withSessionDatabase(projectRoot, (db) => {
     db.prepare(`
-      INSERT INTO sessions (id, agent_name, branch, worktree_path, state, runtime_pid, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(input.id, input.agentName, input.branch, input.worktreePath, input.state, runtimePid, createdAt, updatedAt);
+      INSERT INTO sessions (id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      input.id,
+      input.agentName,
+      input.branch,
+      baseBranch,
+      input.worktreePath,
+      input.state,
+      runtimePid,
+      createdAt,
+      updatedAt
+    );
   });
 
   return {
     id: input.id,
     agentName: input.agentName,
     branch: input.branch,
+    baseBranch,
     worktreePath: input.worktreePath,
     state: input.state,
     runtimePid,
@@ -72,7 +86,7 @@ export async function createSession(projectRoot: string, input: CreateSessionInp
 export async function getSessionById(projectRoot: string, id: string): Promise<SessionRecord | undefined> {
   return await withSessionDatabase(projectRoot, (db) => {
     const row = db.prepare(`
-      SELECT id, agent_name, branch, worktree_path, state, runtime_pid, created_at, updated_at
+      SELECT id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
       FROM sessions
       WHERE id = ?
     `).get(id) as unknown as SessionRow | undefined;
@@ -84,7 +98,7 @@ export async function getSessionById(projectRoot: string, id: string): Promise<S
 export async function findLatestSessionByAgent(projectRoot: string, agentName: string): Promise<SessionRecord | undefined> {
   return await withSessionDatabase(projectRoot, (db) => {
     const row = db.prepare(`
-      SELECT id, agent_name, branch, worktree_path, state, runtime_pid, created_at, updated_at
+      SELECT id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
       FROM sessions
       WHERE agent_name = ?
       ORDER BY updated_at DESC, created_at DESC, id ASC
@@ -139,6 +153,10 @@ function ensureSessionsSchema(db: DatabaseSync): void {
   const columns = db.prepare("PRAGMA table_info(sessions)").all() as Array<{ name: string }>;
   const columnNames = new Set(columns.map((column) => column.name));
 
+  if (!columnNames.has("base_branch")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN base_branch TEXT");
+  }
+
   if (!columnNames.has("runtime_pid")) {
     db.exec("ALTER TABLE sessions ADD COLUMN runtime_pid INTEGER");
   }
@@ -149,6 +167,7 @@ function mapSessionRow(row: SessionRow): SessionRecord {
     id: row.id,
     agentName: row.agent_name,
     branch: row.branch,
+    baseBranch: row.base_branch,
     worktreePath: row.worktree_path,
     state: row.state,
     runtimePid: row.runtime_pid,
