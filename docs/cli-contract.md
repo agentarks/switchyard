@@ -56,16 +56,21 @@ Future target:
 - add richer task/instruction inputs
 - add richer runtime metadata only if operator workflows require attach or transcript inspection
 
-## `sy status [args...]`
+## `sy status [session]`
 
 Current contract:
-- command exists and accepts positional arguments reserved for future filters
+- command accepts one optional session id or agent name selector
 - command loads `.switchyard/config.yaml` from the canonical repo root
 - command reads durable session state from `sessions.db`
+- without a selector, command reads and renders all recorded sessions ordered by most recent update
+- with a selector, command resolves one session by id or normalized agent name and renders only that session
+- command accepts an exact session id before agent-name normalization, even when that selector is not a valid normalized agent name
+- command rejects selectors that match one session by id and a different session by normalized agent name
 - command promotes `starting` sessions to `running` when the first pid liveness check succeeds
 - command marks early-dead `starting` sessions as `failed`
 - command marks obviously stale pid-backed `running` sessions as `failed`
 - command records durable runtime reconciliation events when it changes session state
+- with a selector, command only reconciles that targeted session before rendering
 - command prefers the freshly reconciled lifecycle event in the current table output even if event persistence fails
 - command includes the durable session id in the main status table so later commands can target an exact session
 - command includes one best-effort unread-mail count per session from `mail.db`

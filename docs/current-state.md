@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn, readiness-aware status with session-id visibility plus unread-mail counts and exact per-session inspection, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config.
 
 ## What Exists
 
@@ -39,6 +39,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - first operator-facing event inspection path over `events.db`
 - explicit selector disambiguation in `sy events` when one raw selector could name different session-id, agent-name, or orphaned-event targets
 - operator-controlled recent-event window selection in `sy events --limit`
+- exact per-session inspection in `sy status`, including explicit selector disambiguation between session-id and agent-name matches
 - explicit selector disambiguation in `sy stop` and `sy merge` when one raw selector could name different sessions by session-id and agent-name
 - first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
 - merge preflight failures that now surface the blocking git status entries for dirty repo-root and preserved-worktree states
@@ -82,11 +83,15 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - waits for one short initial readiness window before persisting the session as `starting`
   - records `sling.completed` after that launch window succeeds, including `readyAfterMs`
   - records `sling.failed` when the runtime exits during that launch window
-- `sy status [args...]`
+- `sy status [session]`
   - loads config and session state
+  - optionally resolves one session by id or normalized agent name and renders only that session
+  - accepts an exact session id before agent-name normalization, even when the raw selector is not a valid agent name
+  - rejects ambiguous selectors that would match different sessions by id and agent name
   - promotes `starting` sessions to `running` when the pid survives the first liveness check
   - marks early-dead `starting` sessions as `failed`
   - marks obviously stale `running` pid-backed sessions as `failed`
+  - when a selector is present, only reconciles that targeted session before printing
   - prints an empty-state message when no sessions exist
   - prints a tab-separated session table ordered by most recent update
   - includes the durable session id in that table for exact follow-up selectors
