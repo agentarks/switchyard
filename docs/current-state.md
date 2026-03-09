@@ -38,6 +38,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - durable runtime reconciliation events for `runtime.ready`, `runtime.exited_early`, and `runtime.exited`
 - first operator-facing event inspection path over `events.db`
 - explicit selector disambiguation in `sy events` when one raw selector could name different session-id, agent-name, or orphaned-event targets
+- explicit selector disambiguation in `sy stop` and `sy merge` when one raw selector could name different sessions by session-id and agent-name
 - first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
 - merge preflight failures that now surface the blocking git status entries for dirty repo-root and preserved-worktree states
 - merge and merged-cleanup guards that now refuse to silently retarget preserved work when the configured canonical branch changes after launch
@@ -90,6 +91,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - records runtime reconciliation events when it changes session state
 - `sy stop <session>`
   - resolves one session by id or normalized agent name
+  - rejects ambiguous selectors that would match different sessions by id and agent name
   - stops one active pid-backed runtime and updates durable session state
   - preserves the worktree by default so the operator can review or merge the branch later
   - still stops active sessions when `--cleanup` is requested, even if cleanup is later refused
@@ -99,6 +101,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - reports when preserved cleanup artifacts were already absent instead of claiming removal
 - `sy merge <session>`
   - resolves one session by id or normalized agent name
+  - rejects ambiguous selectors that would match different sessions by id and agent name
   - refuses active sessions so merge only runs against preserved work
   - refuses legacy rows that do not have stored `baseBranch` metadata
   - refuses to silently retarget preserved work when the session `baseBranch` disagrees with the current configured canonical branch

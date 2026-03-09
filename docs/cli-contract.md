@@ -93,6 +93,7 @@ Future target:
 
 Current contract:
 - command resolves one session by id or normalized agent name
+- command rejects selectors that match one session by id and a different session by normalized agent name
 - command stops one active pid-backed runtime cleanly
 - command updates durable session state in `sessions.db`
 - command preserves the worktree by default so the operator can still review or merge the branch later
@@ -111,6 +112,7 @@ Future target:
 
 Current contract:
 - command resolves one session by id or normalized agent name
+- command rejects selectors that match one session by id and a different session by normalized agent name
 - command refuses active sessions and only merges preserved work
 - command refuses legacy rows that do not have stored `baseBranch` metadata
 - command refuses to silently retarget preserved work when the session `baseBranch` differs from the current configured canonical branch

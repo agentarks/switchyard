@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
+import { MergeError } from "../errors.js";
 import { createSession } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
@@ -60,6 +61,47 @@ test("mergeCommand merges a stopped session branch into the canonical branch", a
     assert.equal(events[0]?.eventType, "merge.completed");
     assert.equal(events[0]?.payload.branch, "agents/agent-one");
     assert.equal(events[0]?.payload.canonicalBranch, "main");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("mergeCommand rejects selectors that match different sessions by id and agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createSession(repoDir, {
+      id: "shared-name",
+      agentName: "other-agent",
+      branch: "agents/other-agent",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "other-agent"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T12:00:00.000Z",
+      updatedAt: "2026-03-08T12:00:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-shared-agent",
+      agentName: "shared-name",
+      branch: "agents/shared-name",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "shared-name"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T12:05:00.000Z",
+      updatedAt: "2026-03-08T12:05:00.000Z"
+    });
+
+    await assert.rejects(
+      () => mergeCommand({ selector: "shared-name", startDir: repoDir }),
+      (error: unknown) => {
+        assert.ok(error instanceof MergeError);
+        assert.match(
+          error.message,
+          /Selector 'shared-name' is ambiguous: it matches session 'shared-name' by id and session 'session-shared-agent' by agent name\./
+        );
+        return true;
+      }
+    );
   } finally {
     await removeTempDir(repoDir);
   }
