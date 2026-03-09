@@ -26,7 +26,13 @@ export async function resolveSessionByIdOrAgent(
     return byId;
   }
 
-  return await findLatestSessionByAgent(projectRoot, normalizeAgentName(selector));
+  const normalizedSelector = tryNormalizeAgentName(selector);
+
+  if (!normalizedSelector) {
+    return undefined;
+  }
+
+  return await findLatestSessionByAgent(projectRoot, normalizedSelector);
 }
 
 function tryNormalizeAgentName(selector: string): string | undefined {
