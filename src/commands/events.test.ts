@@ -144,6 +144,66 @@ test("eventsCommand reads events for a direct session id even when the session r
   }
 });
 
+test("eventsCommand resolves an exact session id even when the selector is not a valid agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createSession(repoDir, {
+      id: "!!!",
+      agentName: "agent-bang",
+      branch: "agents/agent-bang",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-bang"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T11:05:00.000Z",
+      updatedAt: "2026-03-08T11:05:00.000Z"
+    });
+    await createEvent(repoDir, {
+      sessionId: "!!!",
+      agentName: "agent-bang",
+      eventType: "stop.completed",
+      payload: {
+        outcome: "stopped"
+      },
+      createdAt: "2026-03-08T11:10:00.000Z"
+    });
+
+    const output = await captureStdout(async () => {
+      await eventsCommand({ startDir: repoDir, selector: "!!!" });
+    });
+
+    assert.match(output, /Recent events for agent-bang \(!{3}\):/);
+    assert.match(output, /2026-03-08T11:10:00.000Z\tstop.completed\tagent-bang\t!!!\toutcome=stopped/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("eventsCommand resolves orphaned session-id events even when the selector is not a valid agent name", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createEvent(repoDir, {
+      sessionId: "!!!",
+      agentName: "agent-orphan",
+      eventType: "stop.completed",
+      payload: {
+        outcome: "stopped"
+      },
+      createdAt: "2026-03-08T11:20:00.000Z"
+    });
+
+    const output = await captureStdout(async () => {
+      await eventsCommand({ startDir: repoDir, selector: "!!!" });
+    });
+
+    assert.match(output, /Recent events for session !!!:/);
+    assert.match(output, /2026-03-08T11:20:00.000Z\tstop.completed\tagent-orphan\t!!!\toutcome=stopped/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("eventsCommand rejects selectors that match different sessions by id and agent name", async () => {
   const repoDir = await createInitializedRepo();
 

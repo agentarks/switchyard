@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
 import type { EventPayload, EventRecord } from "../events/types.js";
-import { EventsError } from "../errors.js";
+import { EventsError, WorktreeError } from "../errors.js";
 import { findLatestSessionByAgent, getSessionById } from "../sessions/store.js";
 import type { SessionRecord } from "../sessions/types.js";
 import { normalizeAgentName } from "../worktrees/naming.js";
@@ -70,7 +70,10 @@ interface ResolvedSessionSelector {
 
 async function resolveSessionSelector(projectRoot: string, selector: string): Promise<ResolvedSessionSelector> {
   const byId = await getSessionById(projectRoot, selector);
-  const byAgent = await findLatestSessionByAgent(projectRoot, normalizeAgentName(selector));
+  const normalizedSelector = normalizeSelectorAsAgentName(selector);
+  const byAgent = normalizedSelector
+    ? await findLatestSessionByAgent(projectRoot, normalizedSelector)
+    : undefined;
 
   if (byId && byAgent && byId.id !== byAgent.id) {
     throw new EventsError(
@@ -79,6 +82,18 @@ async function resolveSessionSelector(projectRoot: string, selector: string): Pr
   }
 
   return { byId, byAgent };
+}
+
+function normalizeSelectorAsAgentName(selector: string): string | undefined {
+  try {
+    return normalizeAgentName(selector);
+  } catch (error) {
+    if (error instanceof WorktreeError) {
+      return undefined;
+    }
+
+    throw error;
+  }
 }
 
 async function resolveEventSelection(
