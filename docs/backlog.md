@@ -4,11 +4,11 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Add one more event or merge diagnostic improvement only if operator workflows expose a concrete gap
+1. Add end-to-end regression coverage around `sy init`
 
 ## Next
 
-2. Add background diagnostics only if operator workflows require it
+2. Add another narrow inspection or lifecycle hardening slice only if operator workflows expose a concrete gap
 
 ## After That
 

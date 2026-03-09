@@ -38,6 +38,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - first operator-facing event inspection path over `events.db`
 - explicit selector disambiguation in `sy events` when one raw selector could name different session-id, agent-name, or orphaned-event targets
 - first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
+- merge preflight failures that now surface the blocking git status entries for dirty repo-root and preserved-worktree states
 - merge and merged-cleanup guards that now refuse to silently retarget preserved work when the configured canonical branch changes after launch
 - first operator-facing cleanup guard that only removes preserved merge artifacts automatically when the branch is confirmed merged, and otherwise requires explicit `--abandon`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
@@ -102,7 +103,9 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - refuses to silently retarget preserved work when the session `baseBranch` disagrees with the current configured canonical branch
   - verifies the preserved worktree path still resolves to the expected git worktree root
   - refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
+  - reports the blocking git status entries when the preserved worktree is dirty
   - requires the repo root worktree to be clean before it switches to the configured canonical branch
+  - reports the blocking git status entries when the repo root is dirty
   - verifies the preserved local `agents/*` branch still exists
   - runs `git merge --no-ff <branch>` from the canonical repo root worktree
   - records `merge.completed` on success, `merge.failed` when git stops in a conflict state, and `merge.skipped` when the branch is already integrated
@@ -145,11 +148,11 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## Recommended Next Task
 
-Validate whether the current `sy events` or merge inspection paths need one more narrow operator-facing diagnostic improvement:
-- prefer clearer operator-readable inspection over broader automation
-- keep the change narrow and grounded in the current single-repo lifecycle
+Add end-to-end regression coverage around `sy init`:
+- keep the slice narrow and focused on the repo bootstrap contract
+- prefer one realistic CLI-path test over broader new behavior
 
-The mail question is now resolved narrowly enough for the current loop, and `sy status` now surfaces unread mailbox counts directly. The next slice should stay equally small and avoid broader automation without clear operator pressure.
+The current inspection gap is now covered narrowly enough for the operator loop. The next slice should reduce bootstrap risk without broadening product scope.
 
 ## How To Use This File
 

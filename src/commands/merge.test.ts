@@ -178,12 +178,20 @@ test("mergeCommand refuses to run when the canonical worktree is dirty", async (
     });
     await writeFile(join(repoDir, "uncommitted.txt"), "dirty\n", "utf8");
 
-    await assert.rejects(async () => {
-      await mergeCommand({
-        selector: "session-dirty",
-        startDir: repoDir
-      });
-    }, /Canonical branch worktree is not clean/);
+    await assert.rejects(
+      async () => {
+        await mergeCommand({
+          selector: "session-dirty",
+          startDir: repoDir
+        });
+      },
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /Canonical branch worktree is not clean/);
+        assert.match(error.message, /\?\? uncommitted\.txt/);
+        return true;
+      }
+    );
   } finally {
     await removeTempDir(repoDir);
   }
@@ -216,12 +224,20 @@ test("mergeCommand refuses to merge when the preserved worktree has uncommitted 
       updatedAt: "2026-03-08T09:15:00.000Z"
     });
 
-    await assert.rejects(async () => {
-      await mergeCommand({
-        selector: "agent-worktree-dirty",
-        startDir: repoDir
-      });
-    }, /Preserved worktree.*not clean/);
+    await assert.rejects(
+      async () => {
+        await mergeCommand({
+          selector: "agent-worktree-dirty",
+          startDir: repoDir
+        });
+      },
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /Preserved worktree.*not clean/);
+        assert.match(error.message, /\?\? draft\.txt/);
+        return true;
+      }
+    );
   } finally {
     await removeTempDir(repoDir);
   }

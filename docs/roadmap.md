@@ -33,16 +33,15 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Validate whether `sy events` or merge inspection needs one more narrow operator-facing diagnostic improvement:
-- add semantics only when a concrete operator workflow proves the remaining inspection paths are insufficient
-- keep the change narrow and operator-readable instead of broadening reporting or automation preemptively
-- avoid broad diagnostics features while the current repo-local loop is still the target
+Add end-to-end regression coverage around `sy init`:
+- keep the slice grounded in the existing repo bootstrap contract
+- prefer one realistic operator path over broader new behavior
+- use the test to lock in root resolution, config creation, and bootstrap layout expectations
 
 Why this is next:
-- the merge/recovery metadata question is now resolved with one stored `baseBranch` field
-- the mail path is now resolved narrowly enough for the current loop with `send`, `check`, `list`, and `list --unread`
-- `sy status` now surfaces unread mailbox counts directly
-- broader diagnostics should be justified by real operator friction, not added speculatively
+- the current merge inspection gap is now covered with dirty-entry diagnostics
+- `sy init` still lacks end-to-end coverage even though the bootstrap contract anchors the whole operator loop
+- this is a smaller risk-reduction slice than adding more reporting surface
 
 ## Order After That
 
