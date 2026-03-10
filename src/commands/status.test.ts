@@ -345,6 +345,74 @@ test("statusCommand shows the launch task handoff for one selected session", asy
   assert.match(output, /Recent: 2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=8181/);
 });
 
+test("statusCommand preserves the launch command when the latest launch event is sling.failed", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-failed-launch",
+    agentName: "agent-failed-launch",
+    branch: "agents/agent-failed-launch",
+    baseBranch: "main",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-failed-launch"),
+    state: "failed",
+    runtimePid: null,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:01:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-failed-launch",
+    agentName: "agent-failed-launch",
+    eventType: "sling.spawned",
+    payload: {
+      runtimePid: 9001,
+      runtimeCommand: "codex --model gpt-5",
+      taskSummary: "Exercise the early readiness failure path.",
+      taskSpecPath: ".switchyard/specs/agent-failed-launch-session-failed-launch.md"
+    },
+    createdAt: "2026-03-09T12:00:30.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-failed-launch",
+    agentName: "agent-failed-launch",
+    eventType: "sling.failed",
+    payload: {
+      errorMessage: "Codex exited before Switchyard marked the session ready (exit code 1).",
+      taskSummary: "Exercise the early readiness failure path.",
+      taskSpecPath: ".switchyard/specs/agent-failed-launch-session-failed-launch.md",
+      cleanupSucceeded: true
+    },
+    createdAt: "2026-03-09T12:01:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      selector: "session-failed-launch",
+      startDir: repoDir,
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /^Status for agent-failed-launch \(session-failed-launch\):/m);
+  assert.match(output, /Runtime pid: -/);
+  assert.match(output, /Runtime: codex --model gpt-5/);
+  assert.match(output, /Task: Exercise the early readiness failure path\./);
+  assert.match(
+    output,
+    /Recent: 2026-03-09T12:01:00.000Z sling\.failed errorMessage="Codex exited before Switchyard marked the session ready \(exit code 1\)\.", taskSummary="Exercise the early readiness failure path\.", taskSpecPath=/
+  );
+});
+
 test("statusCommand prints the full stored task text when requested for one selected session", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
