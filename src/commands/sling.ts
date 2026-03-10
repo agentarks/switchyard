@@ -100,7 +100,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
             taskSummary,
             taskSpecPath,
             runtimePid: spawnedRuntime.pid,
-            runtimeCommand: formatRuntimeCommand(spawnedRuntime)
+            runtimeCommand: formatRuntimeCommandForOperator(spawnedRuntime, task)
           }
         });
       }
@@ -200,7 +200,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       taskSummary,
       taskSpecPath: taskSpec.relativePath,
       runtimePid: runtimeSession.pid,
-      runtimeCommand: formatRuntimeCommand(runtimeSession),
+      runtimeCommand: formatRuntimeCommandForOperator(runtimeSession, task),
       readyAfterMs: runtimeSession.readyAfterMs
     }
   });
@@ -213,7 +213,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   process.stdout.write(`Task: ${taskSummary}\n`);
   process.stdout.write(`Spec: ${taskSpec.relativePath}\n`);
   process.stdout.write(`Worktree: ${formatRelativePath(config.project.root, managedWorktree.path)}\n`);
-  process.stdout.write(`Runtime: ${formatRuntimeCommand(runtimeSession)}\n`);
+  process.stdout.write(`Runtime: ${formatRuntimeCommandForOperator(runtimeSession, task)}\n`);
   process.stdout.write(`Ready: initial launch check passed after ${runtimeSession.readyAfterMs}ms\n`);
 }
 
@@ -225,6 +225,16 @@ function formatRelativePath(projectRoot: string, path: string): string {
 function formatRuntimeCommand(runtimeSession: SpawnedRuntimeProcess): string {
   const parts = [runtimeSession.command.command, ...runtimeSession.command.args];
   return parts.join(" ");
+}
+
+function formatRuntimeCommandForOperator(runtimeSession: SpawnedRuntimeProcess, task: string): string {
+  const args = [...runtimeSession.command.args];
+
+  if (args.at(-1) === task) {
+    args.pop();
+  }
+
+  return [runtimeSession.command.command, ...args].join(" ");
 }
 
 function validateTask(task: string | undefined): string {

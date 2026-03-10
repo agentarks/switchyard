@@ -10,6 +10,7 @@ import { inspectProcessLiveness, isProcessAlive, type ProcessLiveness } from "..
 import { getCleanupReadinessLabel } from "../sessions/cleanup.js";
 import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
 import { getSessionById, listSessions, updateSessionState } from "../sessions/store.js";
+import { readTaskSpecHandoff } from "../specs/task.js";
 import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 
 interface StatusOptions {
@@ -90,7 +91,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     const session = sessions[0];
 
     if (session) {
-      const launchTaskHandoff = await loadLatestLaunchTaskHandoff(config.project.root, session.id);
+      const launchTaskHandoff = await loadLatestLaunchTaskHandoff(config.project.root, session);
       const unreadCount = unreadMailCounts.available
         ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
         : "?";
@@ -449,9 +450,9 @@ function shouldPreservePreReconcileRecentEvent(
 
 async function loadLatestLaunchTaskHandoff(
   projectRoot: string,
-  sessionId: string
+  session: SessionRecord
 ): Promise<{ taskSummary?: string; taskSpecPath?: string } | undefined> {
-  const events = await listEvents(projectRoot, { sessionId });
+  const events = await listEvents(projectRoot, { sessionId: session.id });
 
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
@@ -466,7 +467,7 @@ async function loadLatestLaunchTaskHandoff(
     };
   }
 
-  return undefined;
+  return await readTaskSpecHandoff(projectRoot, session.agentName, session.id);
 }
 
 function selectRecentEventDetailKeys(event: EventRecord): string[] {

@@ -167,6 +167,8 @@ test("eventsCommand surfaces task handoff details from sling launch events", asy
     assert.match(output, /sling\.completed/);
     assert.match(output, /taskSummary=\"Review the current operator loop and call out the next concrete gap\.\"/);
     assert.match(output, new RegExp(`taskSpecPath=\\.switchyard/specs/agent-task-events-${sessionId}\\.md`));
+    assert.match(output, /runtimeCommand=codex/);
+    assert.doesNotMatch(output, /runtimeCommand=codex Review the current operator loop/);
   } finally {
     await removeTempDir(repoDir);
   }

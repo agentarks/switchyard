@@ -76,12 +76,14 @@ test("slingCommand creates a worktree and persists a started session", async () 
   assert.equal(spawnedEvent?.payload.baseBranch, "main");
   assert.equal(spawnedEvent?.payload.taskSummary, task);
   assert.equal(spawnedEvent?.payload.taskSpecPath, `.switchyard/specs/agent-one-${sessions[0]?.id}.md`);
+  assert.equal(spawnedEvent?.payload.runtimeCommand, "codex --model gpt-5");
   assert.equal(completedEvent?.agentName, "agent-one");
   assert.equal(completedEvent?.payload.runtimePid, 4242);
   assert.equal(completedEvent?.payload.branch, "agents/agent-one");
   assert.equal(completedEvent?.payload.baseBranch, "main");
   assert.equal(completedEvent?.payload.taskSummary, task);
   assert.equal(completedEvent?.payload.taskSpecPath, `.switchyard/specs/agent-one-${sessions[0]?.id}.md`);
+  assert.equal(completedEvent?.payload.runtimeCommand, "codex --model gpt-5");
   assert.equal(completedEvent?.payload.readyAfterMs, 500);
   assert.ok(
     typeof spawnedEvent?.createdAt === "string"
@@ -284,8 +286,15 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
 
 test("slingCommand keeps a started session when event persistence fails", async () => {
   const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
 
   try {
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
     await slingCommand({
       agentName: "Agent Four",
       task: "Keep the session even if event persistence fails.",
@@ -311,7 +320,20 @@ test("slingCommand keeps a started session when event persistence fails", async 
     assert.equal(sessions[0]?.runtimePid, 4040);
     const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
     assert.deepEqual(events, []);
+
+    writes.length = 0;
+    await statusCommand({
+      selector: sessions[0]?.id,
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 4040,
+      now: () => "2026-03-09T14:00:00.000Z"
+    });
+
+    const output = writes.join("");
+    assert.match(output, /Task: Keep the session even if event persistence fails\./);
+    assert.match(output, new RegExp(`Spec: \\.switchyard/specs/agent-four-${sessions[0]?.id}\\.md`));
   } finally {
+    process.stdout.write = originalWrite;
     await removeTempDir(repoDir);
   }
 });
