@@ -27,6 +27,7 @@ Completed enough to count as minimally real:
 - M3 session persistence
 - M4 one-agent spawn
 - launch-time session-id visibility in `sy sling`
+- handled merge-failure session-id visibility in `sy merge`
 - stop-time session-id visibility in `sy stop`
 - handled stop output now remains visible even when post-stop cleanup removal fails
 - session-id visibility in `sy mail check` and `sy mail list`
@@ -67,7 +68,7 @@ Completed enough to count as minimally real:
 - end-to-end coverage around `sy init`
 
 Current planning state:
-- no new named slice is justified right now beyond the recent file-backed `sy sling --task-file` handoff, exact mail-body handling, session-id visibility cleanup across `stop`, mail inspection, and empty selected `sy events` output, plus handled stop output for post-stop cleanup removal failures
+- no new named slice is justified right now beyond the recent file-backed `sy sling --task-file` handoff, exact mail-body handling, session-id visibility cleanup across handled `merge` failures, `stop`, mail inspection, and empty selected `sy events` output, plus handled stop output for post-stop cleanup removal failures
 - new lifecycle or inspection work should start only after a reproduced operator-visible gap is named
 
 ## Current In-Scope Work

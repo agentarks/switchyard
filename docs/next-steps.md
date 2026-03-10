@@ -39,6 +39,7 @@ Without that discipline:
 Completed slice:
 - file-backed launch-task input in `sy sling` via `--task-file <path>`
 - exact launch-task inspection in `sy status <session> --task`
+- exact session-id visibility in handled `sy merge` failure output
 - exact session-id visibility in operator-facing `sy stop` output
 - handled stop output plus exact session-id visibility when `sy stop --cleanup` hits a cleanup-removal failure after the runtime is already stopped
 - exact session-id visibility in operator-facing `sy mail check` and `sy mail list` output
