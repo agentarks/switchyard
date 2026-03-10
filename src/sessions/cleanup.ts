@@ -39,11 +39,15 @@ export async function determineCleanupDecision(options: CleanupDecisionOptions):
   const canonicalBranch = sessionBaseBranch;
   const branch = options.session.branch.trim();
   const worktreePath = formatRelativePath(options.projectRoot, options.session.worktreePath);
+  const worktreeExists = await pathExists(options.session.worktreePath);
 
   if (options.abandon) {
-    if (branch.length > 0) {
+    if (branch.length === 0) {
+      if (!worktreeExists) {
+        return { kind: "already_absent" };
+      }
+    } else {
       const branchExists = await localBranchExists(options.projectRoot, branch);
-      const worktreeExists = await pathExists(options.session.worktreePath);
 
       if (!branchExists && !worktreeExists) {
         return { kind: "already_absent" };
@@ -67,8 +71,6 @@ export async function determineCleanupDecision(options: CleanupDecisionOptions):
   }
 
   const branchExists = await localBranchExists(options.projectRoot, branch);
-  const worktreeExists = await pathExists(options.session.worktreePath);
-
   if (!worktreeExists && branchExists) {
     return {
       kind: "blocked",

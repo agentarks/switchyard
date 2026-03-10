@@ -623,6 +623,8 @@ test("stopCommand allows explicit abandon cleanup when branch metadata is missin
   const removedWorktrees: Array<{ agentName: string; branch: string; path: string; baseBranch: string }> = [];
 
   try {
+    await mkdir(worktreePath, { recursive: true });
+
     await createSession(repoDir, {
       id: "session-missing-branch",
       agentName: "agent-missing-branch",
@@ -668,6 +670,60 @@ test("stopCommand allows explicit abandon cleanup when branch metadata is missin
     baseBranch: "main"
   });
   assert.match(writes.join(""), /Cleanup: removed worktree and branch after explicit abandon\./);
+});
+
+test("stopCommand explicit abandon reports already-absent artifacts when branch metadata is missing and the worktree is gone", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-missing-branch-absent");
+  const removedWorktrees: Array<{ agentName: string; branch: string; path: string; baseBranch: string }> = [];
+
+  try {
+    await createSession(repoDir, {
+      id: "session-missing-branch-absent",
+      agentName: "agent-missing-branch-absent",
+      branch: "",
+      baseBranch: "main",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:18:00.000Z"
+    });
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await stopCommand({
+      selector: "agent-missing-branch-absent",
+      cleanup: true,
+      abandon: true,
+      startDir: repoDir,
+      removeSessionWorktree: async (_projectRoot, worktree) => {
+        removedWorktrees.push(worktree);
+      }
+    });
+
+    const events = await listEvents(repoDir, { sessionId: "session-missing-branch-absent" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "stop.completed");
+    assert.equal(events[0]?.payload.cleanupPerformed, false);
+    assert.equal(events[0]?.payload.cleanupReason, "artifacts_missing");
+    assert.equal(events[0]?.payload.cleanupMode, undefined);
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.equal(removedWorktrees.length, 0);
+  const output = writes.join("");
+  assert.match(output, /Session agent-missing-branch-absent is already stopped\./);
+  assert.match(output, /Session: session-missing-branch-absent/);
+  assert.match(output, /Cleanup: preserved worktree and branch were already absent\./);
+  assert.doesNotMatch(output, /removed worktree and branch after explicit abandon\./);
 });
 
 test("stopCommand records cleanup failure details when artifact removal fails after stopping", async () => {
