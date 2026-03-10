@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
 import { RuntimeError } from "../errors.js";
@@ -7,6 +8,20 @@ const DEFAULT_POLL_INTERVAL_MS = 50;
 
 type ProcessSignal = NodeJS.Signals | 0;
 type SignalProcess = (pid: number, signal?: ProcessSignal) => void;
+type ReadProcessState = (pid: number) => string | undefined;
+
+export type ProcessLivenessReason = "pid_alive" | "pid_not_alive" | "process_state_zombie";
+
+export interface ProcessLiveness {
+  alive: boolean;
+  reason: ProcessLivenessReason;
+}
+
+interface InspectProcessLivenessOptions {
+  signalProcess?: SignalProcess;
+  readProcessState?: ReadProcessState;
+  platform?: NodeJS.Platform;
+}
 
 interface StopProcessOptions {
   timeoutMs?: number;
@@ -16,20 +31,57 @@ interface StopProcessOptions {
 }
 
 export function isProcessAlive(pid: number, signalProcess: SignalProcess = process.kill.bind(process)): boolean {
+  return inspectProcessLiveness(pid, { signalProcess }).alive;
+}
+
+export function inspectProcessLiveness(
+  pid: number,
+  options: InspectProcessLivenessOptions = {}
+): ProcessLiveness {
+  const signalProcess = options.signalProcess ?? process.kill.bind(process);
+
   try {
     signalProcess(pid, 0);
-    return true;
   } catch (error) {
     if (isMissingProcessError(error)) {
-      return false;
+      return {
+        alive: false,
+        reason: "pid_not_alive"
+      };
     }
 
     if (isPermissionError(error)) {
-      return true;
+      return {
+        alive: true,
+        reason: "pid_alive"
+      };
     }
 
     throw toRuntimeError(error, `Failed to check liveness for process ${pid}`);
   }
+
+  if (supportsUnixProcessStateInspection(options.platform ?? process.platform)) {
+    const processState = (options.readProcessState ?? readUnixProcessState)(pid)?.trim();
+
+    if (typeof processState === "string" && processState.startsWith("Z")) {
+      return {
+        alive: false,
+        reason: "process_state_zombie"
+      };
+    }
+
+    if (processState === "") {
+      return {
+        alive: false,
+        reason: "pid_not_alive"
+      };
+    }
+  }
+
+  return {
+    alive: true,
+    reason: "pid_alive"
+  };
 }
 
 export async function stopProcess(pid: number, options: StopProcessOptions = {}): Promise<boolean> {
@@ -105,6 +157,38 @@ function isPermissionError(error: unknown): boolean {
 
 function isErrorWithCode(error: unknown, code: string): boolean {
   return error instanceof Error && "code" in error && error.code === code;
+}
+
+function supportsUnixProcessStateInspection(platform: NodeJS.Platform): boolean {
+  return platform !== "win32";
+}
+
+function readUnixProcessState(pid: number): string | undefined {
+  try {
+    return execFileSync("ps", ["-o", "stat=", "-p", String(pid)], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return undefined;
+    }
+
+    if (
+      error instanceof Error &&
+      "stdout" in error &&
+      typeof error.stdout === "string" &&
+      error.stdout.trim().length > 0
+    ) {
+      return error.stdout.trim();
+    }
+
+    if (error instanceof Error && "status" in error && error.status === 1) {
+      return "";
+    }
+
+    return undefined;
+  }
 }
 
 function toRuntimeError(error: unknown, prefix: string): RuntimeError {

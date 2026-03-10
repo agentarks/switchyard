@@ -34,15 +34,15 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-Do not pre-commit to a broader feature slice yet:
-- wait for the next concrete blind spot in the current operator loop
-- choose the smallest inspection or lifecycle hardening task that addresses that real gap
-- keep new work grounded in repo-local reliability rather than new surface area
+The next slice should be first-class task input for `sy sling`:
+- add one explicit operator task handoff at launch time
+- write that handoff into `.switchyard/specs/`
+- keep the slice grounded in the current repo-local loop rather than broader automation
 
 Why this is next:
-- the repo bootstrap contract is now covered by one realistic CLI-path regression test
-- the current loop has no single larger missing slice that is clearly worth fixing before another real operator gap appears
-- deferring speculative breadth is more valuable than inventing a new milestone-sized task
+- the repo already creates `.switchyard/specs/`, but the launch path does not use it yet
+- task handoff is a concrete operator-facing gap at the start of the current loop
+- it is a product slice, not open-ended cleanup
 
 ## Order After That
 

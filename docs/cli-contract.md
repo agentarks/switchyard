@@ -57,7 +57,7 @@ Current contract:
 - on unsupported platforms, detached launch falls back to direct Codex spawn
 
 Future target:
-- add richer task/instruction inputs
+- next slice: add first-class operator task/instruction input with a durable handoff artifact under `.switchyard/specs/`
 - add richer runtime metadata only if operator workflows require attach or transcript inspection
 
 ## `sy status [session]`
@@ -74,6 +74,7 @@ Current contract:
 - command promotes `starting` sessions to `running` when the first pid liveness check succeeds
 - command marks early-dead `starting` sessions as `failed`
 - command marks obviously stale pid-backed `running` sessions as `failed`
+- on Unix-like platforms, command treats zombie runtime pids as stale dead sessions and records `process_state_zombie` in the reconciliation reason
 - command records durable runtime reconciliation events when it changes session state
 - with a selector, command only reconciles that targeted session before rendering
 - command prefers the freshly reconciled lifecycle event in the current table output even if event persistence fails
@@ -121,6 +122,7 @@ Current contract:
 - command rejects selectors that match one session by id and a different session by normalized agent name
 - command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
 - command stops one active pid-backed runtime cleanly
+- on Unix-like platforms, command treats zombie runtime pids as already not running instead of timing out against an unreapable stale pid
 - command updates durable session state in `sessions.db`
 - command preserves the worktree by default so the operator can still review or merge the branch later
 - command still stops an active session even when a requested cleanup cannot proceed safely
@@ -136,7 +138,7 @@ Current contract:
 
 Future target:
 - revisit alternate runtime control only if the pid-based path proves too narrow in real operator workflows
-- refine operator-facing output around stale or missing runtime state
+- refine stale-runtime handling further only if a real operator workflow reproduces pid reuse or another false-positive liveness case
 
 ## `sy merge <session>`
 

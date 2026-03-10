@@ -4,34 +4,48 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Pick the next narrow operator-confidence slice inside the current repo-local loop.
+Stop treating generic hardening as the default next step.
 
 Target outcome:
-- identify one concrete inspection or lifecycle blind spot that still affects the current operator loop
-- keep the slice tied to the current repo-local lifecycle instead of broadening runtime scope
-- prefer the smallest test-backed change that closes that reproduced gap
+- choose one named operator-visible slice inside the current repo-local loop before writing more code
+- make `sy sling` accept a first-class operator task input instead of relying on future-reserved positional args alone
+- avoid "find the next gap" work that does not clearly change operator behavior
 
 ## Why This Is Next
 
-The last reproduced stop-failure visibility gap has been closed, so the next step is to stay disciplined and pick the next concrete weakness in the existing loop rather than expanding scope.
+The core loop is now mostly real. Leaving "pick the next hardening gap" as the standing instruction risks turning progress into an open-ended cleanup exercise instead of a product decision.
 
 Without that discipline:
-- effort can drift into speculative surface area instead of tightening the current operator workflow
-- docs can imply a broader system is needed before the next real repo-local gap is reproduced
-- broader lifecycle work can displace the next concrete issue that actually affects operator use
+- effort can drift into speculative lifecycle cleanup with no clear finish line
+- sessions can keep landing in "improve confidence" work without changing the operator product meaningfully
+- docs can make the project sound incomplete even when the current loop is already usable
 
 ## Exact Order
 
-1. Reproduce and isolate the next operator-loop gap
-   - keep the search space inside the current operator loop instead of inventing new subsystems
-   - confirm exactly which behavior is still weak: status reconciliation, event visibility, stop cleanup, merge safety, or another narrow path
+1. Name the next slice before coding
+   - the next slice is `sy sling` task input
+   - "more hardening" is not a valid slice name
 
-2. Choose the smallest fix that closes it
-   - prefer one narrow operator-facing hardening slice over a redesign
-   - add or update tests in the same pass when behavior is involved
+2. Only do lifecycle work when it is anchored
+   - tie it to a reproduced failure, a confusing operator workflow, or the `sy sling` task-input slice
+   - if the work does not change operator behavior, defer it
 
-3. Update docs only where behavior or priorities truly changed
-   - keep `docs/current-state.md`, `docs/focus-tracker.md`, and this file aligned with reality
+3. Update docs only where priorities truly changed
+   - keep `docs/current-state.md`, `docs/focus-tracker.md`, and this file aligned with the narrower rule
+
+## Named Slice
+
+`sy sling` needs one explicit operator task handoff.
+
+Desired behavior:
+- accept one clear task or instruction input at launch time
+- write that instruction into a durable file under `.switchyard/specs/`
+- surface enough launch output that the operator can see what task was handed off and where it lives
+
+Why this slice:
+- it improves the start of the operator loop instead of tuning internals again
+- it uses an existing repo-local path the project already creates
+- it turns a vague future target into a reviewable product change
 
 ## What To Keep Small
 
@@ -41,17 +55,18 @@ Do not build these unless a concrete operator workflow now requires them:
 - background daemons or watchdogs
 - broad analytics or reporting
 - speculative merge automation beyond the current explicit path
+- unbounded lifecycle cleanup work with no reproduced operator problem
 
 ## Definition Of Done
 
 The next slice is done when all of these are true:
-- it addresses one reproduced operator-loop gap in the current CLI surface
-- tests and docs match the resulting behavior
-- `npm run check` passes
+- it is a named operator-visible slice in the current CLI surface, or a reproduced bug fix
+- tests and docs match the resulting behavior when behavior changed
+- the work did not broaden scope just to stay busy
 
 ## If You Get Stuck
 
 Reduce scope instead of inventing a larger roadmap item:
-- if the first attempted fix grows into redesign, cut scope back to the smallest operator-relevant fix
-- if two fixes are possible, choose the one that is smaller and more operator-readable
+- if the work starts sounding like generic hardening, stop and rename the exact operator-facing slice first
+- if two slices are possible, choose the one that is more concrete and more reviewable
 - keep optimizing for the current single-repo, single-agent loop

@@ -6,7 +6,7 @@ import { listLatestEventsBySession, recordEventBestEffort, type EventRecorder } 
 import type { EventPayloadValue, EventRecord } from "../events/types.js";
 import { StatusError } from "../errors.js";
 import { listUnreadMailCountsBySession } from "../mail/store.js";
-import { isProcessAlive } from "../runtimes/process.js";
+import { inspectProcessLiveness, isProcessAlive, type ProcessLiveness } from "../runtimes/process.js";
 import { getCleanupReadinessLabel } from "../sessions/cleanup.js";
 import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
 import { getSessionById, listSessions, updateSessionState } from "../sessions/store.js";
@@ -16,6 +16,7 @@ interface StatusOptions {
   selector?: string;
   startDir?: string;
   isRuntimeAlive?: (pid: number) => boolean;
+  inspectRuntimeLiveness?: (pid: number) => ProcessLiveness;
   listUnreadMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
   recordEvent?: EventRecorder;
   getCleanupReadiness?: (options: {
@@ -61,7 +62,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
   const reconciledEventsBySession = await reconcileSessionLifecycles(
     config.project.root,
     initialSessions,
-    options.isRuntimeAlive ?? isProcessAlive,
+    options.inspectRuntimeLiveness ?? createRuntimeLivenessInspector(options.isRuntimeAlive ?? isProcessAlive),
     options.recordEvent ?? recordEventBestEffort,
     options.now ?? (() => new Date().toISOString())
   );
@@ -181,7 +182,7 @@ async function loadCleanupReadinessBestEffort(
 async function reconcileSessionLifecycles(
   projectRoot: string,
   sessions: SessionRecord[],
-  isRuntimeAlive: (pid: number) => boolean,
+  inspectRuntimeLiveness: (pid: number) => ProcessLiveness,
   recordEvent: EventRecorder,
   now: () => string
 ): Promise<Map<string, EventRecord>> {
@@ -193,7 +194,7 @@ async function reconcileSessionLifecycles(
     }
 
     const createdAt = now();
-    const nextState = determineNextLifecycleState(session, isRuntimeAlive);
+    const nextState = determineNextLifecycleState(session, inspectRuntimeLiveness);
 
     if (!nextState) {
       continue;
@@ -303,7 +304,7 @@ function formatPayloadValue(value: EventPayloadValue | undefined): string {
 
 function determineNextLifecycleState(
   session: SessionRecord,
-  isRuntimeAlive: (pid: number) => boolean
+  inspectRuntimeLiveness: (pid: number) => ProcessLiveness
 ): {
   state: SessionState;
   runtimePid: number | null;
@@ -322,8 +323,10 @@ function determineNextLifecycleState(
     };
   }
 
+  const runtimeLiveness = inspectRuntimeLiveness(session.runtimePid);
+
   if (session.state === "starting") {
-    if (isRuntimeAlive(session.runtimePid)) {
+    if (runtimeLiveness.alive) {
       return {
         state: "running",
         runtimePid: session.runtimePid,
@@ -331,7 +334,7 @@ function determineNextLifecycleState(
         payload: {
           previousState: session.state,
           runtimePid: session.runtimePid,
-          signal: "pid_alive"
+          signal: runtimeLiveness.reason
         }
       };
     }
@@ -343,12 +346,12 @@ function determineNextLifecycleState(
       payload: {
         previousState: session.state,
         runtimePid: session.runtimePid,
-        reason: "pid_not_alive"
+        reason: runtimeLiveness.reason
       }
     };
   }
 
-  if (isRuntimeAlive(session.runtimePid)) {
+  if (runtimeLiveness.alive) {
     return undefined;
   }
 
@@ -359,8 +362,26 @@ function determineNextLifecycleState(
     payload: {
       previousState: session.state,
       runtimePid: session.runtimePid,
-      reason: "pid_not_alive"
+      reason: runtimeLiveness.reason
     }
+  };
+}
+
+function createRuntimeLivenessInspector(isRuntimeAlive: (pid: number) => boolean): (pid: number) => ProcessLiveness {
+  if (isRuntimeAlive === isProcessAlive) {
+    return inspectProcessLiveness;
+  }
+
+  return (pid: number) => {
+    return isRuntimeAlive(pid)
+      ? {
+          alive: true,
+          reason: "pid_alive"
+        }
+      : {
+          alive: false,
+          reason: "pid_not_alive"
+        };
   };
 }
 
