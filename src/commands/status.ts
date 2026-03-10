@@ -54,6 +54,10 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     return;
   }
 
+  const latestEventsBeforeReconcile = await listLatestEventsBySession(
+    config.project.root,
+    initialSessions.map((session) => session.id)
+  );
   const reconciledEventsBySession = await reconcileSessionLifecycles(
     config.project.root,
     initialSessions,
@@ -89,7 +93,11 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
         ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
         : "?";
       const cleanup = cleanupReadiness.get(session.id) ?? "?";
-      const recentEvent = reconciledEventsBySession.get(session.id) ?? latestEventsBySession.get(session.id);
+      const recentEvent = selectRecentEventForStatus({
+        latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
+        latestStoredEvent: latestEventsBySession.get(session.id),
+        reconciledEvent: reconciledEventsBySession.get(session.id)
+      });
 
       process.stdout.write(`Base: ${formatOptionalField(session.baseBranch)}\n`);
       process.stdout.write(`Runtime pid: ${formatOptionalField(session.runtimePid)}\n`);
@@ -109,7 +117,11 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       : "?";
     const cleanup = cleanupReadiness.get(session.id) ?? "?";
     const recentEvent = formatRecentEventSummary(
-      reconciledEventsBySession.get(session.id) ?? latestEventsBySession.get(session.id)
+      selectRecentEventForStatus({
+        latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
+        latestStoredEvent: latestEventsBySession.get(session.id),
+        reconciledEvent: reconciledEventsBySession.get(session.id)
+      })
     );
     process.stdout.write(
       `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${cleanup}\t${recentEvent}\n`
@@ -384,6 +396,33 @@ function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function selectRecentEventForStatus(options: {
+  latestEventBeforeReconcile?: EventRecord;
+  latestStoredEvent?: EventRecord;
+  reconciledEvent?: EventRecord;
+}): EventRecord | undefined {
+  if (!options.reconciledEvent) {
+    return options.latestStoredEvent ?? options.latestEventBeforeReconcile;
+  }
+
+  if (shouldPreservePreReconcileRecentEvent(options.latestEventBeforeReconcile, options.reconciledEvent)) {
+    return options.latestEventBeforeReconcile;
+  }
+
+  return options.reconciledEvent;
+}
+
+function shouldPreservePreReconcileRecentEvent(
+  latestEventBeforeReconcile: EventRecord | undefined,
+  reconciledEvent: EventRecord
+): boolean {
+  if (!latestEventBeforeReconcile || latestEventBeforeReconcile.eventType !== "stop.failed") {
+    return false;
+  }
+
+  return RECONCILED_RUNTIME_EVENT_TYPES.has(reconciledEvent.eventType);
+}
+
 function selectRecentEventDetailKeys(event: EventRecord): string[] {
   if (event.eventType === "merge.failed") {
     return selectMergeFailedDetailKeys(event);
@@ -460,3 +499,5 @@ const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "stop.completed": ["outcome", "cleanupPerformed", "cleanupReason", "worktreePath", "cleanupError"],
   "stop.failed": ["reason", "runtimePid", "errorMessage"]
 };
+
+const RECONCILED_RUNTIME_EVENT_TYPES = new Set(["runtime.ready", "runtime.exited", "runtime.exited_early"]);

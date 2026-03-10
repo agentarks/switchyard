@@ -54,7 +54,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - merge and merged-cleanup guards that now refuse to silently retarget preserved work when the configured canonical branch changes after launch
 - first operator-facing cleanup guard that only removes preserved merge artifacts automatically when the branch is confirmed merged, and otherwise requires explicit `--abandon`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
-- status output that now also surfaces durable `stop.failed` context such as shutdown-failure reason, runtime pid, and error text in recent-event summaries
+- status output that now also surfaces durable `stop.failed` context such as shutdown-failure reason, runtime pid, and error text in recent-event summaries, including on the same render that records a follow-up runtime reconciliation event
 - status output that now also surfaces each session id in the main overview so later commands can target an exact preserved session without guesswork
 - status output that now also surfaces unread mail counts so operators can spot pending mailbox work without checking each session individually
 - status output that now also surfaces one cleanup-readiness label per session so operators can see whether plain `--cleanup` is currently safe, already unnecessary, or requires explicit `--abandon`
@@ -121,6 +121,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`, with active sessions showing the post-stop outcome as `stop-then:*`
   - distinguishes partial preserved-artifact loss in that cleanup-readiness label when the branch still exists but the preserved worktree path is already missing
   - includes one concise recent-event summary per session when event history exists, including `readyAfterMs` for fresh `sling.completed` events, shutdown-failure details from `stop.failed`, missing-worktree cleanup details from `stop.completed`, and higher-value merge-failure details such as drift targets, preserved-worktree paths, and git errors when those fields exist
+  - when that same status run also records a runtime reconciliation event, keeps a latest pre-existing `stop.failed` visible in the current recent summary instead of immediately replacing it with the synthetic runtime event
   - records runtime reconciliation events when it changes session state
 - `sy stop <session>`
   - resolves one session by id or normalized agent name
