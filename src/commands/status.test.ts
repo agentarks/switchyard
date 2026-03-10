@@ -705,7 +705,109 @@ test("statusCommand includes merge preflight failure details in the recent event
 
   assert.match(
     writes.join(""),
-    /stopped\tsession-merge-preflight\tagent-merge-preflight\tagents\/agent-merge-preflight\t\.switchyard\/worktrees\/agent-merge-preflight\t2026-03-08T11:07:00.000Z\t0\t[^\t]+\t2026-03-08T11:08:00.000Z merge\.failed reason=repo_root_dirty, target=repo_root, firstDirtyEntry=" M tracked\.txt", bra\.\.\./
+    /stopped\tsession-merge-preflight\tagent-merge-preflight\tagents\/agent-merge-preflight\t\.switchyard\/worktrees\/agent-merge-preflight\t2026-03-08T11:07:00.000Z\t0\t[^\t]+\t2026-03-08T11:08:00.000Z merge\.failed reason=repo_root_dirty, target=repo_root, firstDirtyEntry=" M tracked\.txt", dir\.\.\./
+  );
+});
+
+test("statusCommand includes canonical branch drift details in the selected-session recent summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-merge-drift",
+    agentName: "agent-merge-drift",
+    branch: "agents/agent-merge-drift",
+    baseBranch: "main",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-merge-drift"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T11:09:00.000Z",
+    updatedAt: "2026-03-08T11:09:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-merge-drift",
+    agentName: "agent-merge-drift",
+    eventType: "merge.failed",
+    payload: {
+      branch: "agents/agent-merge-drift",
+      reason: "canonical_branch_drift",
+      canonicalBranch: "main",
+      configuredCanonicalBranch: "release"
+    },
+    createdAt: "2026-03-08T11:10:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-merge-drift",
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /Recent: 2026-03-08T11:10:00.000Z merge\.failed reason=canonical_branch_drift, configuredCanonicalBranch=release, canonicalBranch=main, branch=agents\/agent-merge-drift/
+  );
+});
+
+test("statusCommand includes preserved worktree path details in the recent event summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-worktree-missing",
+    agentName: "agent-worktree-missing",
+    branch: "agents/agent-worktree-missing",
+    baseBranch: "main",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-worktree-missing"),
+    state: "failed",
+    runtimePid: null,
+    createdAt: "2026-03-08T11:11:00.000Z",
+    updatedAt: "2026-03-08T11:11:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-worktree-missing",
+    agentName: "agent-worktree-missing",
+    eventType: "merge.failed",
+    payload: {
+      branch: "agents/agent-worktree-missing",
+      reason: "worktree_missing",
+      target: "preserved_worktree",
+      worktreePath: ".switchyard/worktrees/agent-worktree-missing"
+    },
+    createdAt: "2026-03-08T11:12:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-worktree-missing",
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /Recent: 2026-03-08T11:12:00.000Z merge\.failed reason=worktree_missing, target=preserved_worktree, worktreePath=\.switchyard\/worktrees\/agent-worktree-missing, branch=agents\/agent-worktree-missing/
   );
 });
 

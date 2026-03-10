@@ -269,7 +269,7 @@ function formatRecentEventSummary(
 }
 
 function formatRecentEventDetails(event: EventRecord): string {
-  const selectedKeys = RECENT_EVENT_DETAIL_KEYS[event.eventType] ?? [];
+  const selectedKeys = selectRecentEventDetailKeys(event);
 
   if (selectedKeys.length === 0) {
     return "";
@@ -384,12 +384,72 @@ function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function selectRecentEventDetailKeys(event: EventRecord): string[] {
+  if (event.eventType === "merge.failed") {
+    return selectMergeFailedDetailKeys(event);
+  }
+
+  return RECENT_EVENT_DETAIL_KEYS[event.eventType] ?? [];
+}
+
+function selectMergeFailedDetailKeys(event: EventRecord): string[] {
+  const reason = typeof event.payload.reason === "string" ? event.payload.reason : "";
+  const orderedKeys = getMergeFailedDetailKeyOrder(reason);
+
+  return orderedKeys.filter((key) => key in event.payload);
+}
+
+function getMergeFailedDetailKeyOrder(reason: string): string[] {
+  switch (reason) {
+    case "canonical_branch_drift":
+      return ["reason", "configuredCanonicalBranch", "canonicalBranch", "branch"];
+    case "repo_root_dirty":
+      return ["reason", "target", "firstDirtyEntry", "dirtyCount", "branch"];
+    case "worktree_dirty":
+      return ["reason", "target", "worktreePath", "firstDirtyEntry", "dirtyCount", "branch"];
+    case "merge_in_progress":
+      return ["reason", "target", "firstConflictPath", "conflictCount", "branch"];
+    case "merge_conflict":
+      return ["reason", "conflictCount", "firstConflictPath", "branch", "canonicalBranch"];
+    case "worktree_missing":
+    case "worktree_root_mismatch":
+    case "worktree_unusable":
+      return ["reason", "target", "worktreePath", "branch"];
+    case "canonical_branch_switch_failed":
+    case "git_error":
+      return ["reason", "canonicalBranch", "errorMessage", "branch"];
+    case "session_active":
+      return ["reason", "state", "branch"];
+    case "branch_missing":
+    case "branch_matches_canonical":
+      return ["reason", "canonicalBranch", "branch"];
+    case "missing_branch_metadata":
+    case "missing_base_branch_metadata":
+    case "missing_canonical_branch_config":
+      return ["reason", "branch"];
+    default:
+      return [
+        "reason",
+        "configuredCanonicalBranch",
+        "canonicalBranch",
+        "target",
+        "worktreePath",
+        "state",
+        "firstDirtyEntry",
+        "dirtyCount",
+        "firstConflictPath",
+        "conflictCount",
+        "errorMessage",
+        "branch"
+      ];
+  }
+}
+
 const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "mail.checked": ["unreadCount"],
   "mail.listed": ["view", "messageCount", "unreadCount"],
   "mail.sent": ["sender", "bodyLength"],
   "merge.completed": ["canonicalBranch", "branch"],
-  "merge.failed": ["reason", "target", "state", "firstDirtyEntry", "conflictCount", "firstConflictPath", "branch"],
   "merge.skipped": ["reason", "branch"],
   "runtime.exited": ["reason", "runtimePid"],
   "runtime.exited_early": ["reason", "runtimePid"],
