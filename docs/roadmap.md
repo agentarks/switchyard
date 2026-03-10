@@ -38,8 +38,8 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 No new slice is automatically next.
 
 What to do instead:
-- reassess whether the current loop needs another concrete operator-visible slice at all
-- if one is needed, name it before coding and keep it grounded in the current repo-local loop
+- hold the current loop steady until a reproduced operator-visible gap justifies another named slice
+- if a new slice is needed, name it before coding and keep it grounded in the current repo-local loop
 - do not default back to generic lifecycle hardening
 
 ## Order After That

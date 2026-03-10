@@ -171,8 +171,9 @@ These are the current project decisions and should be treated as the default unt
 
 ## Open Decisions
 
-These still need to be resolved or confirmed:
-- Whether `sy status <session> --task` closes the current task-handoff inspection gap, or whether any further operator inspection is justified by real use
+No blocking product decision is open right now for the current loop.
+
+Any new operator inspection or lifecycle slice should be justified by a reproduced workflow gap before it is named.
 
 ## Suggested Order For Our Next Sessions
 

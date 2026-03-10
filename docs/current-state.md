@@ -215,11 +215,11 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## Recommended Next Task
 
-Do not default to another generic hardening pass:
+No new default slice is named right now:
 - treat the exact launch-task inspection slice as complete unless a new reproduced workflow proves it is still insufficient
 - treat the exact mail-inspection session-id visibility slice as complete unless a new reproduced workflow proves it is still insufficient
 - treat the empty selected `sy events` session-id visibility slice as complete unless a new reproduced workflow proves it is still insufficient
-- first reassess whether the loop needs another concrete slice at all before naming one
+- do not start another lifecycle or inspection pass until a concrete operator-visible gap is reproduced and named first
 - only pick a new slice if it changes operator behavior or fixes a reproduced operator problem
 - keep generic lifecycle hardening deferred unless a real workflow now proves it necessary
 

@@ -63,13 +63,14 @@ Completed enough to count as minimally real:
 - opt-in full launch-task inspection in exact-session `sy status --task`
 - end-to-end coverage around `sy init`
 
-Not complete yet:
-- no new named slice is locked yet beyond the recent exact session-id visibility cleanup across `stop`, mail inspection, and empty selected `sy events` output
+Current planning state:
+- no new named slice is justified right now beyond the recent exact session-id visibility cleanup across `stop`, mail inspection, and empty selected `sy events` output
+- new lifecycle or inspection work should start only after a reproduced operator-visible gap is named
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- reassess whether another concrete operator-visible slice is needed at all
+- preserve the current loop and only name a new concrete operator-visible slice when a reproduced workflow proves one is needed
 - improve operator inspection only when a reproduced workflow shows the current task-handoff visibility, including `sy status <session> --task`, is still insufficient
 - harden lifecycle behavior only when a reproduced failure blocks the current loop
 - add tests that reduce risk in the core operator loop
