@@ -127,6 +127,31 @@ test("eventsCommand filters events for one resolved session", async () => {
   }
 });
 
+test("eventsCommand prints the resolved session id when a selected session has no events yet", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createSession(repoDir, {
+      id: "session-empty-events",
+      agentName: "agent-empty-events",
+      branch: "agents/agent-empty-events",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-empty-events"),
+      state: "running",
+      runtimePid: 1212,
+      createdAt: "2026-03-08T09:20:00.000Z",
+      updatedAt: "2026-03-08T09:20:00.000Z"
+    });
+
+    const output = await captureStdout(async () => {
+      await eventsCommand({ startDir: repoDir, selector: "Agent Empty Events" });
+    });
+
+    assert.equal(output, "No events recorded yet for agent-empty-events.\nSession: session-empty-events\n");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("eventsCommand surfaces task handoff details from sling launch events", async () => {
   const repoDir = await createInitializedRepo();
   const task = "Review the current operator loop and call out the next concrete gap.";

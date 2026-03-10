@@ -115,6 +115,7 @@ Current contract:
 - command rejects orphaned agent-name selectors that would combine events from multiple session ids and requires an exact session id instead
 - command rejects non-positive or non-integer `--limit` values with an explicit events-style error
 - when no events exist globally, print `No Switchyard events recorded yet.`
+- when a selected tracked session has no events yet, print the resolved session id in that empty-state output
 - when events exist, print a concise tab-separated table ordered chronologically across the recent window
 
 Future target:

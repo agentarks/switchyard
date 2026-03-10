@@ -43,6 +43,7 @@ Completed enough to count as minimally real:
 - M7 first event inspection path
 - operator-controlled recent-event window selection in `sy events`
 - orphaned agent-name event recovery in `sy events` when tracked session rows are already gone
+- session-id visibility in empty selected `sy events` output
 - first merge and reintegration CLI path
 - merge-target metadata retention for canonical-branch drift
 - dirty-entry diagnostics for merge preflight failures
@@ -63,7 +64,7 @@ Completed enough to count as minimally real:
 - end-to-end coverage around `sy init`
 
 Not complete yet:
-- no new named slice is locked yet beyond exact mail-inspection session-id visibility landing
+- no new named slice is locked yet beyond the recent exact session-id visibility cleanup across `stop`, mail inspection, and empty selected `sy events` output
 
 ## Current In-Scope Work
 
