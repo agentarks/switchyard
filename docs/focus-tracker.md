@@ -60,13 +60,13 @@ Completed enough to count as minimally real:
 - first readiness and early-failure handling as hardening work ahead of M8
 - Unix zombie-runtime detection in pid liveness checks so stale sessions no longer look healthy
 - detached `sy sling` launch compatibility hardening for TTY-requiring Codex builds on supported Unix platforms
-- first-class `sy sling --task` input with durable task specs under `.switchyard/specs/`
+- first-class `sy sling` task input via `--task` or `--task-file`, with durable task specs under `.switchyard/specs/`
 - launch-task visibility in `sy sling`, `sy events`, and exact-session `sy status`
 - opt-in full launch-task inspection in exact-session `sy status --task`
 - end-to-end coverage around `sy init`
 
 Current planning state:
-- no new named slice is justified right now beyond the recent exact mail-body handling and session-id visibility cleanup across `stop`, mail inspection, and empty selected `sy events` output
+- no new named slice is justified right now beyond the recent file-backed `sy sling --task-file` handoff plus exact mail-body handling and session-id visibility cleanup across `stop`, mail inspection, and empty selected `sy events` output
 - new lifecycle or inspection work should start only after a reproduced operator-visible gap is named
 
 ## Current In-Scope Work

@@ -174,6 +174,33 @@ test("sy mail list --unread preserves unread state through the real CLI entrypoi
   }
 });
 
+test("sy sling reports task-file read failures through the Switchyard error contract", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-sling-test-");
+
+  try {
+    await assert.rejects(
+      () => execFileAsync(
+        process.execPath,
+        [tsxCliPath, cliEntryPath, "sling", "agent-cli-task-file", "--task-file", "missing-task.md"],
+        { cwd: repoDir }
+      ),
+      (error: unknown) => {
+        assert.ok(error && typeof error === "object" && "stdout" in error && "stderr" in error);
+        const cliError = error as { stdout: string; stderr: string; code: number };
+        assert.equal(cliError.code, 1);
+        assert.equal(cliError.stdout, "");
+        assert.match(
+          cliError.stderr,
+          /SLING_ERROR: Failed to read task file 'missing-task\.md': ENOENT: no such file or directory/
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createInitializedRepo(prefix: string): Promise<string> {
   const repoDir = await createTempGitRepo(prefix);
   await bootstrapSwitchyardLayout(repoDir);

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { access, mkdir, readFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
@@ -119,7 +119,91 @@ test("slingCommand rejects launches without an explicit task", async () => {
         agentName: "Agent Missing Task",
         startDir: repoDir
       }),
-      /Missing task\. Use '--task <instruction>' to hand off one explicit task\./
+      /Missing task\. Use exactly one of '--task <instruction>' or '--task-file <path>' to hand off one explicit task\./
+    );
+
+    const sessions = await listSessions(repoDir);
+    assert.deepEqual(sessions, []);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("slingCommand reads a multiline task from a file relative to the invocation directory", async () => {
+  const repoDir = await createInitializedRepo();
+  const nestedDir = join(repoDir, "apps", "api");
+  const taskDir = join(nestedDir, "tasks");
+  const taskPath = join(taskDir, "launch.md");
+  const task = "Inspect the preserved worktree.\n\nCall out cleanup blockers before merge.\n";
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await mkdir(taskDir, { recursive: true });
+  await writeFile(taskPath, task, "utf8");
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await slingCommand({
+      agentName: "Agent Task File",
+      taskFile: "tasks/launch.md",
+      startDir: nestedDir,
+      spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
+        assert.deepEqual(runtimeArgs, [task]);
+        const runtime = {
+          pid: 5252,
+          command: {
+            command: "codex",
+            args: runtimeArgs
+          }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
+          readyAfterMs: 500
+        };
+      }
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+
+  try {
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions.length, 1);
+    const session = sessions[0];
+    const specPath = join(repoDir, ".switchyard", "specs", `agent-task-file-${session?.id}.md`);
+    const specDocument = await readFile(specPath, "utf8");
+    const output = writes.join("");
+
+    assert.match(output, /Spawned agent-task-file/);
+    assert.match(output, /Task: Inspect the preserved worktree\. Call out cleanup blockers before merge\./);
+    assert.match(specDocument, /Inspect the preserved worktree\.\n\nCall out cleanup blockers before merge\.\n/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("slingCommand rejects conflicting inline and file-based task inputs", async () => {
+  const repoDir = await createInitializedRepo();
+  const taskPath = join(repoDir, "launch-task.md");
+
+  await writeFile(taskPath, "Inspect the current session.\n", "utf8");
+
+  try {
+    await assert.rejects(
+      () => slingCommand({
+        agentName: "Agent Duplicate Task",
+        task: "Inline task.",
+        taskFile: "launch-task.md",
+        startDir: repoDir
+      }),
+      /Choose exactly one task source: use either '--task <instruction>' or '--task-file <path>'\./
     );
 
     const sessions = await listSessions(repoDir);

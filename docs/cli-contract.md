@@ -43,11 +43,11 @@ Failure rules:
 ## `sy sling [args...]`
 
 Current contract:
-- command requires one `<agent>` argument, one explicit `--task <instruction>`, and may accept additional positional runtime args
+- command requires one `<agent>` argument, exactly one explicit task source via `--task <instruction>` or `--task-file <path>`, and may accept additional positional runtime args
 - command loads config from the canonical repo root
 - command creates one deterministic branch and worktree under `.switchyard/worktrees/`
 - command writes one durable task handoff file under `.switchyard/specs/`
-- command passes the explicit task text to Codex as the initial prompt
+- command passes the explicit task text to Codex as the initial prompt, whether it came from the CLI flag or a task file
 - command starts one detached Codex process from that worktree
 - on supported Unix platforms, detached launch uses the system `script` utility so Codex startup still gets a pseudo-terminal
 - command persists one `starting` session record in `sessions.db`, including the original canonical branch as session `baseBranch`

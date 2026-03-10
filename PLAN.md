@@ -164,7 +164,7 @@ These are the current project decisions and should be treated as the default unt
 - Codex is the first-class runtime for the early project
 - `node:sqlite` is accepted for the first persistence slices behind narrow store modules
 - pid-backed detached runtime control is sufficient for v0; tmux is deferred until operator workflows require attach or transcript handling
-- `sy sling` takes one explicit `--task` instruction, writes `.switchyard/specs/<agent>-<session>.md`, and forwards that task to Codex as the initial prompt
+- `sy sling` takes one explicit task instruction via `--task` or `--task-file`, writes `.switchyard/specs/<agent>-<session>.md`, and forwards that task to Codex as the initial prompt
 - session records retain the original canonical branch as `baseBranch` so merge and merged-cleanup decisions do not silently retarget when config drifts later
 - the first merge workflow is manual-first: stop without cleanup, review the preserved branch, use the narrow `sy merge` path or explicit git to merge into the canonical branch, then clean up
 - broader runtime abstraction is deferred until the core lifecycle is real
