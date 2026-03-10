@@ -13,6 +13,16 @@ import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
 const execFileAsync = promisify(execFile);
 const MAX_DIRTY_ENTRY_DETAILS = 5;
 const MAX_CONFLICT_PATH_DETAILS = 5;
+type MergeFailurePayload = Record<string, string | number | boolean>;
+
+class RecordedMergeError extends MergeError {
+  readonly payload: MergeFailurePayload;
+
+  constructor(message: string, payload: MergeFailurePayload) {
+    super(message);
+    this.payload = payload;
+  }
+}
 
 interface MergeCommandOptions {
   selector: string;
@@ -38,53 +48,104 @@ export async function mergeCommand(options: MergeCommandOptions): Promise<void> 
     throw new MergeError(`No session found for '${options.selector}'.`);
   }
 
-  if (isActiveSessionState(session.state)) {
-    throw new MergeError(`Session '${options.selector}' is still ${session.state}. Stop it before merging.`);
-  }
+  try {
+    await mergeResolvedSession(config.project.root, config.project.canonicalBranch, session, recordEvent, options.selector);
+  } catch (error) {
+    if (error instanceof RecordedMergeError) {
+      await recordEventWithFallback(recordEvent, config.project.root, {
+        sessionId: session.id,
+        agentName: session.agentName,
+        eventType: "merge.failed",
+        payload: error.payload
+      });
+    }
 
+    throw error;
+  }
+}
+
+async function mergeResolvedSession(
+  projectRoot: string,
+  configuredCanonicalBranch: string,
+  session: SessionRecord,
+  recordEvent: EventRecorder,
+  selector: string
+): Promise<void> {
   const branch = session.branch.trim();
-  const configuredCanonicalBranch = config.project.canonicalBranch.trim();
+  const normalizedCanonicalBranch = configuredCanonicalBranch.trim();
   const sessionBaseBranch = session.baseBranch?.trim() ?? "";
 
-  if (branch.length === 0) {
-    throw new MergeError(`Session ${session.id} has no preserved branch metadata.`);
-  }
-
-  if (configuredCanonicalBranch.length === 0) {
-    throw new MergeError("Configured canonical branch is empty.");
-  }
-
-  if (sessionBaseBranch.length === 0) {
-    throw new MergeError(
-      `Session ${session.id} has no stored base branch metadata. Switchyard cannot safely choose a merge target for this legacy session; review it and merge manually with git.`
+  if (isActiveSessionState(session.state)) {
+    throw recordedMergeError(
+      `Session '${selector}' is still ${session.state}. Stop it before merging.`,
+      withBranchPayload(session, {
+        reason: "session_active",
+        state: session.state
+      })
     );
   }
 
-  if (sessionBaseBranch.length > 0 && sessionBaseBranch !== configuredCanonicalBranch) {
-    throw new MergeError(
-      `Session ${session.id} was created against '${sessionBaseBranch}', but Switchyard is now configured to merge into '${configuredCanonicalBranch}'. Review the session and either restore that config target or merge manually with git.`
+  if (branch.length === 0) {
+    throw recordedMergeError(
+      `Session ${session.id} has no preserved branch metadata.`,
+      { reason: "missing_branch_metadata" }
+    );
+  }
+
+  if (normalizedCanonicalBranch.length === 0) {
+    throw recordedMergeError(
+      "Configured canonical branch is empty.",
+      withBranchPayload(session, {
+        reason: "missing_canonical_branch_config"
+      })
+    );
+  }
+
+  if (sessionBaseBranch.length === 0) {
+    throw recordedMergeError(
+      `Session ${session.id} has no stored base branch metadata. Switchyard cannot safely choose a merge target for this legacy session; review it and merge manually with git.`,
+      withBranchPayload(session, {
+        reason: "missing_base_branch_metadata"
+      })
+    );
+  }
+
+  if (sessionBaseBranch !== normalizedCanonicalBranch) {
+    throw recordedMergeError(
+      `Session ${session.id} was created against '${sessionBaseBranch}', but Switchyard is now configured to merge into '${normalizedCanonicalBranch}'. Review the session and either restore that config target or merge manually with git.`,
+      withBranchPayload(session, {
+        reason: "canonical_branch_drift",
+        canonicalBranch: sessionBaseBranch,
+        configuredCanonicalBranch: normalizedCanonicalBranch
+      })
     );
   }
 
   const canonicalBranch = sessionBaseBranch;
 
   if (branch === canonicalBranch) {
-    throw new MergeError(`Session ${session.id} points at '${branch}', which matches the canonical branch.`);
+    throw recordedMergeError(
+      `Session ${session.id} points at '${branch}', which matches the canonical branch.`,
+      withBranchPayload(session, {
+        reason: "branch_matches_canonical",
+        canonicalBranch
+      })
+    );
   }
 
-  await ensureLocalBranchExists(config.project.root, branch);
-  await ensurePreservedWorktreeIsClean(config.project.root, session);
-  await ensureNoMergeInProgress(config.project.root);
-  await ensureProjectRootIsClean(config.project.root);
+  await ensureLocalBranchExists(projectRoot, session, branch, canonicalBranch);
+  await ensurePreservedWorktreeIsClean(projectRoot, session);
+  await ensureNoMergeInProgress(projectRoot, session);
+  await ensureProjectRootIsClean(projectRoot, session);
 
-  const currentBranch = await getCurrentBranch(config.project.root);
+  const currentBranch = await getCurrentBranch(projectRoot);
 
   if (currentBranch !== canonicalBranch) {
-    await switchToCanonicalBranch(config.project.root, canonicalBranch);
+    await switchToCanonicalBranch(projectRoot, session, canonicalBranch);
   }
 
-  if (await isBranchAlreadyMerged(config.project.root, branch)) {
-    await recordEventWithFallback(recordEvent, config.project.root, {
+  if (await isBranchAlreadyMerged(projectRoot, branch)) {
+    await recordEventWithFallback(recordEvent, projectRoot, {
       sessionId: session.id,
       agentName: session.agentName,
       eventType: "merge.skipped",
@@ -103,24 +164,29 @@ export async function mergeCommand(options: MergeCommandOptions): Promise<void> 
   }
 
   try {
-    await runGit(config.project.root, ["merge", "--no-ff", branch]);
+    await runGit(projectRoot, ["merge", "--no-ff", branch]);
   } catch (error) {
-    const failure = await inspectMergeFailure(config.project.root);
-    await recordEventWithFallback(recordEvent, config.project.root, {
-      sessionId: session.id,
-      agentName: session.agentName,
-      eventType: "merge.failed",
-      payload: buildMergeFailurePayload(branch, canonicalBranch, failure)
-    });
+    const failure = await inspectMergeFailure(projectRoot);
 
     if (failure.reason === "merge_conflict") {
-      throw new MergeError(formatMergeConflictMessage(canonicalBranch, branch, failure.conflictPaths));
+      throw recordedMergeError(
+        formatMergeConflictMessage(canonicalBranch, branch, failure.conflictPaths),
+        buildMergeFailurePayload(branch, canonicalBranch, failure)
+      );
     }
 
-    throw new MergeError(`Failed to merge '${branch}' into '${canonicalBranch}': ${formatGitError(error)}`);
+    throw recordedMergeError(
+      `Failed to merge '${branch}' into '${canonicalBranch}': ${formatGitError(error)}`,
+      {
+        branch,
+        canonicalBranch,
+        reason: "git_error",
+        errorMessage: formatGitError(error)
+      }
+    );
   }
 
-  await recordEventWithFallback(recordEvent, config.project.root, {
+  await recordEventWithFallback(recordEvent, projectRoot, {
     sessionId: session.id,
     agentName: session.agentName,
     eventType: "merge.completed",
@@ -142,18 +208,24 @@ async function resolveSession(projectRoot: string, selector: string): Promise<Se
   });
 }
 
-async function ensureProjectRootIsClean(projectRoot: string): Promise<void> {
+async function ensureProjectRootIsClean(projectRoot: string, session: SessionRecord): Promise<void> {
   const { stdout } = await runGit(projectRoot, ["status", "--porcelain", "--untracked-files=all"]);
   const dirtyEntries = parseDirtyEntries(stdout);
 
   if (dirtyEntries.length > 0) {
-    throw new MergeError(
-      `Canonical branch worktree is not clean. Resolve these repo-root entries before merging: ${formatDirtyEntrySummary(dirtyEntries)}.`
+    throw recordedMergeError(
+      `Canonical branch worktree is not clean. Resolve these repo-root entries before merging: ${formatDirtyEntrySummary(dirtyEntries)}.`,
+      withBranchPayload(session, {
+        reason: "repo_root_dirty",
+        target: "repo_root",
+        dirtyCount: dirtyEntries.length,
+        ...(dirtyEntries[0] ? { firstDirtyEntry: dirtyEntries[0] } : {})
+      })
     );
   }
 }
 
-async function ensureNoMergeInProgress(projectRoot: string): Promise<void> {
+async function ensureNoMergeInProgress(projectRoot: string, session: SessionRecord): Promise<void> {
   try {
     await runGit(projectRoot, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD"]);
   } catch {
@@ -161,13 +233,26 @@ async function ensureNoMergeInProgress(projectRoot: string): Promise<void> {
   }
 
   const conflictPaths = await listMergeConflictPaths(projectRoot);
-  throw new MergeError(formatMergeAlreadyInProgressMessage(conflictPaths));
+  throw recordedMergeError(
+    formatMergeAlreadyInProgressMessage(conflictPaths),
+    withBranchPayload(session, {
+      reason: "merge_in_progress",
+      target: "repo_root",
+      conflictCount: conflictPaths.length,
+      ...(conflictPaths[0] ? { firstConflictPath: conflictPaths[0] } : {})
+    })
+  );
 }
 
 async function ensurePreservedWorktreeIsClean(projectRoot: string, session: SessionRecord): Promise<void> {
   if (!(await pathExists(session.worktreePath))) {
-    throw new MergeError(
-      `Preserved worktree for ${session.agentName} is missing (${formatRelativePath(projectRoot, session.worktreePath)}).`
+    throw recordedMergeError(
+      `Preserved worktree for ${session.agentName} is missing (${formatRelativePath(projectRoot, session.worktreePath)}).`,
+      withBranchPayload(session, {
+        reason: "worktree_missing",
+        target: "preserved_worktree",
+        worktreePath: formatRelativePath(projectRoot, session.worktreePath)
+      })
     );
   }
 
@@ -176,8 +261,13 @@ async function ensurePreservedWorktreeIsClean(projectRoot: string, session: Sess
   const resolvedWorktreeRoot = await resolveExistingPath(worktreeRoot);
 
   if (resolvedExpectedPath !== resolvedWorktreeRoot) {
-    throw new MergeError(
-      `Preserved worktree for ${session.agentName} is not a git worktree rooted at ${formatRelativePath(projectRoot, session.worktreePath)}.`
+    throw recordedMergeError(
+      `Preserved worktree for ${session.agentName} is not a git worktree rooted at ${formatRelativePath(projectRoot, session.worktreePath)}.`,
+      withBranchPayload(session, {
+        reason: "worktree_root_mismatch",
+        target: "preserved_worktree",
+        worktreePath: formatRelativePath(projectRoot, session.worktreePath)
+      })
     );
   }
 
@@ -185,8 +275,15 @@ async function ensurePreservedWorktreeIsClean(projectRoot: string, session: Sess
   const dirtyEntries = parseDirtyEntries(stdout);
 
   if (dirtyEntries.length > 0) {
-    throw new MergeError(
-      `Preserved worktree for ${session.agentName} is not clean (${formatRelativePath(projectRoot, session.worktreePath)}). Resolve these entries there before merging: ${formatDirtyEntrySummary(dirtyEntries)}.`
+    throw recordedMergeError(
+      `Preserved worktree for ${session.agentName} is not clean (${formatRelativePath(projectRoot, session.worktreePath)}). Resolve these entries there before merging: ${formatDirtyEntrySummary(dirtyEntries)}.`,
+      withBranchPayload(session, {
+        reason: "worktree_dirty",
+        target: "preserved_worktree",
+        dirtyCount: dirtyEntries.length,
+        worktreePath: formatRelativePath(projectRoot, session.worktreePath),
+        ...(dirtyEntries[0] ? { firstDirtyEntry: dirtyEntries[0] } : {})
+      })
     );
   }
 }
@@ -196,17 +293,33 @@ async function getGitWorktreeRoot(projectRoot: string, session: SessionRecord): 
     const { stdout } = await runGit(session.worktreePath, ["rev-parse", "--show-toplevel"]);
     return stdout.trim();
   } catch {
-    throw new MergeError(
-      `Preserved worktree for ${session.agentName} is not a usable git worktree (${formatRelativePath(projectRoot, session.worktreePath)}).`
+    throw recordedMergeError(
+      `Preserved worktree for ${session.agentName} is not a usable git worktree (${formatRelativePath(projectRoot, session.worktreePath)}).`,
+      withBranchPayload(session, {
+        reason: "worktree_unusable",
+        target: "preserved_worktree",
+        worktreePath: formatRelativePath(projectRoot, session.worktreePath)
+      })
     );
   }
 }
 
-async function ensureLocalBranchExists(projectRoot: string, branch: string): Promise<void> {
+async function ensureLocalBranchExists(
+  projectRoot: string,
+  session: SessionRecord,
+  branch: string,
+  canonicalBranch: string
+): Promise<void> {
   try {
     await runGit(projectRoot, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
   } catch {
-    throw new MergeError(`Preserved branch '${branch}' is missing. Cleanup may already have removed it.`);
+    throw recordedMergeError(
+      `Preserved branch '${branch}' is missing. Cleanup may already have removed it.`,
+      withBranchPayload(session, {
+        reason: "branch_missing",
+        canonicalBranch
+      })
+    );
   }
 }
 
@@ -215,11 +328,22 @@ async function getCurrentBranch(projectRoot: string): Promise<string> {
   return stdout.trim();
 }
 
-async function switchToCanonicalBranch(projectRoot: string, canonicalBranch: string): Promise<void> {
+async function switchToCanonicalBranch(
+  projectRoot: string,
+  session: SessionRecord,
+  canonicalBranch: string
+): Promise<void> {
   try {
     await runGit(projectRoot, ["switch", canonicalBranch]);
   } catch (error) {
-    throw new MergeError(`Failed to switch the repo root to '${canonicalBranch}': ${formatGitError(error)}`);
+    throw recordedMergeError(
+      `Failed to switch the repo root to '${canonicalBranch}': ${formatGitError(error)}`,
+      withBranchPayload(session, {
+        reason: "canonical_branch_switch_failed",
+        canonicalBranch,
+        errorMessage: formatGitError(error)
+      })
+    );
   }
 }
 
@@ -288,8 +412,8 @@ function buildMergeFailurePayload(
   branch: string,
   canonicalBranch: string,
   failure: { reason: string; conflictPaths: string[] }
-): Record<string, string | number> {
-  const payload: Record<string, string | number> = {
+): MergeFailurePayload {
+  const payload: MergeFailurePayload = {
     branch,
     canonicalBranch,
     reason: failure.reason
@@ -301,6 +425,26 @@ function buildMergeFailurePayload(
   }
 
   return payload;
+}
+
+function withBranchPayload(
+  session: SessionRecord,
+  payload: MergeFailurePayload
+): MergeFailurePayload {
+  const branch = session.branch.trim();
+
+  if (branch.length === 0 || "branch" in payload) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    branch
+  };
+}
+
+function recordedMergeError(message: string, payload: MergeFailurePayload): RecordedMergeError {
+  return new RecordedMergeError(message, payload);
 }
 
 function formatMergeConflictMessage(canonicalBranch: string, branch: string, conflictPaths: string[]): string {

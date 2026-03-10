@@ -145,7 +145,7 @@ Current contract:
 - command verifies the preserved local branch still exists
 - command switches the repo root to the configured canonical branch when needed
 - command runs `git merge --no-ff <agent-branch>` from the repo root
-- command records durable merge events for success, already-integrated no-op merges, and git-stopped conflict states
+- command records durable merge events for success, already-integrated no-op merges, session-scoped preflight refusals, and git-stopped conflict states
 - command leaves conflict resolution, validation, and cleanup explicit for the operator
 
 Future target:

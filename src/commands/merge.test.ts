@@ -279,6 +279,14 @@ test("mergeCommand refuses to run when the canonical worktree is dirty", async (
         return true;
       }
     );
+
+    const events = await listEvents(repoDir, { sessionId: "session-dirty" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "merge.failed");
+    assert.equal(events[0]?.payload.reason, "repo_root_dirty");
+    assert.equal(events[0]?.payload.target, "repo_root");
+    assert.equal(events[0]?.payload.firstDirtyEntry, " M tracked.txt");
+    assert.equal(events[0]?.payload.branch, "agents/agent-dirty");
   } finally {
     await removeTempDir(repoDir);
   }
@@ -381,7 +389,11 @@ test("mergeCommand reports an in-progress repo-root merge before generic dirty-s
     );
 
     const events = await listEvents(repoDir, { sessionId: "session-merge-progress" });
-    assert.equal(events.length, 0);
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "merge.failed");
+    assert.equal(events[0]?.payload.reason, "merge_in_progress");
+    assert.equal(events[0]?.payload.target, "repo_root");
+    assert.equal(events[0]?.payload.firstConflictPath, "conflict.txt");
   } finally {
     await removeTempDir(repoDir);
   }
