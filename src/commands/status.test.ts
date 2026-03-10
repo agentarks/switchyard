@@ -1,16 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { createEvent, listEvents } from "../events/store.js";
 import { createMail, readUnreadMailForSession } from "../mail/store.js";
 import { createSession, listSessions } from "../sessions/store.js";
-import { summarizeTask } from "../specs/task.js";
+import { summarizeTask, writeTaskSpec } from "../specs/task.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
 import { slingCommand } from "./sling.js";
 import { statusCommand } from "./status.js";
+
+const execFileAsync = promisify(execFile);
+const tsxCliPath = fileURLToPath(new URL("../../node_modules/tsx/dist/cli.mjs", import.meta.url));
+const cliEntryPath = fileURLToPath(new URL("../index.ts", import.meta.url));
 
 test("statusCommand prints an empty-state message when no sessions exist", async () => {
   const repoDir = await createInitializedRepo();
@@ -408,6 +415,84 @@ test("statusCommand rejects full task inspection without an exact selector", asy
         assert.equal(
           (error as Error).message,
           "Full task inspection requires an exact session selector. Use 'sy status <session> --task'."
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy status prints the full stored task text when --task is passed through the CLI", async () => {
+  const repoDir = await createInitializedRepo();
+  const sessionId = "session-cli-task";
+  const agentName = "agent-cli-task";
+  const task = [
+    "Inspect the preserved worktree and produce an operator-facing merge-risk summary.",
+    "",
+    "Call out:",
+    "- cleanup blockers",
+    "- branch drift"
+  ].join("\n");
+
+  try {
+    await git(repoDir, ["branch", `agents/${agentName}`]);
+    await mkdir(join(repoDir, ".switchyard", "worktrees", agentName), { recursive: true });
+    await createSession(repoDir, {
+      id: sessionId,
+      agentName,
+      branch: `agents/${agentName}`,
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", agentName),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-09T12:00:00.000Z",
+      updatedAt: "2026-03-09T12:00:00.000Z"
+    });
+    await writeTaskSpec({
+      projectRoot: repoDir,
+      sessionId,
+      agentName,
+      task,
+      createdAt: "2026-03-09T12:00:00.000Z",
+      branch: `agents/${agentName}`,
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", agentName)
+    });
+
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [tsxCliPath, cliEntryPath, "status", sessionId, "--task"],
+      { cwd: repoDir }
+    );
+
+    assert.equal(stderr, "");
+    assert.match(stdout, /^Status for agent-cli-task \(session-cli-task\):/m);
+    assert.match(stdout, new RegExp(`Task: ${escapeRegExp(summarizeTask(task))}`));
+    assert.match(
+      stdout,
+      /Instruction:\nInspect the preserved worktree and produce an operator-facing merge-risk summary\.\n\nCall out:\n- cleanup blockers\n- branch drift/
+    );
+    assert.match(stdout, /\n\nSTATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tRECENT\n/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy status reports missing selector for --task through the Switchyard error contract", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(
+      () => execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "status", "--task"], { cwd: repoDir }),
+      (error: unknown) => {
+        assert.ok(error && typeof error === "object");
+        assert.equal("code" in error ? error.code : undefined, 1);
+        assert.equal("stdout" in error ? error.stdout : undefined, "");
+        assert.match(
+          "stderr" in error && typeof error.stderr === "string" ? error.stderr : "",
+          /STATUS_ERROR: Full task inspection requires an exact session selector\. Use 'sy status <session> --task'\.\n/
         );
         return true;
       }
@@ -1918,4 +2003,8 @@ async function createInitializedRepo(): Promise<string> {
   await bootstrapSwitchyardLayout(repoDir);
   await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "main"));
   return repoDir;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
