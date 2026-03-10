@@ -27,7 +27,7 @@ For the current v0 loop, reintegration is still manual-first even though `sy mer
    - Use `sy mail list <session>` when you want the mailbox history without changing read state.
    - Use `sy mail list <session> --unread` when you want only unread mail without consuming it.
    - Use `sy mail check <session>` only when you intentionally want to consume unread mail; it marks the returned messages as read.
-   - Mail inspection output now also echoes the resolved session id, so mailbox review does not force a separate `sy status` lookup just to recover the exact selector you already targeted.
+   - Mail inspection output now also echoes the resolved session id and frames each message body as an explicit `Body:` block, so mailbox review does not force a separate `sy status` lookup and stays readable when messages span multiple lines.
    - Inspect the agent worktree and branch with normal git commands.
    - Run the project checks you expect before reintegration.
 

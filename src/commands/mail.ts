@@ -79,13 +79,13 @@ export async function mailSendCommand(options: MailSendOptions): Promise<void> {
   const session = await resolveSession(config.project.root, options.selector);
   const recordEvent = options.recordEvent ?? recordEventBestEffort;
   const sender = options.sender?.trim() || "operator";
-  const body = options.body.trim();
+  const body = options.body;
 
   if (!session) {
     throw new MailError(`No session found for '${options.selector}'.`);
   }
 
-  if (body.length === 0) {
+  if (body.trim().length === 0) {
     throw new MailError("Mail body cannot be empty.");
   }
 
@@ -144,7 +144,7 @@ export async function mailCheckCommand(options: MailCheckOptions): Promise<void>
 
   for (const message of unreadMail) {
     process.stdout.write(`${message.createdAt}\t${message.sender}\t${message.id}\n`);
-    process.stdout.write(`${message.body}\n`);
+    process.stdout.write(formatMailBody(message.body));
   }
 
   process.stdout.write(`Marked ${unreadMail.length} message${unreadMail.length === 1 ? "" : "s"} as read.\n`);
@@ -195,7 +195,7 @@ export async function mailListCommand(options: MailListOptions): Promise<void> {
     const state = message.readAt ? "read" : "unread";
     const readDetail = message.readAt ? `\treadAt=${message.readAt}` : "";
     process.stdout.write(`${state}\t${message.createdAt}\t${message.sender}\t${message.id}${readDetail}\n`);
-    process.stdout.write(`${message.body}\n`);
+    process.stdout.write(formatMailBody(message.body));
   }
 
   const countSummary = `Listed ${mailbox.length} message${mailbox.length === 1 ? "" : "s"}`;
@@ -210,4 +210,9 @@ async function resolveSession(projectRoot: string, selector: string): Promise<Se
   return await resolveSessionByIdOrAgent(projectRoot, selector, (ambiguity) => {
     return new MailError(formatSessionSelectorAmbiguousMessage(selector, ambiguity));
   });
+}
+
+function formatMailBody(body: string): string {
+  const bodyLines = body.split("\n");
+  return `Body:\n${bodyLines.map((line) => `  ${line}`).join("\n")}\n\n`;
 }

@@ -145,7 +145,7 @@ test("sy mail list --unread preserves unread state through the real CLI entrypoi
       sessionId: "session-cli-mail",
       sender: "operator",
       recipient: "agent-cli-mail",
-      body: "Still unread.",
+      body: "Still unread.\nSecond line.",
       createdAt: "2026-03-10T11:02:00.000Z"
     });
 
@@ -158,13 +158,13 @@ test("sy mail list --unread preserves unread state through the real CLI entrypoi
     assert.equal(stderr, "");
     assert.match(stdout, /Unread mail for agent-cli-mail \(read-only\):/);
     assert.match(stdout, /Session: session-cli-mail/);
-    assert.match(stdout, /Still unread\./);
+    assert.match(stdout, /Body:\n  Still unread\.\n  Second line\.\n/);
     assert.doesNotMatch(stdout, /Already read\./);
     assert.match(stdout, /Listed 1 message; unread-only view, read state unchanged\./);
 
     const unreadMail = await readUnreadMailForSession(repoDir, "session-cli-mail");
     assert.equal(unreadMail.length, 1);
-    assert.equal(unreadMail[0]?.body, "Still unread.");
+    assert.equal(unreadMail[0]?.body, "Still unread.\nSecond line.");
 
     const events = await listEvents(repoDir, { sessionId: "session-cli-mail" });
     assert.equal(events.at(-1)?.eventType, "mail.listed");
