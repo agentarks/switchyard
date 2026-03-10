@@ -97,9 +97,10 @@ Current contract:
 - command exists and accepts one optional session id or agent name selector
 - command accepts `--limit <count>` to control the size of the recent-event window
 - without a selector, command reads the recent durable event timeline from `events.db`
-- with a selector, command resolves one session or one orphaned session-id event stream and reads recent events for that target
+- with a selector, command resolves one session, one orphaned session-id event stream, or one orphaned agent-name event stream when no tracked session row remains
 - command rejects selectors that could refer to different session-id, agent-name, or orphaned-event targets
 - command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
+- command rejects orphaned agent-name selectors that would combine events from multiple session ids and requires an exact session id instead
 - command rejects non-positive or non-integer `--limit` values with an explicit events-style error
 - when no events exist globally, print `No Switchyard events recorded yet.`
 - when events exist, print a concise tab-separated table ordered chronologically across the recent window
