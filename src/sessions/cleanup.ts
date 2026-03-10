@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
+import { relative } from "node:path";
 import { promisify } from "node:util";
 import { isActiveSessionState, type SessionRecord } from "./types.js";
 
@@ -62,6 +63,15 @@ export async function determineCleanupDecision(options: CleanupDecisionOptions):
 
   if (!branchExists && !worktreeExists) {
     return { kind: "already_absent" };
+  }
+
+  if (!worktreeExists) {
+    return {
+      kind: "blocked",
+      reason: "artifacts_missing",
+      canonicalBranch,
+      message: `Refusing cleanup for ${options.session.agentName}: preserved worktree '${formatRelativePath(options.projectRoot, options.session.worktreePath)}' is already missing while branch '${branch}' still exists. Restore it manually if you still need a preserved checkout, rerun without '--cleanup' to preserve the remaining branch, or pass '--cleanup --abandon' to discard it explicitly.`
+    };
   }
 
   if (!branchExists) {
@@ -133,8 +143,13 @@ function formatCleanupOutcomeLabel(decision: CleanupDecision): string {
     case "not_merged":
       return "abandon-only:not-merged";
     case "artifacts_missing":
-      return "absent";
+      return "abandon-only:artifacts-missing";
   }
+}
+
+function formatRelativePath(projectRoot: string, path: string): string {
+  const relativePath = relative(projectRoot, path);
+  return relativePath.length > 0 ? relativePath : ".";
 }
 
 async function localBranchExists(projectRoot: string, branch: string): Promise<boolean> {

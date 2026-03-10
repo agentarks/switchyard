@@ -36,6 +36,7 @@ Completed enough to count as minimally real:
 - session-id visibility in `sy status`
 - exact per-session inspection in `sy status`
 - richer exact-session inspection in `sy status` for stored base-branch, runtime-pid, and full recent-event context
+- cleanup-readiness and stop cleanup diagnostics for missing preserved worktree paths when the branch still remains
 - M7 first event inspection path
 - operator-controlled recent-event window selection in `sy events`
 - orphaned agent-name event recovery in `sy events` when tracked session rows are already gone

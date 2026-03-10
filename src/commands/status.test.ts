@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { createEvent, listEvents } from "../events/store.js";
@@ -96,11 +96,15 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
   try {
     await git(repoDir, ["branch", "agents/agent-active"]);
     await git(repoDir, ["branch", "agents/merged-ready"]);
+    await git(repoDir, ["branch", "agents/missing-worktree"]);
     await git(repoDir, ["switch", "-c", "agents/not-ready"]);
     await writeFile(join(repoDir, "not-ready.txt"), "pending merge\n", "utf8");
     await git(repoDir, ["add", "not-ready.txt"]);
     await git(repoDir, ["commit", "-m", "Add preserved branch change"]);
     await git(repoDir, ["switch", "main"]);
+    await mkdir(join(repoDir, ".switchyard", "worktrees", "agent-active"), { recursive: true });
+    await mkdir(join(repoDir, ".switchyard", "worktrees", "agent-merged"), { recursive: true });
+    await mkdir(join(repoDir, ".switchyard", "worktrees", "agent-unmerged"), { recursive: true });
 
     await createSession(repoDir, {
       id: "session-active",
@@ -134,6 +138,17 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
       runtimePid: null,
       createdAt: "2026-03-08T09:10:00.000Z",
       updatedAt: "2026-03-08T09:10:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-missing-worktree",
+      agentName: "agent-missing-worktree",
+      branch: "agents/missing-worktree",
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-missing-worktree"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:12:00.000Z",
+      updatedAt: "2026-03-08T09:12:00.000Z"
     });
     await createSession(repoDir, {
       id: "session-unmerged",
@@ -175,6 +190,10 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
   assert.match(output, /running\tsession-active\tagent-active[^\n]*\tstop-then:merged\t-/);
   assert.match(output, /stopped\tsession-merged\tagent-merged[^\n]*\tready:merged\t-/);
   assert.match(output, /stopped\tsession-absent\tagent-absent[^\n]*\tready:absent\t-/);
+  assert.match(
+    output,
+    /stopped\tsession-missing-worktree\tagent-missing-worktree[^\n]*\tabandon-only:artifacts-missing\t-/
+  );
   assert.match(output, /stopped\tsession-unmerged\tagent-unmerged[^\n]*\tabandon-only:not-merged\t-/);
   assert.match(output, /failed\tsession-legacy-cleanup\tagent-legacy-cleanup[^\n]*\tabandon-only:legacy\t-/);
 });

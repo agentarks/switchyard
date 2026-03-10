@@ -751,6 +751,53 @@ test("stopCommand reports already-missing cleanup artifacts without claiming rem
   assert.doesNotMatch(output, /removed worktree and branch/);
 });
 
+test("stopCommand refuses cleanup when the preserved worktree is already missing but the branch remains", async () => {
+  const repoDir = await createInitializedRepo();
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-missing-worktree");
+
+  try {
+    await git(repoDir, ["branch", "agents/missing-worktree"]);
+    await createSession(repoDir, {
+      id: "session-missing-worktree",
+      agentName: "agent-missing-worktree",
+      branch: "agents/missing-worktree",
+      baseBranch: "main",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:15:00.000Z"
+    });
+
+    await assert.rejects(
+      () => stopCommand({
+        selector: "agent-missing-worktree",
+        cleanup: true,
+        startDir: repoDir
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof StopError);
+        assert.match(
+          error.message,
+          /preserved worktree '\.switchyard\/worktrees\/agent-missing-worktree' is already missing while branch 'agents\/missing-worktree' still exists/
+        );
+        return true;
+      }
+    );
+
+    await git(repoDir, ["rev-parse", "--verify", "agents/missing-worktree"]);
+
+    const events = await listEvents(repoDir, { sessionId: "session-missing-worktree" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "stop.completed");
+    assert.equal(events[0]?.payload.outcome, "already_not_running");
+    assert.equal(events[0]?.payload.cleanupPerformed, false);
+    assert.equal(events[0]?.payload.cleanupReason, "artifacts_missing");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("stopCommand removes the worktree and branch after confirmed merge cleanup", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
