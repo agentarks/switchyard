@@ -496,7 +496,7 @@ const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "sling.completed": ["runtimePid", "baseBranch", "readyAfterMs"],
   "sling.failed": ["errorMessage", "cleanupSucceeded"],
   "sling.spawned": ["runtimePid", "baseBranch"],
-  "stop.completed": ["outcome", "cleanupPerformed", "cleanupReason", "worktreePath", "cleanupError"],
+  "stop.completed": ["outcome", "cleanupPerformed", "cleanupMode", "cleanupReason", "worktreePath", "cleanupError"],
   "stop.failed": ["reason", "runtimePid", "errorMessage"]
 };
 
