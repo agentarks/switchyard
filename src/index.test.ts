@@ -130,6 +130,43 @@ test("sy stop reports the stopped session before surfacing a cleanup removal fai
   }
 });
 
+test("sy stop reports the resolved session id before the repeated-stop failure output", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-stop-already-inactive-test-");
+
+  try {
+    await createSession(repoDir, {
+      id: "session-cli-already-stopped",
+      agentName: "agent-cli-already-stopped",
+      branch: "agents/agent-cli-already-stopped",
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-cli-already-stopped"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-10T09:35:00.000Z",
+      updatedAt: "2026-03-10T09:35:00.000Z"
+    });
+
+    await assert.rejects(
+      () => execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "stop", "agent cli already stopped"], {
+        cwd: repoDir
+      }),
+      (error: unknown) => {
+        assert.ok(error && typeof error === "object" && "stdout" in error && "stderr" in error);
+        const cliError = error as { stdout: string; stderr: string; code: number };
+        assert.equal(cliError.code, 1);
+        assert.equal(cliError.stdout, "");
+        assert.match(
+          cliError.stderr,
+          /^Session: session-cli-already-stopped\nSTOP_ERROR: Session 'agent cli already stopped' is already stopped\.\n$/
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("sy merge merges a preserved branch through the real CLI entrypoint", async () => {
   const repoDir = await createInitializedRepo("switchyard-cli-merge-test-");
   const notesPath = join(repoDir, "notes.txt");
