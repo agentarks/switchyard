@@ -92,7 +92,7 @@ Current contract:
 - command keeps operator-relevant `stop.failed` context in the recent-event summary, including shutdown failure reason, runtime pid, and error text when those details exist
 - command keeps operator-relevant `stop.completed` cleanup mode in the recent-event summary so later status inspection still shows whether cleanup happened after a confirmed merge or an explicit abandon
 - when the same `sy status` run also records an automatic runtime reconciliation event, command still keeps a latest pre-existing `stop.failed` visible in the current recent summary instead of immediately replacing it with that synthetic runtime event
-- with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, creation time, latest launch task summary, latest launch spec path, unread-mail count, cleanup-readiness label, and the full recent-event summary
+- with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, latest launch spec path, unread-mail count, cleanup-readiness label, and the full recent-event summary
 - with `--task` plus a selector, command also prints the full stored launch instruction from `.switchyard/specs/`
 - command rejects `--task` without an exact selector
 - command fails explicitly when `--task` is requested but the stored task text cannot be read

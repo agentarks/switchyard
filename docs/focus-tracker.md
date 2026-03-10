@@ -43,6 +43,7 @@ Completed enough to count as minimally real:
 - session-id visibility in `sy status`
 - exact per-session inspection in `sy status`
 - richer exact-session inspection in `sy status` for stored base-branch, runtime-pid, and full recent-event context
+- richer exact-session inspection in `sy status` for the latest stored launch command
 - cleanup-readiness and stop cleanup diagnostics for missing preserved worktree paths when the branch still remains
 - stop cleanup mode visibility in recent `sy status` summaries
 - M7 first event inspection path
@@ -69,7 +70,7 @@ Completed enough to count as minimally real:
 - end-to-end coverage around `sy init`
 
 Current planning state:
-- no new named slice is justified right now beyond the recent file-backed `sy sling --task-file` handoff, exact mail-body handling, session-id visibility cleanup across handled `merge` failures, `stop`, mail inspection, and empty selected `sy events` output, plus handled stop output for post-stop cleanup removal failures
+- no new named slice is justified right now beyond the recent file-backed `sy sling --task-file` handoff, exact launch-command inspection in `sy status`, exact mail-body handling, session-id visibility cleanup across handled `merge` failures, `stop`, mail inspection, and empty selected `sy events` output, plus handled stop output for post-stop cleanup removal failures
 - new lifecycle or inspection work should start only after a reproduced operator-visible gap is named
 
 ## Current In-Scope Work

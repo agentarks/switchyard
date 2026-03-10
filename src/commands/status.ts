@@ -114,6 +114,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 
       process.stdout.write(`Base: ${formatOptionalField(session.baseBranch)}\n`);
       process.stdout.write(`Runtime pid: ${formatOptionalField(session.runtimePid)}\n`);
+      process.stdout.write(`Runtime: ${selectedSessionDetails?.taskHandoff?.runtimeCommand ?? "-"}\n`);
       process.stdout.write(`Created: ${session.createdAt}\n`);
       process.stdout.write(`Task: ${selectedSessionDetails?.taskHandoff?.taskSummary ?? "-"}\n`);
       process.stdout.write(`Spec: ${selectedSessionDetails?.taskHandoff?.taskSpecPath ?? "-"}\n`);
@@ -470,8 +471,9 @@ function shouldPreservePreReconcileRecentEvent(
 async function loadLatestLaunchTaskHandoff(
   projectRoot: string,
   session: SessionRecord
-): Promise<{ taskSummary?: string; taskSpecPath?: string } | undefined> {
+): Promise<{ taskSummary?: string; taskSpecPath?: string; runtimeCommand?: string } | undefined> {
   const events = await listEvents(projectRoot, { sessionId: session.id });
+  const taskHandoff: { taskSummary?: string; taskSpecPath?: string; runtimeCommand?: string } = {};
 
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
@@ -480,13 +482,36 @@ async function loadLatestLaunchTaskHandoff(
       continue;
     }
 
-    return {
-      taskSummary: typeof event.payload.taskSummary === "string" ? event.payload.taskSummary : undefined,
-      taskSpecPath: typeof event.payload.taskSpecPath === "string" ? event.payload.taskSpecPath : undefined
-    };
+    if (typeof event.payload.taskSummary === "string" && typeof taskHandoff.taskSummary === "undefined") {
+      taskHandoff.taskSummary = event.payload.taskSummary;
+    }
+
+    if (typeof event.payload.taskSpecPath === "string" && typeof taskHandoff.taskSpecPath === "undefined") {
+      taskHandoff.taskSpecPath = event.payload.taskSpecPath;
+    }
+
+    if (typeof event.payload.runtimeCommand === "string" && typeof taskHandoff.runtimeCommand === "undefined") {
+      taskHandoff.runtimeCommand = event.payload.runtimeCommand;
+    }
+
+    if (typeof taskHandoff.taskSummary === "string"
+      && typeof taskHandoff.taskSpecPath === "string"
+      && typeof taskHandoff.runtimeCommand === "string") {
+      return taskHandoff;
+    }
   }
 
-  return await readTaskSpecHandoff(projectRoot, session.agentName, session.id);
+  const fallbackTaskHandoff = await readTaskSpecHandoff(projectRoot, session.agentName, session.id);
+
+  if (!fallbackTaskHandoff && typeof taskHandoff.runtimeCommand === "undefined") {
+    return undefined;
+  }
+
+  return {
+    taskSummary: taskHandoff.taskSummary ?? fallbackTaskHandoff?.taskSummary,
+    taskSpecPath: taskHandoff.taskSpecPath ?? fallbackTaskHandoff?.taskSpecPath,
+    runtimeCommand: taskHandoff.runtimeCommand
+  };
 }
 
 async function loadLatestLaunchTaskInstruction(projectRoot: string, session: SessionRecord): Promise<string | undefined> {
@@ -497,7 +522,10 @@ async function loadSelectedSessionDetails(
   projectRoot: string,
   session: SessionRecord | undefined,
   showTask: boolean
-): Promise<{ taskHandoff?: { taskSummary?: string; taskSpecPath?: string }; taskInstruction?: string } | undefined> {
+): Promise<{
+  taskHandoff?: { taskSummary?: string; taskSpecPath?: string; runtimeCommand?: string };
+  taskInstruction?: string;
+} | undefined> {
   if (!session) {
     return undefined;
   }
