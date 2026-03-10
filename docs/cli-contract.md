@@ -86,6 +86,7 @@ Current contract:
 - command keeps that missing-worktree case distinct in recent stop-event history instead of collapsing it into the harmless already-absent case
 - if cleanup readiness cannot be evaluated for a session, command still renders status and prints `?` in the cleanup column instead of failing
 - command keeps operator-relevant `merge.failed` context in the recent-event summary, including branch-drift targets, preserved-worktree paths, and git error text when those details exist
+- command keeps operator-relevant `stop.failed` context in the recent-event summary, including shutdown failure reason, runtime pid, and error text when those details exist
 - with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, creation time, unread-mail count, cleanup-readiness label, and the full recent-event summary
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
 - when sessions exist, print a concise tab-separated table ordered by most recent update
@@ -121,6 +122,7 @@ Current contract:
 - command updates durable session state in `sessions.db`
 - command preserves the worktree by default so the operator can still review or merge the branch later
 - command still stops an active session even when a requested cleanup cannot proceed safely
+- if runtime shutdown fails before state changes, command leaves the session active and records a durable `stop.failed` event with the failure reason and error text
 - command removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch`
 - command refuses plain merged-cleanup for legacy rows that do not have stored `baseBranch` metadata
 - command requires `--cleanup --abandon` to discard work that is not confirmed merged

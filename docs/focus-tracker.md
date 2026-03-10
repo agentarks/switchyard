@@ -45,6 +45,7 @@ Completed enough to count as minimally real:
 - dirty-entry diagnostics for merge preflight failures
 - explicit repo-root merge-in-progress diagnostics in `sy merge`
 - merge-conflict path diagnostics in `sy merge` and recent status context
+- durable stop-failure events with recent-status visibility for runtime shutdown errors before state change
 - durable stop cleanup failure events with recent-status visibility for blocked or failed cleanup attempts
 - durable merge preflight failure events with recent-status visibility for blocked reintegration attempts
 - durable stop cleanup failure events with recent-status visibility for blocked or failed cleanup attempts

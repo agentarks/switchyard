@@ -13,7 +13,7 @@ Target outcome:
 
 ## Why This Is Next
 
-The last blocking launch-compatibility gap has been closed, so the next step is to stay disciplined and pick the next concrete weakness in the existing loop rather than expanding scope.
+The last reproduced stop-failure visibility gap has been closed, so the next step is to stay disciplined and pick the next concrete weakness in the existing loop rather than expanding scope.
 
 Without that discipline:
 - effort can drift into speculative surface area instead of tightening the current operator workflow

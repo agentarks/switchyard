@@ -157,6 +157,49 @@ test("stopCommand rejects selectors that match multiple sessions by agent name",
   }
 });
 
+test("stopCommand records a durable failure event when runtime shutdown fails", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createSession(repoDir, {
+      id: "session-stop-failure",
+      agentName: "agent-stop-failure",
+      branch: "agents/agent-stop-failure",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stop-failure"),
+      state: "running",
+      runtimePid: 5150,
+      createdAt: "2026-03-08T12:00:00.000Z",
+      updatedAt: "2026-03-08T12:00:00.000Z"
+    });
+
+    await assert.rejects(
+      () => stopCommand({
+        selector: "agent-stop-failure",
+        startDir: repoDir,
+        isRuntimeAlive: (pid) => pid === 5150,
+        stopRuntime: async () => {
+          throw new Error("simulated stop failure");
+        }
+      }),
+      /simulated stop failure/
+    );
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "running");
+    assert.equal(sessions[0]?.runtimePid, 5150);
+
+    const events = await listEvents(repoDir, { sessionId: "session-stop-failure" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "stop.failed");
+    assert.equal(events[0]?.payload.reason, "runtime_stop_failed");
+    assert.equal(events[0]?.payload.runtimePid, 5150);
+    assert.equal(events[0]?.payload.errorMessage, "simulated stop failure");
+    assert.equal(events[0]?.payload.previousState, "running");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("stopCommand removes the worktree and branch when cleanup is explicitly abandoned", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
