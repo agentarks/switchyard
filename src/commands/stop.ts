@@ -122,6 +122,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
         }
       });
       process.stdout.write(`Session ${session.agentName} is already ${session.state}.\n`);
+      process.stdout.write(`Session: ${session.id}\n`);
       process.stdout.write(`${cleanup.message}\n`);
       return;
     }
@@ -175,6 +176,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       }
     });
     process.stdout.write(`Session ${session.agentName} has no recorded runtime pid. Marked failed.\n`);
+    process.stdout.write(`Session: ${nextSession.id}\n`);
     if (cleanup.message) {
       process.stdout.write(`${cleanup.message}\n`);
     } else {
@@ -268,6 +270,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
   } else {
     process.stdout.write(`Stopped ${session.agentName}\n`);
   }
+  process.stdout.write(`Session: ${nextSession.id}\n`);
 
   if (cleanup.message) {
     process.stdout.write(`${cleanup.message}\n`);
