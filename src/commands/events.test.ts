@@ -7,10 +7,11 @@ import { fileURLToPath } from "node:url";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { createEvent } from "../events/store.js";
 import { EventsError } from "../errors.js";
-import { createSession } from "../sessions/store.js";
+import { createSession, listSessions } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, removeTempDir } from "../test-helpers/git.js";
 import { eventsCommand } from "./events.js";
+import { slingCommand } from "./sling.js";
 
 const execFileAsync = promisify(execFile);
 const tsxCliPath = fileURLToPath(new URL("../../node_modules/tsx/dist/cli.mjs", import.meta.url));
@@ -121,6 +122,51 @@ test("eventsCommand filters events for one resolved session", async () => {
     assert.match(output, /sling.completed/);
     assert.doesNotMatch(output, /agent-two/);
     assert.doesNotMatch(output, /stop.completed/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("eventsCommand surfaces task handoff details from sling launch events", async () => {
+  const repoDir = await createInitializedRepo();
+  const task = "Review the current operator loop and call out the next concrete gap.";
+
+  try {
+    await slingCommand({
+      agentName: "Agent Task Events",
+      task,
+      startDir: repoDir,
+      spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
+        assert.deepEqual(runtimeArgs, [task]);
+        const runtime = {
+          pid: 7171,
+          command: {
+            command: "codex",
+            args: runtimeArgs
+          }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    const sessions = await listSessions(repoDir);
+    const sessionId = sessions[0]?.id;
+    assert.ok(sessionId);
+
+    const output = await captureStdout(async () => {
+      await eventsCommand({ startDir: repoDir, selector: sessionId });
+    });
+
+    assert.match(output, /sling\.spawned/);
+    assert.match(output, /sling\.completed/);
+    assert.match(output, /taskSummary=\"Review the current operator loop and call out the next concrete gap\.\"/);
+    assert.match(output, new RegExp(`taskSpecPath=\\.switchyard/specs/agent-task-events-${sessionId}\\.md`));
   } finally {
     await removeTempDir(repoDir);
   }

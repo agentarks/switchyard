@@ -55,16 +55,18 @@ Completed enough to count as minimally real:
 - first readiness and early-failure handling as hardening work ahead of M8
 - Unix zombie-runtime detection in pid liveness checks so stale sessions no longer look healthy
 - detached `sy sling` launch compatibility hardening for TTY-requiring Codex builds on supported Unix platforms
+- first-class `sy sling --task` input with durable task specs under `.switchyard/specs/`
+- launch-task visibility in `sy sling`, `sy events`, and exact-session `sy status`
 - end-to-end coverage around `sy init`
 
 Not complete yet:
-- the next session should implement first-class task input for `sy sling`
+- no new named slice is locked yet beyond reassessing whether one is needed
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- implement first-class task input in `sy sling`
-- improve operator inspection only where that slice changes what an operator can actually understand or do
+- reassess whether another concrete operator-visible slice is needed at all
+- improve operator inspection only when a reproduced workflow shows the current task-handoff visibility is insufficient
 - harden lifecycle behavior only when a reproduced failure blocks the current loop
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
@@ -79,7 +81,7 @@ These are derailment risks right now:
 - merge queue automation before the merge workflow exists
 - tmux-style interactive wrappers unless operator workflows prove pid-only control is insufficient
 - broad analytics, filtering, or reporting features
-- “nice to have” abstractions without current operator value
+- "nice to have" abstractions without current operator value
 
 ## Session Gate
 

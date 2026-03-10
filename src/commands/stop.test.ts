@@ -12,6 +12,8 @@ import { slingCommand } from "./sling.js";
 import { statusCommand } from "./status.js";
 import { stopCommand } from "./stop.js";
 
+const TEST_TASK = "Handle the assigned operator task.";
+
 test("stopCommand stops an active session and preserves the worktree by default", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
@@ -21,6 +23,7 @@ test("stopCommand stops an active session and preserves the worktree by default"
   try {
     await slingCommand({
       agentName: "Agent One",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -209,6 +212,7 @@ test("stopCommand removes the worktree and branch when cleanup is explicitly aba
   try {
     await slingCommand({
       agentName: "Agent Two",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -313,6 +317,7 @@ test("stopCommand cleans up legacy active sessions without a pid when requested"
   try {
     await slingCommand({
       agentName: "Agent Legacy Cleanup",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -383,6 +388,7 @@ test("stopCommand allows explicit abandon cleanup for sessions already marked fa
   try {
     await slingCommand({
       agentName: "Agent Stale Cleanup",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -449,6 +455,7 @@ test("stopCommand refuses cleanup for an unmerged stopped session without explic
   try {
     await slingCommand({
       agentName: "Agent Unmerged",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -621,6 +628,7 @@ test("stopCommand records cleanup failure details when artifact removal fails af
   try {
     await slingCommand({
       agentName: "Agent Cleanup Failure",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -678,6 +686,7 @@ test("stopCommand still stops an active unmerged session when cleanup is refused
   try {
     await slingCommand({
       agentName: "Agent Active Unmerged",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -742,6 +751,7 @@ test("stopCommand reports already-missing cleanup artifacts without claiming rem
   try {
     await slingCommand({
       agentName: "Agent Missing Artifacts",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -893,6 +903,7 @@ test("stopCommand removes the worktree and branch after confirmed merge cleanup"
   try {
     await slingCommand({
       agentName: "Agent Merged Cleanup",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -963,6 +974,7 @@ test("stopCommand uses the session base branch for merged cleanup when config dr
   try {
     await slingCommand({
       agentName: "Agent Target Drift",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -1019,6 +1031,7 @@ test("stopCommand rejects --abandon without --cleanup", async () => {
   try {
     await slingCommand({
       agentName: "Agent Abandon Flag",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -1050,6 +1063,7 @@ test("stopCommand treats an exit during shutdown as stopped instead of failed", 
   try {
     await slingCommand({
       agentName: "Agent Race",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -1084,6 +1098,7 @@ test("stopCommand keeps the stop result when event persistence fails", async () 
   try {
     await slingCommand({
       agentName: "Agent Event Failure",
+      task: TEST_TASK,
       startDir: repoDir,
       spawnRuntime: async () => {
         return {

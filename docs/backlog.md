@@ -4,15 +4,15 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Add first-class operator task input to `sy sling`
+1. Reassess whether the loop needs another concrete slice at all before defaulting back to hardening
 
 ## Next
 
-2. Surface that task handoff clearly in launch output and durable inspection
+2. If a real operator gap remains, name one small operator-visible slice before coding
 
 ## After That
 
-3. Reassess whether the loop needs another concrete slice at all before defaulting back to hardening
+3. Improve diagnostics only where a reproduced workflow proves the current task handoff or inspection paths are insufficient
 
 ## Then
 

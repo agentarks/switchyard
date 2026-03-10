@@ -2,7 +2,7 @@ import { relative } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
-import { listLatestEventsBySession, recordEventBestEffort, type EventRecorder } from "../events/store.js";
+import { listEvents, listLatestEventsBySession, recordEventBestEffort, type EventRecorder } from "../events/store.js";
 import type { EventPayloadValue, EventRecord } from "../events/types.js";
 import { StatusError } from "../errors.js";
 import { listUnreadMailCountsBySession } from "../mail/store.js";
@@ -90,6 +90,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     const session = sessions[0];
 
     if (session) {
+      const launchTaskHandoff = await loadLatestLaunchTaskHandoff(config.project.root, session.id);
       const unreadCount = unreadMailCounts.available
         ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
         : "?";
@@ -103,6 +104,8 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       process.stdout.write(`Base: ${formatOptionalField(session.baseBranch)}\n`);
       process.stdout.write(`Runtime pid: ${formatOptionalField(session.runtimePid)}\n`);
       process.stdout.write(`Created: ${session.createdAt}\n`);
+      process.stdout.write(`Task: ${launchTaskHandoff?.taskSummary ?? "-"}\n`);
+      process.stdout.write(`Spec: ${launchTaskHandoff?.taskSpecPath ?? "-"}\n`);
       process.stdout.write(`Unread: ${unreadCount}\n`);
       process.stdout.write(`Cleanup: ${cleanup}\n`);
       process.stdout.write(`Recent: ${formatRecentEventSummary(recentEvent, { truncate: false })}\n`);
@@ -444,6 +447,28 @@ function shouldPreservePreReconcileRecentEvent(
   return RECONCILED_RUNTIME_EVENT_TYPES.has(reconciledEvent.eventType);
 }
 
+async function loadLatestLaunchTaskHandoff(
+  projectRoot: string,
+  sessionId: string
+): Promise<{ taskSummary?: string; taskSpecPath?: string } | undefined> {
+  const events = await listEvents(projectRoot, { sessionId });
+
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+
+    if (!event || !SLING_LAUNCH_EVENT_TYPES.has(event.eventType)) {
+      continue;
+    }
+
+    return {
+      taskSummary: typeof event.payload.taskSummary === "string" ? event.payload.taskSummary : undefined,
+      taskSpecPath: typeof event.payload.taskSpecPath === "string" ? event.payload.taskSpecPath : undefined
+    };
+  }
+
+  return undefined;
+}
+
 function selectRecentEventDetailKeys(event: EventRecord): string[] {
   if (event.eventType === "merge.failed") {
     return selectMergeFailedDetailKeys(event);
@@ -514,11 +539,12 @@ const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "runtime.exited": ["reason", "runtimePid"],
   "runtime.exited_early": ["reason", "runtimePid"],
   "runtime.ready": ["signal", "runtimePid"],
-  "sling.completed": ["runtimePid", "baseBranch", "readyAfterMs"],
-  "sling.failed": ["errorMessage", "cleanupSucceeded"],
-  "sling.spawned": ["runtimePid", "baseBranch"],
+  "sling.completed": ["runtimePid", "baseBranch", "taskSummary", "taskSpecPath", "readyAfterMs"],
+  "sling.failed": ["errorMessage", "taskSummary", "taskSpecPath", "cleanupSucceeded"],
+  "sling.spawned": ["runtimePid", "baseBranch", "taskSummary", "taskSpecPath"],
   "stop.completed": ["outcome", "cleanupPerformed", "cleanupMode", "cleanupReason", "worktreePath", "cleanupError"],
   "stop.failed": ["reason", "runtimePid", "errorMessage"]
 };
 
 const RECONCILED_RUNTIME_EVENT_TYPES = new Set(["runtime.ready", "runtime.exited", "runtime.exited_early"]);
+const SLING_LAUNCH_EVENT_TYPES = new Set(["sling.spawned", "sling.completed", "sling.failed"]);
