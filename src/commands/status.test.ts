@@ -595,6 +595,55 @@ test("statusCommand includes stop cleanup failure details in the recent event su
   );
 });
 
+test("statusCommand includes stop cleanup mode details in the recent event summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stop-cleanup-mode",
+    agentName: "agent-stop-cleanup-mode",
+    branch: "agents/agent-stop-cleanup-mode",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stop-cleanup-mode"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T09:22:30.000Z",
+    updatedAt: "2026-03-08T09:22:30.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stop-cleanup-mode",
+    agentName: "agent-stop-cleanup-mode",
+    eventType: "stop.completed",
+    payload: {
+      outcome: "already_not_running",
+      cleanupPerformed: true,
+      cleanupMode: "abandoned"
+    },
+    createdAt: "2026-03-08T09:23:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-stop-cleanup-mode",
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /Recent: 2026-03-08T09:23:00.000Z stop\.completed outcome=already_not_running, cleanupPerformed=true, cleanupMode=abandoned/
+  );
+});
+
 test("statusCommand includes stop failure details in the recent event summary", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
