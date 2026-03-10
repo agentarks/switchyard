@@ -161,6 +161,44 @@ test("stopCommand rejects selectors that match multiple sessions by agent name",
   }
 });
 
+test("stopCommand echoes the resolved session id when a repeated stop targets an already inactive session", async () => {
+  const repoDir = await createInitializedRepo();
+  const stderrWrites: string[] = [];
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  try {
+    await createSession(repoDir, {
+      id: "session-already-stopped",
+      agentName: "agent-already-stopped",
+      branch: "agents/agent-already-stopped",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-already-stopped"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T12:12:00.000Z",
+      updatedAt: "2026-03-08T12:14:00.000Z"
+    });
+
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    await assert.rejects(
+      () => stopCommand({ selector: "agent already stopped", startDir: repoDir }),
+      (error: unknown) => {
+        assert.ok(error instanceof StopError);
+        assert.equal(error.message, "Session 'agent already stopped' is already stopped.");
+        return true;
+      }
+    );
+  } finally {
+    process.stderr.write = originalStderrWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.equal(stderrWrites.join(""), "Session: session-already-stopped\n");
+});
+
 test("stopCommand records a durable failure event when runtime shutdown fails", async () => {
   const repoDir = await createInitializedRepo();
 
