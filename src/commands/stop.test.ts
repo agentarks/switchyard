@@ -628,6 +628,8 @@ test("stopCommand allows explicit abandon cleanup when branch metadata is missin
 
 test("stopCommand records cleanup failure details when artifact removal fails after stopping", async () => {
   const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
   const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cleanup-failure");
 
   try {
@@ -646,6 +648,11 @@ test("stopCommand records cleanup failure details when artifact removal fails af
         };
       }
     });
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
 
     await assert.rejects(
       async () => {
@@ -678,8 +685,14 @@ test("stopCommand records cleanup failure details when artifact removal fails af
     await access(worktreePath);
     await git(repoDir, ["rev-parse", "--verify", "agents/agent-cleanup-failure"]);
   } finally {
+    process.stdout.write = originalWrite;
     await removeTempDir(repoDir);
   }
+
+  const output = writes.join("");
+  assert.match(output, /Stopped agent-cleanup-failure/);
+  assert.match(output, /Session: [^\n]+/);
+  assert.match(output, /Cleanup failed after stop: Cleanup failed for agent-cleanup-failure: simulated remove failure/);
 });
 
 test("stopCommand still stops an active unmerged session when cleanup is refused", async () => {

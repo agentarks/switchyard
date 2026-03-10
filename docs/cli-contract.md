@@ -135,6 +135,7 @@ Current contract:
 - command preserves the worktree by default so the operator can still review or merge the branch later
 - command still stops an active session even when a requested cleanup cannot proceed safely
 - if runtime shutdown fails before state changes, command leaves the session active and records a durable `stop.failed` event with the failure reason and error text
+- if cleanup artifact removal fails after the stop state is already known, command still prints the resolved session id and handled stop summary before exiting nonzero
 - command removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch`
 - command refuses plain merged-cleanup for legacy rows that do not have stored `baseBranch` metadata
 - command requires `--cleanup --abandon` to discard work that is not confirmed merged

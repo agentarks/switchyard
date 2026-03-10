@@ -121,9 +121,11 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
           ...(cleanup.cleanupDetails ?? {})
         }
       });
-      process.stdout.write(`Session ${session.agentName} is already ${session.state}.\n`);
-      process.stdout.write(`Session: ${session.id}\n`);
-      process.stdout.write(`${cleanup.message}\n`);
+      writeStopResult(
+        `Session ${session.agentName} is already ${session.state}.`,
+        session.id,
+        cleanup.message ?? "Cleanup: no additional detail available."
+      );
       return;
     }
 
@@ -157,6 +159,11 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
         cleanupPerformed: false,
         ...buildCleanupFailurePayload(error)
       });
+      writeStopResult(
+        `Session ${session.agentName} has no recorded runtime pid. Marked failed.`,
+        nextSession.id,
+        `Cleanup failed after stop: ${formatErrorMessage(error)}`
+      );
       throw error;
     }
 
@@ -175,13 +182,11 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
         ...(cleanup.cleanupDetails ?? {})
       }
     });
-    process.stdout.write(`Session ${session.agentName} has no recorded runtime pid. Marked failed.\n`);
-    process.stdout.write(`Session: ${nextSession.id}\n`);
-    if (cleanup.message) {
-      process.stdout.write(`${cleanup.message}\n`);
-    } else {
-      process.stdout.write(`Worktree preserved: ${formatRelativePath(config.project.root, session.worktreePath)}\n`);
-    }
+    writeStopResult(
+      `Session ${session.agentName} has no recorded runtime pid. Marked failed.`,
+      nextSession.id,
+      cleanup.message ?? `Worktree preserved: ${formatRelativePath(config.project.root, session.worktreePath)}`
+    );
     return;
   }
 
@@ -251,6 +256,11 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       cleanupPerformed: false,
       ...buildCleanupFailurePayload(error)
     });
+    writeStopResult(
+      formatStopHeading(session.agentName, nextState),
+      nextSession.id,
+      `Cleanup failed after stop: ${formatErrorMessage(error)}`
+    );
     throw error;
   }
 
@@ -265,18 +275,11 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     ...(cleanup.cleanupDetails ?? {})
   });
 
-  if (nextState === "failed") {
-    process.stdout.write(`Session ${session.agentName} was already not running. Marked failed.\n`);
-  } else {
-    process.stdout.write(`Stopped ${session.agentName}\n`);
-  }
-  process.stdout.write(`Session: ${nextSession.id}\n`);
-
-  if (cleanup.message) {
-    process.stdout.write(`${cleanup.message}\n`);
-  } else {
-    process.stdout.write(`Worktree preserved: ${formatRelativePath(config.project.root, session.worktreePath)}\n`);
-  }
+  writeStopResult(
+    formatStopHeading(session.agentName, nextState),
+    nextSession.id,
+    cleanup.message ?? `Worktree preserved: ${formatRelativePath(config.project.root, session.worktreePath)}`
+  );
 }
 
 async function resolveSession(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
@@ -372,6 +375,20 @@ function determineStopOutcome(
   }
 
   return "stopped";
+}
+
+function formatStopHeading(agentName: string, nextState: SessionRecord["state"]): string {
+  if (nextState === "failed") {
+    return `Session ${agentName} was already not running. Marked failed.`;
+  }
+
+  return `Stopped ${agentName}`;
+}
+
+function writeStopResult(firstLine: string, sessionId: string, detailLine: string): void {
+  process.stdout.write(`${firstLine}\n`);
+  process.stdout.write(`Session: ${sessionId}\n`);
+  process.stdout.write(`${detailLine}\n`);
 }
 
 function formatRelativePath(projectRoot: string, path: string): string {

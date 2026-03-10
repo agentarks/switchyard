@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
@@ -63,6 +63,65 @@ test("sy stop --cleanup --abandon removes preserved artifacts through the real C
     const events = await listEvents(repoDir, { sessionId: "session-cli-stop" });
     assert.equal(events.at(-1)?.eventType, "stop.completed");
     assert.equal(events.at(-1)?.payload.cleanupMode, "abandoned");
+  } finally {
+    if (runtime.pid) {
+      stopChildIfAlive(runtime.pid);
+    }
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy stop reports the stopped session before surfacing a cleanup removal failure", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-stop-cleanup-failure-test-");
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-cleanup-failure");
+  const runtime = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    detached: true,
+    stdio: "ignore"
+  });
+  runtime.unref();
+
+  try {
+    assert.ok(runtime.pid);
+    await git(repoDir, ["branch", "agents/agent-cli-cleanup-failure"]);
+    await mkdir(worktreePath, { recursive: true });
+
+    await createSession(repoDir, {
+      id: "session-cli-cleanup-failure",
+      agentName: "agent-cli-cleanup-failure",
+      branch: "agents/agent-cli-cleanup-failure",
+      baseBranch: "main",
+      worktreePath,
+      state: "running",
+      runtimePid: runtime.pid,
+      createdAt: "2026-03-10T09:30:00.000Z",
+      updatedAt: "2026-03-10T09:30:00.000Z"
+    });
+
+    await assert.rejects(
+      () => execFileAsync(
+        process.execPath,
+        [tsxCliPath, cliEntryPath, "stop", "session-cli-cleanup-failure", "--cleanup"],
+        { cwd: repoDir }
+      ),
+      (error: unknown) => {
+        assert.ok(error && typeof error === "object" && "stdout" in error && "stderr" in error);
+        const cliError = error as { stdout: string; stderr: string; code: number };
+        assert.equal(cliError.code, 1);
+        assert.match(cliError.stdout, /Stopped agent-cli-cleanup-failure/);
+        assert.match(cliError.stdout, /Session: session-cli-cleanup-failure/);
+        assert.match(cliError.stdout, /Cleanup failed after stop: Cleanup failed for agent-cli-cleanup-failure:/);
+        assert.match(cliError.stderr, /STOP_ERROR: Cleanup failed for agent-cli-cleanup-failure:/);
+        return true;
+      }
+    );
+
+    const session = await getSessionById(repoDir, "session-cli-cleanup-failure");
+    assert.equal(session?.state, "stopped");
+    assert.equal(session?.runtimePid, null);
+
+    const events = await listEvents(repoDir, { sessionId: "session-cli-cleanup-failure" });
+    assert.equal(events.at(-1)?.eventType, "stop.completed");
+    assert.equal(events.at(-1)?.payload.cleanupReason, "cleanup_failed");
   } finally {
     if (runtime.pid) {
       stopChildIfAlive(runtime.pid);
