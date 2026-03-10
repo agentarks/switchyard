@@ -10,7 +10,7 @@ Switchyard is a very early-stage custom fork in the Overstory problem space, but
 
 Current status:
 - `sy init` is implemented
-- `sy events` shows the recent durable lifecycle timeline, globally or for one session
+- `sy events` shows the recent durable lifecycle timeline, globally, for one session, or for one orphaned agent stream after the session row is gone
 - `sy sling` creates one worktree-backed Codex session, using a pseudo-terminal wrapper on supported Unix platforms, and persists it
 - `sy status` is implemented with SQLite-backed session state, narrow liveness checks, unread-mail plus cleanup-readiness inspection, recent event context, and exact per-session inspection
 - `sy stop` stops one tracked session and supports optional `--cleanup`

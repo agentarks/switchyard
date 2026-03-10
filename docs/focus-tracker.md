@@ -38,6 +38,7 @@ Completed enough to count as minimally real:
 - richer exact-session inspection in `sy status` for stored base-branch, runtime-pid, and full recent-event context
 - M7 first event inspection path
 - operator-controlled recent-event window selection in `sy events`
+- orphaned agent-name event recovery in `sy events` when tracked session rows are already gone
 - first merge and reintegration CLI path
 - merge-target metadata retention for canonical-branch drift
 - dirty-entry diagnostics for merge preflight failures

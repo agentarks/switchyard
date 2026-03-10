@@ -1,7 +1,7 @@
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
-import { listEvents } from "../events/store.js";
+import { listDistinctSessionIdsForAgentEvents, listEvents } from "../events/store.js";
 import type { EventPayload, EventRecord } from "../events/types.js";
 import { EventsError } from "../errors.js";
 import type { SessionRecord } from "../sessions/types.js";
@@ -22,6 +22,7 @@ interface EventsCommandOptions {
 interface ResolvedEventSelection {
   session?: SessionRecord;
   sessionId?: string;
+  agentName?: string;
   events?: EventRecord[];
 }
 
@@ -59,7 +60,7 @@ export async function eventsCommand(options: EventsCommandOptions = {}): Promise
     return;
   }
 
-  process.stdout.write(`${formatHeading(config.project.name, session, selection?.sessionId)}\n`);
+  process.stdout.write(`${formatHeading(config.project.name, session, selection?.sessionId, selection?.agentName)}\n`);
   process.stdout.write("TIME\tEVENT\tAGENT\tSESSION\tDETAILS\n");
 
   for (const event of events) {
@@ -70,6 +71,7 @@ export async function eventsCommand(options: EventsCommandOptions = {}): Promise
 interface ResolvedSessionSelector {
   byId?: SessionRecord;
   byAgent: SessionRecord[];
+  normalizedAgentName?: string;
 }
 
 async function resolveSessionSelector(projectRoot: string, selector: string): Promise<ResolvedSessionSelector> {
@@ -89,7 +91,8 @@ async function resolveSessionSelector(projectRoot: string, selector: string): Pr
 
   return {
     byId: matches.byId,
-    byAgent: conflictingAgentMatches
+    byAgent: conflictingAgentMatches,
+    normalizedAgentName: matches.normalizedAgentName
   };
 }
 
@@ -98,7 +101,7 @@ async function resolveEventSelection(
   selector: string,
   limit: number
 ): Promise<ResolvedEventSelection | undefined> {
-  const { byId, byAgent } = await resolveSessionSelector(projectRoot, selector);
+  const { byId, byAgent, normalizedAgentName } = await resolveSessionSelector(projectRoot, selector);
 
   if (byId) {
     const events = await listEvents(projectRoot, {
@@ -138,7 +141,11 @@ async function resolveEventSelection(
   }
 
   if (byAgent.length === 0) {
-    return undefined;
+    if (!normalizedAgentName) {
+      return undefined;
+    }
+
+    return await resolveOrphanedAgentEventSelection(projectRoot, selector, normalizedAgentName, limit);
   }
 
   if (byAgent.length > 1) {
@@ -167,8 +174,46 @@ async function resolveEventSelection(
   };
 }
 
-function formatHeading(projectName: string, session?: SessionRecord, sessionId?: string): string {
+async function resolveOrphanedAgentEventSelection(
+  projectRoot: string,
+  selector: string,
+  agentName: string,
+  limit: number
+): Promise<ResolvedEventSelection | undefined> {
+  const sessionIds = await listDistinctSessionIdsForAgentEvents(projectRoot, agentName);
+
+  if (sessionIds.length > 1) {
+    throw new EventsError(
+      `Selector '${selector}' is ambiguous: it matches orphaned events for multiple sessions by agent name (${sessionIds.map((sessionId) => `'${sessionId}'`).join(", ")}). Use an exact session id.`
+    );
+  }
+
+  const agentEvents = await listEvents(projectRoot, {
+    agentName,
+    limit
+  });
+
+  if (agentEvents.length === 0) {
+    return undefined;
+  }
+
+  return {
+    agentName,
+    sessionId: sessionIds[0],
+    events: agentEvents
+  };
+}
+
+function formatHeading(projectName: string, session?: SessionRecord, sessionId?: string, agentName?: string): string {
   if (!session) {
+    if (agentName) {
+      if (sessionId) {
+        return `Recent events for ${agentName} (${sessionId}):`;
+      }
+
+      return `Recent events for ${agentName}:`;
+    }
+
     if (sessionId) {
       return `Recent events for session ${sessionId}:`;
     }

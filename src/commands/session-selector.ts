@@ -6,6 +6,7 @@ import { normalizeAgentName } from "../worktrees/naming.js";
 export interface SessionSelectorAmbiguity {
   byId?: SessionRecord;
   byAgent: SessionRecord[];
+  normalizedAgentName?: string;
 }
 
 export async function findSessionSelectorMatches(
@@ -13,12 +14,12 @@ export async function findSessionSelectorMatches(
   selector: string
 ): Promise<SessionSelectorAmbiguity> {
   const byId = await getSessionById(projectRoot, selector);
-  const normalizedSelector = tryNormalizeAgentName(selector);
-  const byAgent = normalizedSelector
-    ? await listSessionsByAgent(projectRoot, normalizedSelector)
+  const normalizedAgentName = tryNormalizeAgentName(selector);
+  const byAgent = normalizedAgentName
+    ? await listSessionsByAgent(projectRoot, normalizedAgentName)
     : [];
 
-  return { byId, byAgent };
+  return { byId, byAgent, normalizedAgentName };
 }
 
 export async function resolveSessionByIdOrAgent(

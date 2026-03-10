@@ -338,6 +338,34 @@ test("eventsCommand resolves orphaned session-id events even when the selector i
   }
 });
 
+test("eventsCommand reads orphaned events by normalized agent name when the session row is missing", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createEvent(repoDir, {
+      sessionId: "session-orphan-agent",
+      agentName: "agent-orphan",
+      eventType: "stop.completed",
+      payload: {
+        outcome: "stopped"
+      },
+      createdAt: "2026-03-08T11:21:00.000Z"
+    });
+
+    const output = await captureStdout(async () => {
+      await eventsCommand({ startDir: repoDir, selector: "Agent Orphan" });
+    });
+
+    assert.match(output, /Recent events for agent-orphan \(session-orphan-agent\):/);
+    assert.match(
+      output,
+      /2026-03-08T11:21:00.000Z\tstop.completed\tagent-orphan\tsession-orphan-agent\toutcome=stopped/
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("eventsCommand rejects selectors that match different sessions by id and agent name", async () => {
   const repoDir = await createInitializedRepo();
 
@@ -411,6 +439,90 @@ test("eventsCommand rejects selectors that match multiple sessions by agent name
         assert.equal(
           error.message,
           "Selector 'shared-agent' is ambiguous: it matches multiple sessions by agent name ('session-latest', 'session-earlier'). Use an exact session id from 'sy status'."
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("eventsCommand rejects orphaned agent-name selectors that span multiple session ids", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createEvent(repoDir, {
+      sessionId: "session-shared-1",
+      agentName: "shared-agent",
+      eventType: "stop.completed",
+      payload: {
+        outcome: "stopped"
+      },
+      createdAt: "2026-03-08T13:10:00.000Z"
+    });
+    await createEvent(repoDir, {
+      sessionId: "session-shared-2",
+      agentName: "shared-agent",
+      eventType: "mail.sent",
+      payload: {
+        sender: "operator",
+        bodyLength: 12
+      },
+      createdAt: "2026-03-08T13:15:00.000Z"
+    });
+
+    await assert.rejects(
+      () => eventsCommand({ startDir: repoDir, selector: "shared-agent" }),
+      (error: unknown) => {
+        assert.ok(error instanceof EventsError);
+        assert.equal(
+          error.message,
+          "Selector 'shared-agent' is ambiguous: it matches orphaned events for multiple sessions by agent name ('session-shared-1', 'session-shared-2'). Use an exact session id."
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("eventsCommand rejects orphaned agent-name selectors that span multiple session ids outside the recent-event limit", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createEvent(repoDir, {
+      sessionId: "session-shared-old",
+      agentName: "shared-agent",
+      eventType: "stop.completed",
+      payload: {
+        outcome: "stopped"
+      },
+      createdAt: "2026-03-08T13:00:00.000Z"
+    });
+
+    for (let index = 0; index < 10; index += 1) {
+      const minute = String(10 + index).padStart(2, "0");
+      await createEvent(repoDir, {
+        sessionId: "session-shared-new",
+        agentName: "shared-agent",
+        eventType: "mail.sent",
+        payload: {
+          sender: "operator",
+          bodyLength: 12
+        },
+        createdAt: `2026-03-08T13:${minute}:00.000Z`
+      });
+    }
+
+    await assert.rejects(
+      () => eventsCommand({ startDir: repoDir, selector: "shared-agent" }),
+      (error: unknown) => {
+        assert.ok(error instanceof EventsError);
+        assert.equal(
+          error.message,
+          "Selector 'shared-agent' is ambiguous: it matches orphaned events for multiple sessions by agent name ('session-shared-new', 'session-shared-old'). Use an exact session id."
         );
         return true;
       }
