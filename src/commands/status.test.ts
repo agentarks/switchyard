@@ -605,7 +605,7 @@ test("statusCommand includes merge conflict details in the recent event summary"
 
   assert.match(
     writes.join(""),
-    /stopped\tsession-merge-conflict\tagent-merge-conflict\tagents\/agent-merge-conflict\t\.switchyard\/worktrees\/agent-merge-conflict\t2026-03-08T11:05:00.000Z\t0\t[^\t]+\t2026-03-08T11:06:00.000Z merge\.failed reason=merge_conflict, conflictCount=2, firstConflictPath=src\/conflict\.ts, bran\.\.\./
+    /stopped\tsession-merge-conflict\tagent-merge-conflict\tagents\/agent-merge-conflict\t\.switchyard\/worktrees\/agent-merge-conflict\t2026-03-08T11:05:00.000Z\t0\t[^\t]+\t2026-03-08T11:06:00.000Z merge\.failed reason=merge_conflict, canonicalBranch=main, conflictCount=2, firstConflictPath\.\.\./
   );
 });
 
@@ -656,6 +656,107 @@ test("statusCommand includes merge preflight failure details in the recent event
   assert.match(
     writes.join(""),
     /stopped\tsession-merge-preflight\tagent-merge-preflight\tagents\/agent-merge-preflight\t\.switchyard\/worktrees\/agent-merge-preflight\t2026-03-08T11:07:00.000Z\t0\t[^\t]+\t2026-03-08T11:08:00.000Z merge\.failed reason=repo_root_dirty, target=repo_root, firstDirtyEntry=" M tracked\.txt", bra\.\.\./
+  );
+});
+
+test("statusCommand selected-session view includes merge drift details in the recent summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-merge-drift",
+    agentName: "agent-merge-drift",
+    branch: "agents/agent-merge-drift",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-merge-drift"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T11:09:00.000Z",
+    updatedAt: "2026-03-08T11:09:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-merge-drift",
+    agentName: "agent-merge-drift",
+    eventType: "merge.failed",
+    payload: {
+      branch: "agents/agent-merge-drift",
+      canonicalBranch: "main",
+      configuredCanonicalBranch: "release",
+      reason: "canonical_branch_drift"
+    },
+    createdAt: "2026-03-08T11:10:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-merge-drift",
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /Recent: 2026-03-08T11:10:00.000Z merge\.failed reason=canonical_branch_drift, canonicalBranch=main, configuredCanonicalBranch=release, branch=agents\/agent-merge-drift/
+  );
+});
+
+test("statusCommand selected-session view includes merge worktree and git error details in the recent summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-merge-git-error",
+    agentName: "agent-merge-git-error",
+    branch: "agents/agent-merge-git-error",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-merge-git-error"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T11:11:00.000Z",
+    updatedAt: "2026-03-08T11:11:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-merge-git-error",
+    agentName: "agent-merge-git-error",
+    eventType: "merge.failed",
+    payload: {
+      branch: "agents/agent-merge-git-error",
+      canonicalBranch: "main",
+      reason: "git_error",
+      worktreePath: ".switchyard/worktrees/agent-merge-git-error",
+      errorMessage: "fatal: switch failed"
+    },
+    createdAt: "2026-03-08T11:12:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-merge-git-error",
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /Recent: 2026-03-08T11:12:00.000Z merge\.failed reason=git_error, canonicalBranch=main, worktreePath=\.switchyard\/worktrees\/agent-merge-git-error, errorMessage="fatal: switch failed", branch=agents\/agent-merge-git-error/
   );
 });
 
