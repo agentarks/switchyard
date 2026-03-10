@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { buildDefaultConfig, writeConfig } from "./config.js";
 import { listEvents } from "./events/store.js";
-import { createMail, readUnreadMailForSession } from "./mail/store.js";
+import { createMail, listMailForSession, readUnreadMailForSession } from "./mail/store.js";
 import { createSession, getSessionById } from "./sessions/store.js";
 import { bootstrapSwitchyardLayout } from "./storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "./test-helpers/git.js";
@@ -229,6 +229,48 @@ test("sy merge reports the resolved session id when a preserved merge stops with
     const events = await listEvents(repoDir, { sessionId: "session-cli-conflict" });
     assert.equal(events.at(-1)?.eventType, "merge.failed");
     assert.equal(events.at(-1)?.payload.reason, "merge_conflict");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy mail send preserves the exact body and reports the resolved session id through the real CLI entrypoint", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-mail-send-test-");
+  const body = "  Review the preserved branch diff.\nSecond line stays intact.  ";
+
+  try {
+    await createSession(repoDir, {
+      id: "!!!",
+      agentName: "agent-cli-send",
+      branch: "agents/agent-cli-send",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-cli-send"),
+      state: "running",
+      runtimePid: 42424,
+      createdAt: "2026-03-10T10:45:00.000Z",
+      updatedAt: "2026-03-10T10:45:00.000Z"
+    });
+
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [tsxCliPath, cliEntryPath, "mail", "send", "!!!", body, "--from", "operator-review"],
+      { cwd: repoDir }
+    );
+
+    assert.equal(stderr, "");
+    assert.match(stdout, /Queued mail for agent-cli-send/);
+    assert.match(stdout, /Session: !!!/);
+    assert.match(stdout, /Mail id: [0-9a-f-]{36}/);
+
+    const mailbox = await listMailForSession(repoDir, "!!!");
+    assert.equal(mailbox.length, 1);
+    assert.equal(mailbox[0]?.sender, "operator-review");
+    assert.equal(mailbox[0]?.recipient, "agent-cli-send");
+    assert.equal(mailbox[0]?.body, body);
+
+    const events = await listEvents(repoDir, { sessionId: "!!!" });
+    assert.equal(events.at(-1)?.eventType, "mail.sent");
+    assert.equal(events.at(-1)?.payload.sender, "operator-review");
+    assert.equal(events.at(-1)?.payload.bodyLength, body.length);
   } finally {
     await removeTempDir(repoDir);
   }

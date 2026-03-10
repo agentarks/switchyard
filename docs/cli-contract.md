@@ -198,6 +198,7 @@ Current contract:
 - mail commands reject selectors that match multiple sessions by normalized agent name and require an exact session id instead
 - `sy mail send` writes one durable record into `mail.db`
 - `sy mail send` preserves the exact provided body text while still rejecting whitespace-only input
+- `sy mail send` prints the resolved session id and generated mail id in operator-facing output
 - `sy mail check <session>` reads unread mail for one resolved session
 - `sy mail check` prints the resolved session id in operator-facing output, including the empty-unread case
 - `sy mail check` prints each returned message body as an explicit `Body:` block
