@@ -103,6 +103,11 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
           cleanupPerformed: false,
           ...buildCleanupFailurePayload(error)
         });
+        writeStopResult(
+          `Session ${session.agentName} is already ${session.state}.`,
+          session.id,
+          `Cleanup failed after stop: ${formatErrorMessage(error)}`
+        );
         throw error;
       }
 
