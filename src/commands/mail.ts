@@ -135,10 +135,12 @@ export async function mailCheckCommand(options: MailCheckOptions): Promise<void>
 
   if (unreadMail.length === 0) {
     process.stdout.write(`No unread mail for ${session.agentName}.\n`);
+    process.stdout.write(`Session: ${session.id}\n`);
     return;
   }
 
   process.stdout.write(`Unread mail for ${session.agentName}:\n`);
+  process.stdout.write(`Session: ${session.id}\n`);
 
   for (const message of unreadMail) {
     process.stdout.write(`${message.createdAt}\t${message.sender}\t${message.id}\n`);
@@ -178,6 +180,7 @@ export async function mailListCommand(options: MailListOptions): Promise<void> {
     process.stdout.write(
       options.unreadOnly ? `No unread mail for ${session.agentName}.\n` : `No mail for ${session.agentName}.\n`
     );
+    process.stdout.write(`Session: ${session.id}\n`);
     return;
   }
 
@@ -186,6 +189,7 @@ export async function mailListCommand(options: MailListOptions): Promise<void> {
       ? `Unread mail for ${session.agentName} (read-only):\n`
       : `Mailbox for ${session.agentName} (read-only):\n`
   );
+  process.stdout.write(`Session: ${session.id}\n`);
 
   for (const message of mailbox) {
     const state = message.readAt ? "read" : "unread";

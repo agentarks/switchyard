@@ -4,7 +4,7 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Reassess whether any real operator gap remains now that `sy status <session> --task` can print the full stored launch instruction and `sy stop` now echoes the exact session id in handled output
+1. Reassess whether any real operator gap remains now that `sy status <session> --task` can print the full stored launch instruction, `sy stop` echoes the exact session id in handled output, and mail inspection now does the same
 
 ## Next
 

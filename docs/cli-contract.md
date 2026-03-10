@@ -195,9 +195,11 @@ Current contract:
 - mail commands reject selectors that match multiple sessions by normalized agent name and require an exact session id instead
 - `sy mail send` writes one durable record into `mail.db`
 - `sy mail check <session>` reads unread mail for one resolved session
+- `sy mail check` prints the resolved session id in operator-facing output, including the empty-unread case
 - `sy mail check` marks returned messages as read
 - `sy mail list <session>` reads the full mailbox for one resolved session
 - `sy mail list <session> --unread` reads only unread mail for one resolved session
+- `sy mail list` prints the resolved session id in operator-facing output, including empty mailbox views
 - `sy mail list` does not change read state
 - `sy mail list --unread` does not change read state
 - mail commands reject selectors that match one session by id and a different session by normalized agent name

@@ -28,6 +28,7 @@ Completed enough to count as minimally real:
 - M4 one-agent spawn
 - launch-time session-id visibility in `sy sling`
 - stop-time session-id visibility in `sy stop`
+- session-id visibility in `sy mail check` and `sy mail list`
 - M5 lifecycle control
 - M6 messaging
 - read-only mailbox inspection inside the mail path
@@ -62,7 +63,7 @@ Completed enough to count as minimally real:
 - end-to-end coverage around `sy init`
 
 Not complete yet:
-- no new named slice is locked yet beyond exact stop-output session-id visibility landing
+- no new named slice is locked yet beyond exact mail-inspection session-id visibility landing
 
 ## Current In-Scope Work
 
