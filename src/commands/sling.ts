@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { relative } from "node:path";
+import { readFile } from "node:fs/promises";
+import { relative, resolve } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
@@ -19,6 +20,7 @@ import { createWorktree, type ManagedWorktree, removeWorktree } from "../worktre
 interface SlingOptions {
   agentName: string;
   task?: string;
+  taskFile?: string;
   runtimeArgs?: string[];
   startDir?: string;
   spawnRuntime?: (options: {
@@ -36,15 +38,20 @@ export function createSlingCommand(): Command {
   return new Command("sling")
     .description("Spawn one Codex agent into an isolated worktree")
     .argument("<agent>", "Deterministic agent name")
-    .requiredOption("--task <instruction>", "Operator task or instruction to hand off")
+    .option("--task <instruction>", "Operator task or instruction to hand off")
+    .option("--task-file <path>", "Read the operator task or instruction from a file")
     .argument("[args...]", "Arguments reserved for future Codex/runtime inputs")
-    .action(async (agentName: string, runtimeArgs: string[], commandOptions: { task: string }) => {
-      await slingCommand({ agentName, task: commandOptions.task, runtimeArgs });
+    .action(async (
+      agentName: string,
+      runtimeArgs: string[],
+      commandOptions: { task?: string; taskFile?: string }
+    ) => {
+      await slingCommand({ agentName, task: commandOptions.task, taskFile: commandOptions.taskFile, runtimeArgs });
     });
 }
 
 export async function slingCommand(options: SlingOptions): Promise<void> {
-  const task = validateTask(options.task);
+  const task = await loadTask(options);
   const config = await loadConfig(options.startDir);
   const recordEvent = options.recordEvent ?? recordEventBestEffort;
   const createSessionRecord = options.createSessionRecord ?? createSession;
@@ -237,9 +244,33 @@ function formatRuntimeCommandForOperator(runtimeSession: SpawnedRuntimeProcess, 
   return [runtimeSession.command.command, ...args].join(" ");
 }
 
+async function loadTask(options: Pick<SlingOptions, "task" | "taskFile" | "startDir">): Promise<string> {
+  if (typeof options.task === "string" && typeof options.taskFile === "string") {
+    throw new SlingError("Choose exactly one task source: use either '--task <instruction>' or '--task-file <path>'.");
+  }
+
+  if (typeof options.taskFile === "string") {
+    return validateTask(await readTaskFile(options.taskFile, options.startDir));
+  }
+
+  return validateTask(options.task);
+}
+
+async function readTaskFile(taskFile: string, startDir?: string): Promise<string> {
+  const resolvedPath = resolve(startDir ?? process.cwd(), taskFile);
+
+  try {
+    return await readFile(resolvedPath, "utf8");
+  } catch (error) {
+    throw new SlingError(`Failed to read task file '${taskFile}': ${formatErrorMessage(error)}`);
+  }
+}
+
 function validateTask(task: string | undefined): string {
   if (typeof task !== "string" || task.trim().length === 0) {
-    throw new SlingError("Missing task. Use '--task <instruction>' to hand off one explicit task.");
+    throw new SlingError(
+      "Missing task. Use exactly one of '--task <instruction>' or '--task-file <path>' to hand off one explicit task."
+    );
   }
 
   return task;

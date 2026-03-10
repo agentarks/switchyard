@@ -37,6 +37,7 @@ Without that discipline:
 ## Latest Completed Slice
 
 Completed slice:
+- file-backed launch-task input in `sy sling` via `--task-file <path>`
 - exact launch-task inspection in `sy status <session> --task`
 - exact session-id visibility in operator-facing `sy stop` output
 - exact session-id visibility in operator-facing `sy mail check` and `sy mail list` output
