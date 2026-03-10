@@ -659,6 +659,56 @@ test("statusCommand includes merge conflict details in the recent event summary"
   );
 });
 
+test("statusCommand includes merge preflight failure details in the recent event summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-merge-preflight",
+    agentName: "agent-merge-preflight",
+    branch: "agents/agent-merge-preflight",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-merge-preflight"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T11:07:00.000Z",
+    updatedAt: "2026-03-08T11:07:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-merge-preflight",
+    agentName: "agent-merge-preflight",
+    eventType: "merge.failed",
+    payload: {
+      branch: "agents/agent-merge-preflight",
+      reason: "repo_root_dirty",
+      target: "repo_root",
+      dirtyCount: 1,
+      firstDirtyEntry: " M tracked.txt"
+    },
+    createdAt: "2026-03-08T11:08:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /stopped\tsession-merge-preflight\tagent-merge-preflight\tagents\/agent-merge-preflight\t\.switchyard\/worktrees\/agent-merge-preflight\t2026-03-08T11:07:00.000Z\t0\t[^\t]+\t2026-03-08T11:08:00.000Z merge\.failed reason=repo_root_dirty, target=repo_root, firstDirtyEntry=" M tracked\.txt", bra\.\.\./
+  );
+});
+
 test("statusCommand shows unread mail counts alongside recent events", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
