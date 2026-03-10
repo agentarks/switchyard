@@ -83,6 +83,7 @@ Current contract:
 - command includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`
 - active sessions show the post-stop cleanup result with a `stop-then:` prefix instead of hiding whether cleanup would be merged-safe or abandon-only
 - command surfaces partial preserved-artifact loss in that cleanup-readiness label when the branch still exists but the preserved worktree is already missing
+- command keeps that missing-worktree case distinct in recent stop-event history instead of collapsing it into the harmless already-absent case
 - if cleanup readiness cannot be evaluated for a session, command still renders status and prints `?` in the cleanup column instead of failing
 - command keeps operator-relevant `merge.failed` context in the recent-event summary, including branch-drift targets, preserved-worktree paths, and git error text when those details exist
 - with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, creation time, unread-mail count, cleanup-readiness label, and the full recent-event summary
@@ -126,6 +127,7 @@ Current contract:
 - command rejects `--abandon` unless `--cleanup` is also set
 - command reports already-absent artifacts as already absent instead of reporting a removal that did not happen
 - command refuses plain cleanup when the preserved branch still exists but the preserved worktree path is already missing, and tells the operator to restore it manually or use explicit abandon
+- command records that missing-worktree refusal distinctly from the fully-absent branch-plus-worktree case in durable `stop.completed` history
 - command records a durable `stop.completed` event with cleanup failure details when cleanup is blocked or artifact removal fails after the stop state is already known
 
 Future target:

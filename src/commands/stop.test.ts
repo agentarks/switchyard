@@ -792,7 +792,50 @@ test("stopCommand refuses cleanup when the preserved worktree is already missing
     assert.equal(events[0]?.eventType, "stop.completed");
     assert.equal(events[0]?.payload.outcome, "already_not_running");
     assert.equal(events[0]?.payload.cleanupPerformed, false);
-    assert.equal(events[0]?.payload.cleanupReason, "artifacts_missing");
+    assert.equal(events[0]?.payload.cleanupReason, "worktree_missing");
+    assert.equal(events[0]?.payload.worktreePath, ".switchyard/worktrees/agent-missing-worktree");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("stopCommand surfaces a missing preserved worktree before legacy cleanup gating", async () => {
+  const repoDir = await createInitializedRepo();
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-legacy-missing-worktree");
+
+  try {
+    await git(repoDir, ["branch", "agents/legacy-missing-worktree"]);
+    await createSession(repoDir, {
+      id: "session-legacy-missing-worktree",
+      agentName: "agent-legacy-missing-worktree",
+      branch: "agents/legacy-missing-worktree",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:16:00.000Z",
+      updatedAt: "2026-03-08T09:16:00.000Z"
+    });
+
+    await assert.rejects(
+      () => stopCommand({
+        selector: "agent-legacy-missing-worktree",
+        cleanup: true,
+        startDir: repoDir
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof StopError);
+        assert.match(
+          error.message,
+          /preserved worktree '\.switchyard\/worktrees\/agent-legacy-missing-worktree' is already missing while branch 'agents\/legacy-missing-worktree' still exists/
+        );
+        return true;
+      }
+    );
+
+    const events = await listEvents(repoDir, { sessionId: "session-legacy-missing-worktree" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.payload.cleanupReason, "worktree_missing");
+    assert.equal(events[0]?.payload.worktreePath, ".switchyard/worktrees/agent-legacy-missing-worktree");
   } finally {
     await removeTempDir(repoDir);
   }

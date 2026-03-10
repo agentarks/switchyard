@@ -150,6 +150,17 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
       createdAt: "2026-03-08T09:12:00.000Z",
       updatedAt: "2026-03-08T09:12:00.000Z"
     });
+    await git(repoDir, ["branch", "agents/legacy-missing-worktree"]);
+    await createSession(repoDir, {
+      id: "session-legacy-missing-worktree",
+      agentName: "agent-legacy-missing-worktree",
+      branch: "agents/legacy-missing-worktree",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-legacy-missing-worktree"),
+      state: "failed",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:13:00.000Z",
+      updatedAt: "2026-03-08T09:13:00.000Z"
+    });
     await createSession(repoDir, {
       id: "session-unmerged",
       agentName: "agent-unmerged",
@@ -192,7 +203,11 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
   assert.match(output, /stopped\tsession-absent\tagent-absent[^\n]*\tready:absent\t-/);
   assert.match(
     output,
-    /stopped\tsession-missing-worktree\tagent-missing-worktree[^\n]*\tabandon-only:artifacts-missing\t-/
+    /stopped\tsession-missing-worktree\tagent-missing-worktree[^\n]*\tabandon-only:worktree-missing\t-/
+  );
+  assert.match(
+    output,
+    /failed\tsession-legacy-missing-worktree\tagent-legacy-missing-worktree[^\n]*\tabandon-only:worktree-missing\t-/
   );
   assert.match(output, /stopped\tsession-unmerged\tagent-unmerged[^\n]*\tabandon-only:not-merged\t-/);
   assert.match(output, /failed\tsession-legacy-cleanup\tagent-legacy-cleanup[^\n]*\tabandon-only:legacy\t-/);
@@ -577,6 +592,56 @@ test("statusCommand includes stop cleanup failure details in the recent event su
   assert.match(
     writes.join(""),
     /Recent: 2026-03-08T09:22:00.000Z stop\.completed outcome=already_not_running, cleanupPerformed=false, cleanupReason=cleanup_failed, cleanupError="simulated remove failure"/
+  );
+});
+
+test("statusCommand includes missing-worktree cleanup details in the recent event summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stop-missing-worktree",
+    agentName: "agent-stop-missing-worktree",
+    branch: "agents/agent-stop-missing-worktree",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stop-missing-worktree"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T09:23:00.000Z",
+    updatedAt: "2026-03-08T09:23:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stop-missing-worktree",
+    agentName: "agent-stop-missing-worktree",
+    eventType: "stop.completed",
+    payload: {
+      outcome: "already_not_running",
+      cleanupPerformed: false,
+      cleanupReason: "worktree_missing",
+      worktreePath: ".switchyard/worktrees/agent-stop-missing-worktree"
+    },
+    createdAt: "2026-03-08T09:24:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-stop-missing-worktree",
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /Recent: 2026-03-08T09:24:00.000Z stop\.completed outcome=already_not_running, cleanupPerformed=false, cleanupReason=worktree_missing, worktreePath=\.switchyard\/worktrees\/agent-stop-missing-worktree/
   );
 });
 
