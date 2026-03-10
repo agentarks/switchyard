@@ -171,7 +171,7 @@ These are the current project decisions and should be treated as the default unt
 ## Open Decisions
 
 These still need to be resolved or confirmed:
-- Which additional event or merge diagnostic improvement, if any, is still justified inside the current operator loop?
+- What is the smallest first-class task input contract for `sy sling`?
 
 ## Suggested Order For Our Next Sessions
 

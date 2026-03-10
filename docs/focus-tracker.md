@@ -53,21 +53,21 @@ Completed enough to count as minimally real:
 - explicit selector disambiguation in `stop` and `merge`
 - explicit reused-agent selector disambiguation across session-targeting commands
 - first readiness and early-failure handling as hardening work ahead of M8
+- Unix zombie-runtime detection in pid liveness checks so stale sessions no longer look healthy
 - detached `sy sling` launch compatibility hardening for TTY-requiring Codex builds on supported Unix platforms
 - end-to-end coverage around `sy init`
 
 Not complete yet:
-- the next concrete operator-loop hardening gap still needs selection and reproduction
+- the next session should implement first-class task input for `sy sling`
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- improve operator inspection only where a real operator workflow still has a blind spot
-- improve pid-backed lifecycle control only where the current operator loop is still concretely weak
-- harden launch, status, stop, merge, mail, or event behavior only when a real operator blind spot is reproduced
+- implement first-class task input in `sy sling`
+- improve operator inspection only where that slice changes what an operator can actually understand or do
+- harden lifecycle behavior only when a reproduced failure blocks the current loop
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
-- broaden event or merge inspection further only if the current operator loop proves insufficient
 
 ## Current Out-Of-Scope Work
 
@@ -98,7 +98,7 @@ If the task mainly improves a deferred area, defer it.
 Use this rough project view instead of one flat percentage:
 
 - Core v0 operator loop: mostly complete
-- v0 hardening and operator confidence: in progress
+- v0 hardening: exception-only, not the default mode
 - merge/reintegration workflow: minimally real, still intentionally narrow
 - broader long-term vision: intentionally deferred
 
@@ -111,3 +111,4 @@ A session is probably on track if it ends with at least one of these:
 - the project docs became more accurate about scope or state
 
 If a session produces mostly new surface area without improving the current loop, it is likely drift.
+If a session produces mostly generic hardening without a named slice or reproduced bug, it is also likely drift.

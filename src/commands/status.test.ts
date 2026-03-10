@@ -1383,6 +1383,66 @@ test("statusCommand marks stale running sessions as failed", async () => {
   );
 });
 
+test("statusCommand reports zombie runtimes as failed stale sessions", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "agent-zombie",
+    agentName: "agent-zombie",
+    branch: "agents/agent-zombie",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-zombie"),
+    state: "running",
+    runtimePid: 9191,
+    createdAt: "2026-03-06T09:00:00.000Z",
+    updatedAt: "2026-03-06T10:00:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "agent-zombie",
+    agentName: "agent-zombie",
+    eventType: "sling.completed",
+    payload: {
+      runtimePid: 9191,
+      readyAfterMs: 500
+    },
+    createdAt: "2026-03-06T09:30:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      inspectRuntimeLiveness: () => ({
+        alive: false,
+        reason: "process_state_zombie"
+      }),
+      now: () => "2026-03-08T09:46:00.000Z"
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(sessions[0]?.runtimePid, null);
+    const events = await listEvents(repoDir, { sessionId: "agent-zombie" });
+    assert.equal(events.length, 2);
+    assert.equal(events[1]?.eventType, "runtime.exited");
+    assert.equal(events[1]?.payload.reason, "process_state_zombie");
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(
+    output,
+    /failed\tagent-zombie\tagent-zombie\tagents\/agent-zombie\t\.switchyard\/worktrees\/agent-zombie\t2026-03-08T09:46:00.000Z\t0\t[^\t]+\t2026-03-08T09:46:00.000Z runtime\.exited reason=process_state_zombie, runtimePid=9191/
+  );
+});
+
 test("statusCommand keeps rendering when unread mail counts cannot be loaded", async () => {
   const repoDir = await createInitializedRepo();
   const stdoutWrites: string[] = [];

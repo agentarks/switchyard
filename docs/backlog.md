@@ -4,22 +4,23 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Identify and close the next narrow reliability or inspection gap in the current operator loop
+1. Add first-class operator task input to `sy sling`
 
 ## Next
 
-2. Add another narrow inspection or lifecycle hardening slice once the next operator workflow gap is reproduced
+2. Surface that task handoff clearly in launch output and durable inspection
 
 ## After That
 
-3. Dashboard or TUI work, if still justified
+3. Reassess whether the loop needs another concrete slice at all before defaulting back to hardening
 
 ## Then
 
-4. Multiple runtimes beyond Codex, if still justified
+4. Dashboard or TUI work, if still justified
 
 ## Later
 
+- multiple runtimes beyond Codex, if still justified
 - richer runtime matrix, if still justified
 
 ## Not A Priority Yet

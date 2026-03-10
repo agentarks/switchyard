@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn with launch-time session-id visibility, readiness-aware status with session-id visibility plus unread-mail counts, cleanup-readiness inspection, and exact per-session inspection that now surfaces stored base-branch and runtime-pid metadata plus the full recent-event summary, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window and orphaned agent-name recovery when the session row is gone, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop. Merge conflicts now also surface the conflicting paths directly in `sy merge`, with compact conflict metadata carried into durable events and recent status context, repo-root merge-in-progress preflight now fails with an explicit recovery message instead of a generic dirty-worktree error, session-scoped merge preflight refusals now also record durable `merge.failed` events so later `sy status` and `sy events` inspection still show what blocked reintegration, `sy stop` shutdown failures before any state mutation now also record durable `stop.failed` events so later `sy status` and `sy events` inspection still show what blocked shutdown, `sy status` now keeps higher-value merge-failure context like branch-drift targets, preserved-worktree paths, git error text, stop-failure shutdown diagnostics, and stop cleanup mode in its recent-event summary, and cleanup inspection now also distinguishes when a preserved worktree has already gone missing while the branch still remains so `sy status`, `sy stop --cleanup`, and later durable `stop.completed` history no longer collapse that partial-artifact-loss case into the harmless already-absent path.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn with launch-time session-id visibility, readiness-aware status with session-id visibility plus unread-mail counts, cleanup-readiness inspection, and exact per-session inspection that now surfaces stored base-branch and runtime-pid metadata plus the full recent-event summary, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window and orphaned agent-name recovery when the session row is gone, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop. Merge conflicts now also surface the conflicting paths directly in `sy merge`, with compact conflict metadata carried into durable events and recent status context, repo-root merge-in-progress preflight now fails with an explicit recovery message instead of a generic dirty-worktree error, session-scoped merge preflight refusals now also record durable `merge.failed` events so later `sy status` and `sy events` inspection still show what blocked reintegration, `sy stop` shutdown failures before any state mutation now also record durable `stop.failed` events so later `sy status` and `sy events` inspection still show what blocked shutdown, `sy status` now keeps higher-value merge-failure context like branch-drift targets, preserved-worktree paths, git error text, stop-failure shutdown diagnostics, and stop cleanup mode in its recent-event summary, cleanup inspection now also distinguishes when a preserved worktree has already gone missing while the branch still remains so `sy status`, `sy stop --cleanup`, and later durable `stop.completed` history no longer collapse that partial-artifact-loss case into the harmless already-absent path, and Unix zombie runtime pids are now treated as stale dead sessions instead of being misreported as healthy just because the pid still answers a signal probe.
 
 ## What Exists
 
@@ -35,6 +35,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - launch-time session-id visibility in `sy sling` so operators can target an exact preserved session immediately
 - initial readiness waiting that requires the spawned Codex process to survive a short launch window before the session is marked usable
 - narrow process liveness and stop helpers for detached Codex sessions
+- Unix zombie-process detection in runtime liveness checks so stale sessions fail closed instead of staying `running`
 - durable lifecycle event appends around `sy sling`, `sy stop`, `sy mail send`, `sy mail check`, and `sy mail list`
 - durable `stop.failed` events for shutdown errors that happen before `sy stop` can change session state
 - spawn lifecycle events that now distinguish `sling.spawned` from `sling.completed`
@@ -114,6 +115,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - promotes `starting` sessions to `running` when the pid survives the first liveness check
   - marks early-dead `starting` sessions as `failed`
   - marks obviously stale `running` pid-backed sessions as `failed`
+  - treats Unix zombie runtime pids as stale not-running sessions and records `process_state_zombie` in the reconciliation event reason
   - when a selector is present, only reconciles that targeted session before printing
   - prints an empty-state message when no sessions exist
   - prints a tab-separated session table ordered by most recent update
@@ -198,10 +200,10 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## Recommended Next Task
 
-Pick the next reproduced operator-loop hardening gap before broadening scope:
-- keep the slice inside the current `init -> sling -> status -> stop -> merge -> mail -> events` loop
-- prefer one concrete inspection or lifecycle blind spot over broader runtime redesign or new surface area
-- keep prioritizing operator-readable behavior, durable state, and regression coverage over new subsystems
+Do not default to another generic hardening pass:
+- the named next slice is first-class task input for `sy sling`
+- use the existing `.switchyard/specs/` directory for the durable handoff artifact
+- only do lifecycle hardening when it is tied to a reproduced operator problem or this slice
 
 ## How To Use This File
 
