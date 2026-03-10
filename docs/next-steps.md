@@ -41,6 +41,7 @@ Completed slice:
 - exact launch-task inspection in `sy status <session> --task`
 - exact session-id visibility in handled `sy merge` failure output
 - exact session-id visibility in operator-facing `sy stop` output
+- exact session-id visibility in repeated-stop already-inactive `sy stop` refusal output
 - handled stop output plus exact session-id visibility when `sy stop --cleanup` hits a cleanup-removal failure after the runtime is already stopped
 - exact session-id visibility in operator-facing `sy mail check` and `sy mail list` output
 - exact mail-body preservation in `sy mail send`

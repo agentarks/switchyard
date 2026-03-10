@@ -29,6 +29,7 @@ Completed enough to count as minimally real:
 - launch-time session-id visibility in `sy sling`
 - handled merge-failure session-id visibility in `sy merge`
 - stop-time session-id visibility in `sy stop`
+- repeated-stop already-inactive refusal output in `sy stop` now also echoes the resolved session id
 - handled stop output now remains visible even when post-stop cleanup removal fails
 - session-id visibility in `sy mail check` and `sy mail list`
 - exact mail-body preservation in `sy mail send`

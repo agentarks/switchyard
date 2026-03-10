@@ -132,6 +132,7 @@ Current contract:
 - on Unix-like platforms, command treats zombie runtime pids as already not running instead of timing out against an unreapable stale pid
 - command updates durable session state in `sessions.db`
 - command prints the durable session id in handled operator-facing success paths so later `events`, `merge`, or cleanup commands can target the preserved session directly
+- command also prints the resolved durable session id before failing when a repeated stop targets an already inactive session
 - command preserves the worktree by default so the operator can still review or merge the branch later
 - command still stops an active session even when a requested cleanup cannot proceed safely
 - if runtime shutdown fails before state changes, command leaves the session active and records a durable `stop.failed` event with the failure reason and error text

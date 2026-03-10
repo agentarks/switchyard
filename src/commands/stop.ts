@@ -134,6 +134,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       return;
     }
 
+    writeStopFailureContext(session.id);
     throw new StopError(`Session '${options.selector}' is already ${session.state}.`);
   }
 
@@ -394,6 +395,10 @@ function writeStopResult(firstLine: string, sessionId: string, detailLine: strin
   process.stdout.write(`${firstLine}\n`);
   process.stdout.write(`Session: ${sessionId}\n`);
   process.stdout.write(`${detailLine}\n`);
+}
+
+function writeStopFailureContext(sessionId: string): void {
+  process.stderr.write(`Session: ${sessionId}\n`);
 }
 
 function formatRelativePath(projectRoot: string, path: string): string {
