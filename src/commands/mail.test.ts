@@ -152,7 +152,9 @@ test("mailCheckCommand prints unread mail and marks it read", async () => {
     await removeTempDir(repoDir);
   }
 
-  assert.match(writes.join(""), /No unread mail for agent-two\./);
+  const output = writes.join("");
+  assert.match(output, /No unread mail for agent-two\./);
+  assert.match(output, /Session: session-agent-two/);
 });
 
 test("mailCheckCommand reports no session found for an invalid selector that is not an exact session id", async () => {
@@ -322,6 +324,7 @@ test("mailListCommand prints mailbox history without changing read state", async
 
   const output = writes.join("");
   assert.match(output, /Mailbox for agent-five \(read-only\):/);
+  assert.match(output, /Session: session-agent-five/);
   assert.match(output, /read\t2026-03-06T13:05:00.000Z\toperator\t[0-9a-f-]{36}\treadAt=20\d{2}-/);
   assert.match(output, /First mailbox message\./);
   assert.match(output, /read\t2026-03-06T13:10:00.000Z\tagent-five\t[0-9a-f-]{36}\treadAt=20\d{2}-/);
@@ -372,7 +375,9 @@ test("mailListCommand reports an empty mailbox without mutating state", async ()
     await removeTempDir(repoDir);
   }
 
-  assert.match(writes.join(""), /No mail for agent-six\./);
+  const output = writes.join("");
+  assert.match(output, /No mail for agent-six\./);
+  assert.match(output, /Session: session-agent-six/);
 });
 
 test("mailListCommand can show only unread mail without changing read state", async () => {
@@ -439,6 +444,7 @@ test("mailListCommand can show only unread mail without changing read state", as
 
   const output = writes.join("");
   assert.match(output, /Unread mail for agent-seven \(read-only\):/);
+  assert.match(output, /Session: session-agent-seven/);
   assert.doesNotMatch(output, /Already read mailbox message\./);
   assert.match(output, /unread\t2026-03-06T15:10:00.000Z\tagent-seven\t[0-9a-f-]{36}/);
   assert.match(output, /Unread-only mailbox message\./);
@@ -497,7 +503,9 @@ test("mailListCommand with unreadOnly reports no unread mail without mutating st
     await removeTempDir(repoDir);
   }
 
-  assert.match(writes.join(""), /No unread mail for agent-eight\./);
+  const output = writes.join("");
+  assert.match(output, /No unread mail for agent-eight\./);
+  assert.match(output, /Session: session-agent-eight/);
 });
 
 test("mailListCommand rejects selectors that match different sessions by id and agent name", async () => {

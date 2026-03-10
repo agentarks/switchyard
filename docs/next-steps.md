@@ -38,9 +38,11 @@ Without that discipline:
 Completed slice:
 - exact launch-task inspection in `sy status <session> --task`
 - exact session-id visibility in operator-facing `sy stop` output
+- exact session-id visibility in operator-facing `sy mail check` and `sy mail list` output
 
 Decision rule:
 - if current launch output, `sy events`, exact-session `sy status`, and `sy status <session> --task` already give enough task-handoff visibility, do not invent another slice just to stay busy
+- if current mailbox inspection already gives enough exact-session visibility for follow-up commands, do not invent another mail slice just to stay busy
 - if operators hit a concrete gap, name that gap explicitly before writing code
 
 ## What To Keep Small
