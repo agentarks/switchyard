@@ -48,6 +48,10 @@ interface ListEventsOptions {
   limit?: number;
 }
 
+interface DistinctAgentSessionIdRow {
+  session_id: string;
+}
+
 export async function initializeEventStore(projectRoot: string): Promise<void> {
   await withEventDatabase(projectRoot, () => {
     // Schema creation happens in the shared database helper.
@@ -163,6 +167,22 @@ export async function listLatestEventsBySession(
     }
 
     return latestEvents;
+  });
+}
+
+export async function listDistinctSessionIdsForAgentEvents(
+  projectRoot: string,
+  agentName: string
+): Promise<string[]> {
+  return await withEventDatabase(projectRoot, (db) => {
+    const rows = db.prepare(`
+      SELECT DISTINCT session_id
+      FROM events
+      WHERE agent_name = ? AND session_id IS NOT NULL
+      ORDER BY session_id ASC
+    `).all(agentName) as unknown as DistinctAgentSessionIdRow[];
+
+    return rows.map((row) => row.session_id);
   });
 }
 

@@ -488,6 +488,50 @@ test("eventsCommand rejects orphaned agent-name selectors that span multiple ses
   }
 });
 
+test("eventsCommand rejects orphaned agent-name selectors that span multiple session ids outside the recent-event limit", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await createEvent(repoDir, {
+      sessionId: "session-shared-old",
+      agentName: "shared-agent",
+      eventType: "stop.completed",
+      payload: {
+        outcome: "stopped"
+      },
+      createdAt: "2026-03-08T13:00:00.000Z"
+    });
+
+    for (let index = 0; index < 10; index += 1) {
+      const minute = String(10 + index).padStart(2, "0");
+      await createEvent(repoDir, {
+        sessionId: "session-shared-new",
+        agentName: "shared-agent",
+        eventType: "mail.sent",
+        payload: {
+          sender: "operator",
+          bodyLength: 12
+        },
+        createdAt: `2026-03-08T13:${minute}:00.000Z`
+      });
+    }
+
+    await assert.rejects(
+      () => eventsCommand({ startDir: repoDir, selector: "shared-agent" }),
+      (error: unknown) => {
+        assert.ok(error instanceof EventsError);
+        assert.equal(
+          error.message,
+          "Selector 'shared-agent' is ambiguous: it matches orphaned events for multiple sessions by agent name ('session-shared-new', 'session-shared-old'). Use an exact session id."
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("eventsCommand rejects selectors that match orphaned events and a session by agent name", async () => {
   const repoDir = await createInitializedRepo();
 

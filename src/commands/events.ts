@@ -1,7 +1,7 @@
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
-import { listEvents } from "../events/store.js";
+import { listDistinctSessionIdsForAgentEvents, listEvents } from "../events/store.js";
 import type { EventPayload, EventRecord } from "../events/types.js";
 import { EventsError } from "../errors.js";
 import type { SessionRecord } from "../sessions/types.js";
@@ -180,6 +180,14 @@ async function resolveOrphanedAgentEventSelection(
   agentName: string,
   limit: number
 ): Promise<ResolvedEventSelection | undefined> {
+  const sessionIds = await listDistinctSessionIdsForAgentEvents(projectRoot, agentName);
+
+  if (sessionIds.length > 1) {
+    throw new EventsError(
+      `Selector '${selector}' is ambiguous: it matches orphaned events for multiple sessions by agent name (${sessionIds.map((sessionId) => `'${sessionId}'`).join(", ")}). Use an exact session id.`
+    );
+  }
+
   const agentEvents = await listEvents(projectRoot, {
     agentName,
     limit
@@ -187,18 +195,6 @@ async function resolveOrphanedAgentEventSelection(
 
   if (agentEvents.length === 0) {
     return undefined;
-  }
-
-  const sessionIds = Array.from(new Set(
-    agentEvents
-      .map((event) => event.sessionId)
-      .filter((sessionId): sessionId is string => typeof sessionId === "string" && sessionId.length > 0)
-  ));
-
-  if (sessionIds.length > 1) {
-    throw new EventsError(
-      `Selector '${selector}' is ambiguous: it matches orphaned events for multiple sessions by agent name (${sessionIds.map((sessionId) => `'${sessionId}'`).join(", ")}). Use an exact session id.`
-    );
   }
 
   return {
