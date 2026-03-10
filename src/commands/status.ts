@@ -114,6 +114,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 
       process.stdout.write(`Base: ${formatOptionalField(session.baseBranch)}\n`);
       process.stdout.write(`Runtime pid: ${formatOptionalField(session.runtimePid)}\n`);
+      process.stdout.write(`Runtime: ${selectedSessionDetails?.taskHandoff?.runtimeCommand ?? "-"}\n`);
       process.stdout.write(`Created: ${session.createdAt}\n`);
       process.stdout.write(`Task: ${selectedSessionDetails?.taskHandoff?.taskSummary ?? "-"}\n`);
       process.stdout.write(`Spec: ${selectedSessionDetails?.taskHandoff?.taskSpecPath ?? "-"}\n`);
@@ -470,7 +471,7 @@ function shouldPreservePreReconcileRecentEvent(
 async function loadLatestLaunchTaskHandoff(
   projectRoot: string,
   session: SessionRecord
-): Promise<{ taskSummary?: string; taskSpecPath?: string } | undefined> {
+): Promise<{ taskSummary?: string; taskSpecPath?: string; runtimeCommand?: string } | undefined> {
   const events = await listEvents(projectRoot, { sessionId: session.id });
 
   for (let index = events.length - 1; index >= 0; index -= 1) {
@@ -482,7 +483,8 @@ async function loadLatestLaunchTaskHandoff(
 
     return {
       taskSummary: typeof event.payload.taskSummary === "string" ? event.payload.taskSummary : undefined,
-      taskSpecPath: typeof event.payload.taskSpecPath === "string" ? event.payload.taskSpecPath : undefined
+      taskSpecPath: typeof event.payload.taskSpecPath === "string" ? event.payload.taskSpecPath : undefined,
+      runtimeCommand: typeof event.payload.runtimeCommand === "string" ? event.payload.runtimeCommand : undefined
     };
   }
 
@@ -497,7 +499,10 @@ async function loadSelectedSessionDetails(
   projectRoot: string,
   session: SessionRecord | undefined,
   showTask: boolean
-): Promise<{ taskHandoff?: { taskSummary?: string; taskSpecPath?: string }; taskInstruction?: string } | undefined> {
+): Promise<{
+  taskHandoff?: { taskSummary?: string; taskSpecPath?: string; runtimeCommand?: string };
+  taskInstruction?: string;
+} | undefined> {
   if (!session) {
     return undefined;
   }

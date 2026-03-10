@@ -12,7 +12,7 @@ Current status:
 - `sy init` is implemented
 - `sy events` shows the recent durable lifecycle timeline, globally, for one session, or for one orphaned agent stream after the session row is gone
 - `sy sling` creates one worktree-backed Codex session, using a pseudo-terminal wrapper on supported Unix platforms, and persists it
-- `sy status` is implemented with SQLite-backed session state, narrow liveness checks, unread-mail plus cleanup-readiness inspection, recent event context, and exact per-session inspection
+- `sy status` is implemented with SQLite-backed session state, narrow liveness checks, unread-mail plus cleanup-readiness inspection, recent event context, and exact per-session inspection including the stored launch command
 - `sy stop` stops one tracked session and supports optional `--cleanup`
 - `sy mail send` and `sy mail check` now provide one durable session-targeted mail path
 - `sy sling`, `sy stop`, and `sy mail` now append narrow lifecycle events to `events.db`

@@ -279,6 +279,7 @@ test("statusCommand prints only the selected session and reconciles only that se
   assert.match(output, /^Status for agent-one \(session-1\):/m);
   assert.match(output, /Base: -/);
   assert.match(output, /Runtime pid: -/);
+  assert.match(output, /Runtime: -/);
   assert.match(output, /Created: 2026-03-08T09:00:00.000Z/);
   assert.match(output, /Unread: 0/);
   assert.match(output, /Cleanup: [^\n]+/);
@@ -338,6 +339,7 @@ test("statusCommand shows the launch task handoff for one selected session", asy
   const output = writes.join("");
   const sessionIdMatch = output.match(/Status for agent-task-status \(([0-9a-f-]{36})\):/);
   assert.ok(sessionIdMatch);
+  assert.match(output, /Runtime: codex/);
   assert.match(output, new RegExp(`Task: ${task}`));
   assert.match(output, new RegExp(`Spec: \\.switchyard/specs/agent-task-status-${sessionIdMatch[1]}\\.md`));
   assert.match(output, /Recent: 2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=8181/);
@@ -570,6 +572,19 @@ test("statusCommand selected-session view surfaces stored base branch and runtim
   await createEvent(repoDir, {
     sessionId: "session-selected",
     agentName: "agent-selected",
+    eventType: "sling.completed",
+    payload: {
+      runtimePid: 5151,
+      runtimeCommand: "codex --model gpt-5",
+      taskSummary: "Inspect the selected session launch metadata.",
+      taskSpecPath: ".switchyard/specs/agent-selected-session-selected.md",
+      readyAfterMs: 500
+    },
+    createdAt: "2026-03-08T12:05:30.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-selected",
+    agentName: "agent-selected",
     eventType: "mail.sent",
     payload: {
       sender: "operator",
@@ -598,6 +613,7 @@ test("statusCommand selected-session view surfaces stored base branch and runtim
   assert.match(output, /^Status for agent-selected \(session-selected\):/m);
   assert.match(output, /Base: main/);
   assert.match(output, /Runtime pid: 5151/);
+  assert.match(output, /Runtime: codex --model gpt-5/);
   assert.match(output, /Created: 2026-03-08T12:00:00.000Z/);
   assert.match(output, /Unread: 0/);
   assert.match(output, /Cleanup: [^\n]+/);
