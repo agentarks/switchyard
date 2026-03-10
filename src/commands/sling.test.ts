@@ -82,6 +82,7 @@ test("slingCommand creates a worktree and persists a started session", async () 
   );
 
   assert.match(writes.join(""), /Spawned agent-one/);
+  assert.match(writes.join(""), new RegExp(`Session: ${sessions[0]?.id}`));
   assert.match(writes.join(""), /State: starting/);
   assert.match(writes.join(""), /Base: main/);
   assert.match(writes.join(""), /Runtime: codex --model gpt-5/);

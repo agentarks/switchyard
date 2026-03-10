@@ -26,6 +26,7 @@ Completed enough to count as minimally real:
 - M2 repo bootstrap
 - M3 session persistence
 - M4 one-agent spawn
+- launch-time session-id visibility in `sy sling`
 - M5 lifecycle control
 - M6 messaging
 - read-only mailbox inspection inside the mail path
