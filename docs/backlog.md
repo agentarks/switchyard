@@ -4,7 +4,7 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Reassess whether the loop needs another concrete slice at all before defaulting back to hardening
+1. Reassess whether any real operator gap remains now that `sy status <session> --task` can print the full stored launch instruction
 
 ## Next
 
@@ -12,7 +12,7 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## After That
 
-3. Improve diagnostics only where a reproduced workflow proves the current task handoff or inspection paths are insufficient
+3. Improve diagnostics only where a reproduced workflow proves the current task handoff or inspection paths are still insufficient
 
 ## Then
 

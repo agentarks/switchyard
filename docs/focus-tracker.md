@@ -57,16 +57,17 @@ Completed enough to count as minimally real:
 - detached `sy sling` launch compatibility hardening for TTY-requiring Codex builds on supported Unix platforms
 - first-class `sy sling --task` input with durable task specs under `.switchyard/specs/`
 - launch-task visibility in `sy sling`, `sy events`, and exact-session `sy status`
+- opt-in full launch-task inspection in exact-session `sy status --task`
 - end-to-end coverage around `sy init`
 
 Not complete yet:
-- no new named slice is locked yet beyond reassessing whether one is needed
+- no new named slice is locked yet beyond reassessing whether anything remains after exact-task inspection landed
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
 - reassess whether another concrete operator-visible slice is needed at all
-- improve operator inspection only when a reproduced workflow shows the current task-handoff visibility is insufficient
+- improve operator inspection only when a reproduced workflow shows the current task-handoff visibility, including `sy status <session> --task`, is still insufficient
 - harden lifecycle behavior only when a reproduced failure blocks the current loop
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes

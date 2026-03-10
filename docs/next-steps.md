@@ -4,7 +4,7 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Stop treating generic hardening as the default next step now that the `sy sling` task-handoff slice exists.
+Do not treat another inspection or hardening pass as the default next step now that exact launch-task inspection exists in `sy status <session> --task`.
 
 Target outcome:
 - reassess whether the current repo-local loop needs another concrete slice at all
@@ -35,10 +35,11 @@ Without that discipline:
 
 ## Named Slice
 
-No new named slice is locked yet.
+Completed slice:
+- exact launch-task inspection in `sy status <session> --task`
 
 Decision rule:
-- if current launch output, `sy events`, and exact-session `sy status` already give enough task-handoff visibility, do not invent another slice just to stay busy
+- if current launch output, `sy events`, exact-session `sy status`, and `sy status <session> --task` already give enough task-handoff visibility, do not invent another slice just to stay busy
 - if operators hit a concrete gap, name that gap explicitly before writing code
 
 ## What To Keep Small
