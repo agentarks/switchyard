@@ -18,6 +18,7 @@ For the current v0 loop, reintegration is still manual-first even though `sy mer
    - Run `sy status`.
    - Use the printed session id when you want later `events`, `mail`, `stop`, or `merge` commands to target one exact preserved session.
    - If the session is still `starting` or `running`, run `sy stop <session>`.
+   - `sy stop` now also echoes the exact session id in its handled output, so you do not need a separate `sy status` lookup before later follow-up commands.
    - If you include `--cleanup` too early, Switchyard still stops the active session first and then preserves the work unless cleanup is confirmed safe or you passed explicit `--abandon`.
    - Do not pass `--cleanup` before you have either merged or deliberately abandoned the work.
 

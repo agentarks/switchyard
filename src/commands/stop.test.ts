@@ -70,6 +70,7 @@ test("stopCommand stops an active session and preserves the worktree by default"
 
   const output = writes.join("");
   assert.match(output, /Stopped agent-one/);
+  assert.match(output, /Session: [^\n]+/);
   assert.match(output, /Worktree preserved: \.switchyard\/worktrees\/agent-one/);
 });
 
@@ -260,6 +261,7 @@ test("stopCommand removes the worktree and branch when cleanup is explicitly aba
 
   const output = writes.join("");
   assert.match(output, /Stopped agent-two/);
+  assert.match(output, /Session: [^\n]+/);
   assert.match(output, /Cleanup: removed worktree and branch after explicit abandon\./);
 });
 
@@ -305,6 +307,7 @@ test("stopCommand marks legacy active sessions without a pid as failed", async (
 
   const output = writes.join("");
   assert.match(output, /has no recorded runtime pid\. Marked failed\./);
+  assert.match(output, /Session: legacy-agent/);
   assert.match(output, /Worktree preserved: \.switchyard\/worktrees\/legacy-agent/);
 });
 
@@ -376,6 +379,7 @@ test("stopCommand cleans up legacy active sessions without a pid when requested"
 
   const output = writes.join("");
   assert.match(output, /has no recorded runtime pid\. Marked failed\./);
+  assert.match(output, /Session: [^\n]+/);
   assert.match(output, /Cleanup: removed worktree and branch after explicit abandon\./);
 });
 
@@ -443,6 +447,7 @@ test("stopCommand allows explicit abandon cleanup for sessions already marked fa
 
   const output = writes.join("");
   assert.match(output, /Session agent-stale-cleanup is already failed\./);
+  assert.match(output, /Session: [^\n]+/);
   assert.match(output, /Cleanup: removed worktree and branch after explicit abandon\./);
 });
 
@@ -739,6 +744,7 @@ test("stopCommand still stops an active unmerged session when cleanup is refused
 
   const output = writes.join("");
   assert.match(output, /Stopped agent-active-unmerged/);
+  assert.match(output, /Session: [^\n]+/);
   assert.match(output, /Cleanup skipped: Refusing cleanup for agent-active-unmerged: preserved branch 'agents\/agent-active-unmerged' is not merged into 'main'/);
 });
 
@@ -800,6 +806,7 @@ test("stopCommand reports already-missing cleanup artifacts without claiming rem
 
   const output = writes.join("");
   assert.match(output, /Session agent-missing-artifacts is already stopped\./);
+  assert.match(output, /Session: [^\n]+/);
   assert.match(output, /Cleanup: preserved worktree and branch were already absent\./);
   assert.doesNotMatch(output, /removed worktree and branch/);
 });
@@ -962,6 +969,7 @@ test("stopCommand removes the worktree and branch after confirmed merge cleanup"
 
   const output = writes.join("");
   assert.match(output, /Session agent-merged-cleanup is already stopped\./);
+  assert.match(output, /Session: [^\n]+/);
   assert.match(output, /Cleanup: removed worktree and branch after confirming merge into main\./);
 });
 
@@ -1022,6 +1030,7 @@ test("stopCommand uses the session base branch for merged cleanup when config dr
 
   const output = writes.join("");
   assert.match(output, /Session agent-target-drift is already stopped\./);
+  assert.match(output, /Session: [^\n]+/);
   assert.match(output, /Cleanup: removed worktree and branch after confirming merge into main\./);
 });
 
