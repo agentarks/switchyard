@@ -186,9 +186,35 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
   const isRuntimeAlive = options.isRuntimeAlive ?? isProcessAlive;
   const stopRuntime = options.stopRuntime ?? stopProcess;
   let nextState: SessionRecord["state"] = "stopped";
+  let wasAlive: boolean;
 
-  const wasAlive = isRuntimeAlive(session.runtimePid);
-  const stopped = await stopRuntime(session.runtimePid);
+  try {
+    wasAlive = isRuntimeAlive(session.runtimePid);
+  } catch (error) {
+    await recordStopFailedEvent(recordEvent, config.project.root, session, {
+      previousState: session.state,
+      runtimePid: session.runtimePid,
+      reason: "liveness_check_failed",
+      errorMessage: formatErrorMessage(error),
+      cleanupRequested: options.cleanup ? true : false
+    });
+    throw error;
+  }
+
+  let stopped: boolean;
+
+  try {
+    stopped = await stopRuntime(session.runtimePid);
+  } catch (error) {
+    await recordStopFailedEvent(recordEvent, config.project.root, session, {
+      previousState: session.state,
+      runtimePid: session.runtimePid,
+      reason: "runtime_stop_failed",
+      errorMessage: formatErrorMessage(error),
+      cleanupRequested: options.cleanup ? true : false
+    });
+    throw error;
+  }
 
   if (!wasAlive) {
     nextState = "failed";
@@ -364,6 +390,20 @@ async function recordStopCompletedEvent(
   });
 }
 
+async function recordStopFailedEvent(
+  recordEvent: EventRecorder,
+  projectRoot: string,
+  session: SessionRecord,
+  payload: Record<string, string | number | boolean>
+): Promise<void> {
+  await recordEventWithFallback(recordEvent, projectRoot, {
+    sessionId: session.id,
+    agentName: session.agentName,
+    eventType: "stop.failed",
+    payload
+  });
+}
+
 function buildCleanupFailurePayload(error: unknown): {
   cleanupReason: StopCleanupReason;
   cleanupError?: string;
@@ -383,4 +423,8 @@ function buildCleanupFailurePayload(error: unknown): {
     cleanupReason: "cleanup_failed",
     cleanupError: message
   };
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

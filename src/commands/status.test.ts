@@ -595,6 +595,184 @@ test("statusCommand includes stop cleanup failure details in the recent event su
   );
 });
 
+test("statusCommand includes stop failure details in the recent event summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stop-failed",
+    agentName: "agent-stop-failed",
+    branch: "agents/agent-stop-failed",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stop-failed"),
+    state: "running",
+    runtimePid: 5150,
+    createdAt: "2026-03-08T09:22:30.000Z",
+    updatedAt: "2026-03-08T09:22:30.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stop-failed",
+    agentName: "agent-stop-failed",
+    eventType: "stop.failed",
+    payload: {
+      previousState: "running",
+      reason: "runtime_stop_failed",
+      runtimePid: 5150,
+      errorMessage: "simulated stop failure"
+    },
+    createdAt: "2026-03-08T09:23:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-stop-failed",
+      isRuntimeAlive: (pid) => pid === 5150
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /Recent: 2026-03-08T09:23:00.000Z stop\.failed reason=runtime_stop_failed, runtimePid=5150, errorMessage="simulated stop failure"/
+  );
+});
+
+test("statusCommand preserves a latest stop failure summary when the same render promotes the session to running", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stop-failed-starting",
+    agentName: "agent-stop-failed-starting",
+    branch: "agents/agent-stop-failed-starting",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stop-failed-starting"),
+    state: "starting",
+    runtimePid: 5252,
+    createdAt: "2026-03-08T09:22:30.000Z",
+    updatedAt: "2026-03-08T09:22:30.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stop-failed-starting",
+    agentName: "agent-stop-failed-starting",
+    eventType: "stop.failed",
+    payload: {
+      previousState: "starting",
+      reason: "runtime_stop_failed",
+      runtimePid: 5252,
+      errorMessage: "simulated stop failure"
+    },
+    createdAt: "2026-03-08T09:23:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-stop-failed-starting",
+      isRuntimeAlive: (pid) => pid === 5252,
+      now: () => "2026-03-08T09:24:00.000Z"
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "running");
+    assert.equal(sessions[0]?.runtimePid, 5252);
+
+    const events = await listEvents(repoDir, { sessionId: "session-stop-failed-starting" });
+    assert.equal(events.length, 2);
+    assert.equal(events[1]?.eventType, "runtime.ready");
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(
+    output,
+    /Recent: 2026-03-08T09:23:00.000Z stop\.failed reason=runtime_stop_failed, runtimePid=5252, errorMessage="simulated stop failure"/
+  );
+  assert.match(
+    output,
+    /running\tsession-stop-failed-starting\tagent-stop-failed-starting[^\n]*\t2026-03-08T09:23:00.000Z stop\.failed reason=runtime_stop_failed, runtimePid=5252, errorMessage="simulated stop failure"/
+  );
+});
+
+test("statusCommand preserves a latest stop failure summary when the same render marks the session failed", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stop-failed-running",
+    agentName: "agent-stop-failed-running",
+    branch: "agents/agent-stop-failed-running",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stop-failed-running"),
+    state: "running",
+    runtimePid: 5353,
+    createdAt: "2026-03-08T09:24:30.000Z",
+    updatedAt: "2026-03-08T09:24:30.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stop-failed-running",
+    agentName: "agent-stop-failed-running",
+    eventType: "stop.failed",
+    payload: {
+      previousState: "running",
+      reason: "runtime_stop_failed",
+      runtimePid: 5353,
+      errorMessage: "simulated stop failure"
+    },
+    createdAt: "2026-03-08T09:25:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-stop-failed-running",
+      isRuntimeAlive: () => false,
+      now: () => "2026-03-08T09:26:00.000Z"
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(sessions[0]?.runtimePid, null);
+
+    const events = await listEvents(repoDir, { sessionId: "session-stop-failed-running" });
+    assert.equal(events.length, 2);
+    assert.equal(events[1]?.eventType, "runtime.exited");
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(
+    output,
+    /Recent: 2026-03-08T09:25:00.000Z stop\.failed reason=runtime_stop_failed, runtimePid=5353, errorMessage="simulated stop failure"/
+  );
+  assert.match(
+    output,
+    /failed\tsession-stop-failed-running\tagent-stop-failed-running[^\n]*\t2026-03-08T09:25:00.000Z stop\.failed reason=runtime_stop_failed, runtimePid=5353, errorMessage="simulated stop failure"/
+  );
+});
+
 test("statusCommand includes missing-worktree cleanup details in the recent event summary", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
