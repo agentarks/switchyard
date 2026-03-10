@@ -59,6 +59,41 @@ test("mailSendCommand stores one durable message for the resolved session", asyn
   assert.match(output, /Mail id: [0-9a-f-]{36}/);
 });
 
+test("mailSendCommand preserves the exact body text when storing durable mail", async () => {
+  const repoDir = await createInitializedRepo();
+  const body = "  Leading detail.\nSecond line stays intact.  ";
+
+  try {
+    const session = await createSession(repoDir, {
+      id: "session-agent-body",
+      agentName: "agent-body",
+      branch: "agents/agent-body",
+      worktreePath: `${repoDir}/.switchyard/worktrees/agent-body`,
+      state: "running",
+      runtimePid: 1212,
+      createdAt: "2026-03-06T09:15:00.000Z",
+      updatedAt: "2026-03-06T09:15:00.000Z"
+    });
+
+    await mailSendCommand({
+      selector: session.id,
+      body,
+      startDir: repoDir
+    });
+
+    const mail = await listMailForSession(repoDir, session.id);
+    assert.equal(mail.length, 1);
+    assert.equal(mail[0]?.body, body);
+
+    const events = await listEvents(repoDir, { sessionId: session.id });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "mail.sent");
+    assert.equal(events[0]?.payload.bodyLength, body.length);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("mailSendCommand resolves an exact session id even when the selector is not a valid agent name", async () => {
   const repoDir = await createInitializedRepo();
 
@@ -176,6 +211,53 @@ test("mailCheckCommand reports no session found for an invalid selector that is 
   } finally {
     await removeTempDir(repoDir);
   }
+});
+
+test("mailCheckCommand prints unread mail bodies as explicit blocks", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  try {
+    const session = await createSession(repoDir, {
+      id: "session-agent-body-check",
+      agentName: "agent-body-check",
+      branch: "agents/agent-body-check",
+      worktreePath: `${repoDir}/.switchyard/worktrees/agent-body-check`,
+      state: "running",
+      runtimePid: 2323,
+      createdAt: "2026-03-06T10:30:00.000Z",
+      updatedAt: "2026-03-06T10:30:00.000Z"
+    });
+
+    await createMail(repoDir, {
+      sessionId: session.id,
+      sender: "operator",
+      recipient: session.agentName,
+      body: "First line.\n\nIndented context.",
+      createdAt: "2026-03-06T10:35:00.000Z"
+    });
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await mailCheckCommand({
+      selector: session.id,
+      startDir: repoDir
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Unread mail for agent-body-check:/);
+  assert.match(output, /Session: session-agent-body-check/);
+  assert.match(output, /2026-03-06T10:35:00.000Z\toperator\t[0-9a-f-]{36}/);
+  assert.match(output, /Body:\n  First line\.\n  \n  Indented context\.\n/);
+  assert.match(output, /Marked 1 message as read\./);
 });
 
 test("mailSendCommand keeps queued mail when event persistence fails", async () => {
@@ -326,11 +408,11 @@ test("mailListCommand prints mailbox history without changing read state", async
   assert.match(output, /Mailbox for agent-five \(read-only\):/);
   assert.match(output, /Session: session-agent-five/);
   assert.match(output, /read\t2026-03-06T13:05:00.000Z\toperator\t[0-9a-f-]{36}\treadAt=20\d{2}-/);
-  assert.match(output, /First mailbox message\./);
+  assert.match(output, /Body:\n  First mailbox message\.\n/);
   assert.match(output, /read\t2026-03-06T13:10:00.000Z\tagent-five\t[0-9a-f-]{36}\treadAt=20\d{2}-/);
-  assert.match(output, /Second mailbox message\./);
+  assert.match(output, /Body:\n  Second mailbox message\.\n/);
   assert.match(output, /unread\t2026-03-06T13:15:00.000Z\toperator\t[0-9a-f-]{36}/);
-  assert.match(output, /Unread mailbox message\./);
+  assert.match(output, /Body:\n  Unread mailbox message\.\n/);
   assert.match(output, /Listed 3 messages; 1 unread\./);
 });
 
@@ -447,7 +529,7 @@ test("mailListCommand can show only unread mail without changing read state", as
   assert.match(output, /Session: session-agent-seven/);
   assert.doesNotMatch(output, /Already read mailbox message\./);
   assert.match(output, /unread\t2026-03-06T15:10:00.000Z\tagent-seven\t[0-9a-f-]{36}/);
-  assert.match(output, /Unread-only mailbox message\./);
+  assert.match(output, /Body:\n  Unread-only mailbox message\.\n/);
   assert.match(output, /Listed 1 message; unread-only view, read state unchanged\./);
 });
 

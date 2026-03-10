@@ -29,6 +29,8 @@ Completed enough to count as minimally real:
 - launch-time session-id visibility in `sy sling`
 - stop-time session-id visibility in `sy stop`
 - session-id visibility in `sy mail check` and `sy mail list`
+- exact mail-body preservation in `sy mail send`
+- explicit body-block framing in `sy mail check` and `sy mail list`
 - M5 lifecycle control
 - M6 messaging
 - read-only mailbox inspection inside the mail path
@@ -64,7 +66,7 @@ Completed enough to count as minimally real:
 - end-to-end coverage around `sy init`
 
 Current planning state:
-- no new named slice is justified right now beyond the recent exact session-id visibility cleanup across `stop`, mail inspection, and empty selected `sy events` output
+- no new named slice is justified right now beyond the recent exact mail-body handling and session-id visibility cleanup across `stop`, mail inspection, and empty selected `sy events` output
 - new lifecycle or inspection work should start only after a reproduced operator-visible gap is named
 
 ## Current In-Scope Work
