@@ -52,7 +52,7 @@ Current contract:
 - command records `sling.spawned` when the runtime pid exists
 - command records `sling.completed` after the initial launch window succeeds
 - if Codex exits during the launch window, command records `sling.failed` with the launch error and leaves the session failed instead of pretending the launch succeeded
-- command prints the launch state, created branch, base branch, worktree path, runtime command line, and initial readiness delay
+- command prints the durable session id, launch state, created branch, base branch, worktree path, runtime command line, and initial readiness delay
 - if the `script` wrapper is unavailable on a supported platform, command fails explicitly instead of pretending the launch succeeded
 - on unsupported platforms, detached launch falls back to direct Codex spawn
 

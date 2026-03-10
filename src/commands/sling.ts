@@ -175,6 +175,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   });
 
   process.stdout.write(`Spawned ${managedWorktree.agentName}\n`);
+  process.stdout.write(`Session: ${sessionId}\n`);
   process.stdout.write("State: starting\n");
   process.stdout.write(`Branch: ${managedWorktree.branch}\n`);
   process.stdout.write(`Base: ${managedWorktree.baseBranch}\n`);
