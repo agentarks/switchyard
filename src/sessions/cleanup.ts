@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
+import { relative } from "node:path";
 import { promisify } from "node:util";
 import { isActiveSessionState, type SessionRecord } from "./types.js";
 
@@ -12,11 +13,18 @@ export type CleanupReason =
   | "branch_missing"
   | "missing_base_branch_metadata"
   | "missing_branch_metadata"
-  | "not_merged";
+  | "not_merged"
+  | "worktree_missing";
 
 export type CleanupDecision =
   | { kind: "perform"; mode: CleanupMode; canonicalBranch: string }
-  | { kind: "blocked"; reason: CleanupReason; message: string; canonicalBranch: string }
+  | {
+    kind: "blocked";
+    reason: CleanupReason;
+    message: string;
+    canonicalBranch: string;
+    details?: Record<string, string | number | boolean>;
+  }
   | { kind: "already_absent" };
 
 interface CleanupDecisionOptions {
@@ -30,6 +38,7 @@ export async function determineCleanupDecision(options: CleanupDecisionOptions):
   const sessionBaseBranch = options.session.baseBranch?.trim() ?? "";
   const canonicalBranch = sessionBaseBranch;
   const branch = options.session.branch.trim();
+  const worktreePath = formatRelativePath(options.projectRoot, options.session.worktreePath);
 
   if (options.abandon) {
     return {
@@ -48,6 +57,21 @@ export async function determineCleanupDecision(options: CleanupDecisionOptions):
     };
   }
 
+  const branchExists = await localBranchExists(options.projectRoot, branch);
+  const worktreeExists = await pathExists(options.session.worktreePath);
+
+  if (!worktreeExists && branchExists) {
+    return {
+      kind: "blocked",
+      reason: "worktree_missing",
+      canonicalBranch,
+      message: `Refusing cleanup for ${options.session.agentName}: preserved worktree '${worktreePath}' is already missing while branch '${branch}' still exists. Restore it manually if you still need a preserved checkout, rerun without '--cleanup' to preserve the remaining branch, or pass '--cleanup --abandon' to discard it explicitly.`,
+      details: {
+        worktreePath
+      }
+    };
+  }
+
   if (sessionBaseBranch.length === 0) {
     return {
       kind: "blocked",
@@ -56,9 +80,6 @@ export async function determineCleanupDecision(options: CleanupDecisionOptions):
       message: `Refusing cleanup for ${options.session.agentName}: no stored base branch metadata is available for this legacy session, so Switchyard cannot safely confirm where '${branch}' should have been merged. Rerun without '--cleanup' to preserve it, or pass '--cleanup --abandon' to discard it explicitly.`
     };
   }
-
-  const branchExists = await localBranchExists(options.projectRoot, branch);
-  const worktreeExists = await pathExists(options.session.worktreePath);
 
   if (!branchExists && !worktreeExists) {
     return { kind: "already_absent" };
@@ -132,9 +153,16 @@ function formatCleanupOutcomeLabel(decision: CleanupDecision): string {
       return "abandon-only:no-branch";
     case "not_merged":
       return "abandon-only:not-merged";
+    case "worktree_missing":
+      return "abandon-only:worktree-missing";
     case "artifacts_missing":
-      return "absent";
+      return "abandon-only:artifacts-missing";
   }
+}
+
+function formatRelativePath(projectRoot: string, path: string): string {
+  const relativePath = relative(projectRoot, path);
+  return relativePath.length > 0 ? relativePath : ".";
 }
 
 async function localBranchExists(projectRoot: string, branch: string): Promise<boolean> {

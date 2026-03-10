@@ -20,11 +20,18 @@ type StopCleanupReason = CleanupReason | "cleanup_failed";
 class StopCleanupError extends StopError {
   readonly cleanupReason: StopCleanupReason;
   readonly cleanupError?: string;
+  readonly cleanupDetails?: Record<string, string | number | boolean>;
 
-  constructor(message: string, cleanupReason: StopCleanupReason, cleanupError?: string) {
+  constructor(
+    message: string,
+    cleanupReason: StopCleanupReason,
+    cleanupError?: string,
+    cleanupDetails?: Record<string, string | number | boolean>
+  ) {
     super(message);
     this.cleanupReason = cleanupReason;
     this.cleanupError = cleanupError;
+    this.cleanupDetails = cleanupDetails;
   }
 }
 
@@ -110,7 +117,8 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
           cleanupRequested: true,
           cleanupPerformed: cleanup.performed,
           ...(cleanup.cleanupMode ? { cleanupMode: cleanup.cleanupMode } : {}),
-          ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {})
+          ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {}),
+          ...(cleanup.cleanupDetails ?? {})
         }
       });
       process.stdout.write(`Session ${session.agentName} is already ${session.state}.\n`);
@@ -162,7 +170,8 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
         cleanupRequested: options.cleanup ? true : false,
         cleanupPerformed: cleanup.performed,
         ...(cleanup.cleanupMode ? { cleanupMode: cleanup.cleanupMode } : {}),
-        ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {})
+        ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {}),
+        ...(cleanup.cleanupDetails ?? {})
       }
     });
     process.stdout.write(`Session ${session.agentName} has no recorded runtime pid. Marked failed.\n`);
@@ -224,7 +233,8 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     cleanupRequested: options.cleanup ? true : false,
     cleanupPerformed: cleanup.performed,
     ...(cleanup.cleanupMode ? { cleanupMode: cleanup.cleanupMode } : {}),
-    ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {})
+    ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {}),
+    ...(cleanup.cleanupDetails ?? {})
   });
 
   if (nextState === "failed") {
@@ -278,6 +288,7 @@ async function resolveCleanupRequest(options: {
   message?: string;
   cleanupMode?: CleanupMode;
   cleanupReason?: CleanupReason;
+  cleanupDetails?: Record<string, string | number | boolean>;
 }> {
   if (!options.cleanupRequested) {
     return { performed: false };
@@ -287,13 +298,14 @@ async function resolveCleanupRequest(options: {
 
   if (decision.kind === "blocked") {
     if (options.failOnBlocked) {
-      throw new StopCleanupError(decision.message, decision.reason);
+      throw new StopCleanupError(decision.message, decision.reason, undefined, decision.details);
     }
 
     return {
       performed: false,
       message: `Cleanup skipped: ${decision.message}`,
-      cleanupReason: decision.reason
+      cleanupReason: decision.reason,
+      cleanupDetails: decision.details
     };
   }
 
@@ -355,11 +367,13 @@ async function recordStopCompletedEvent(
 function buildCleanupFailurePayload(error: unknown): {
   cleanupReason: StopCleanupReason;
   cleanupError?: string;
+  [key: string]: string | number | boolean | undefined;
 } {
   if (error instanceof StopCleanupError) {
     return {
       cleanupReason: error.cleanupReason,
-      ...(error.cleanupError ? { cleanupError: error.cleanupError } : {})
+      ...(error.cleanupError ? { cleanupError: error.cleanupError } : {}),
+      ...(error.cleanupDetails ?? {})
     };
   }
 

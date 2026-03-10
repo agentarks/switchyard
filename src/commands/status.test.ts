@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { createEvent, listEvents } from "../events/store.js";
@@ -96,11 +96,15 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
   try {
     await git(repoDir, ["branch", "agents/agent-active"]);
     await git(repoDir, ["branch", "agents/merged-ready"]);
+    await git(repoDir, ["branch", "agents/missing-worktree"]);
     await git(repoDir, ["switch", "-c", "agents/not-ready"]);
     await writeFile(join(repoDir, "not-ready.txt"), "pending merge\n", "utf8");
     await git(repoDir, ["add", "not-ready.txt"]);
     await git(repoDir, ["commit", "-m", "Add preserved branch change"]);
     await git(repoDir, ["switch", "main"]);
+    await mkdir(join(repoDir, ".switchyard", "worktrees", "agent-active"), { recursive: true });
+    await mkdir(join(repoDir, ".switchyard", "worktrees", "agent-merged"), { recursive: true });
+    await mkdir(join(repoDir, ".switchyard", "worktrees", "agent-unmerged"), { recursive: true });
 
     await createSession(repoDir, {
       id: "session-active",
@@ -134,6 +138,28 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
       runtimePid: null,
       createdAt: "2026-03-08T09:10:00.000Z",
       updatedAt: "2026-03-08T09:10:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-missing-worktree",
+      agentName: "agent-missing-worktree",
+      branch: "agents/missing-worktree",
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-missing-worktree"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:12:00.000Z",
+      updatedAt: "2026-03-08T09:12:00.000Z"
+    });
+    await git(repoDir, ["branch", "agents/legacy-missing-worktree"]);
+    await createSession(repoDir, {
+      id: "session-legacy-missing-worktree",
+      agentName: "agent-legacy-missing-worktree",
+      branch: "agents/legacy-missing-worktree",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-legacy-missing-worktree"),
+      state: "failed",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:13:00.000Z",
+      updatedAt: "2026-03-08T09:13:00.000Z"
     });
     await createSession(repoDir, {
       id: "session-unmerged",
@@ -175,6 +201,14 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
   assert.match(output, /running\tsession-active\tagent-active[^\n]*\tstop-then:merged\t-/);
   assert.match(output, /stopped\tsession-merged\tagent-merged[^\n]*\tready:merged\t-/);
   assert.match(output, /stopped\tsession-absent\tagent-absent[^\n]*\tready:absent\t-/);
+  assert.match(
+    output,
+    /stopped\tsession-missing-worktree\tagent-missing-worktree[^\n]*\tabandon-only:worktree-missing\t-/
+  );
+  assert.match(
+    output,
+    /failed\tsession-legacy-missing-worktree\tagent-legacy-missing-worktree[^\n]*\tabandon-only:worktree-missing\t-/
+  );
   assert.match(output, /stopped\tsession-unmerged\tagent-unmerged[^\n]*\tabandon-only:not-merged\t-/);
   assert.match(output, /failed\tsession-legacy-cleanup\tagent-legacy-cleanup[^\n]*\tabandon-only:legacy\t-/);
 });
@@ -558,6 +592,56 @@ test("statusCommand includes stop cleanup failure details in the recent event su
   assert.match(
     writes.join(""),
     /Recent: 2026-03-08T09:22:00.000Z stop\.completed outcome=already_not_running, cleanupPerformed=false, cleanupReason=cleanup_failed, cleanupError="simulated remove failure"/
+  );
+});
+
+test("statusCommand includes missing-worktree cleanup details in the recent event summary", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stop-missing-worktree",
+    agentName: "agent-stop-missing-worktree",
+    branch: "agents/agent-stop-missing-worktree",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stop-missing-worktree"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-08T09:23:00.000Z",
+    updatedAt: "2026-03-08T09:23:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stop-missing-worktree",
+    agentName: "agent-stop-missing-worktree",
+    eventType: "stop.completed",
+    payload: {
+      outcome: "already_not_running",
+      cleanupPerformed: false,
+      cleanupReason: "worktree_missing",
+      worktreePath: ".switchyard/worktrees/agent-stop-missing-worktree"
+    },
+    createdAt: "2026-03-08T09:24:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-stop-missing-worktree",
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /Recent: 2026-03-08T09:24:00.000Z stop\.completed outcome=already_not_running, cleanupPerformed=false, cleanupReason=worktree_missing, worktreePath=\.switchyard\/worktrees\/agent-stop-missing-worktree/
   );
 });
 
