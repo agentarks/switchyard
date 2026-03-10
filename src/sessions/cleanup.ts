@@ -41,6 +41,15 @@ export async function determineCleanupDecision(options: CleanupDecisionOptions):
   const worktreePath = formatRelativePath(options.projectRoot, options.session.worktreePath);
 
   if (options.abandon) {
+    if (branch.length > 0) {
+      const branchExists = await localBranchExists(options.projectRoot, branch);
+      const worktreeExists = await pathExists(options.session.worktreePath);
+
+      if (!branchExists && !worktreeExists) {
+        return { kind: "already_absent" };
+      }
+    }
+
     return {
       kind: "perform",
       mode: "abandoned",
