@@ -450,9 +450,11 @@ test("stopCommand refuses cleanup for an unmerged stopped session without explic
     const sessions = await listSessions(repoDir);
     assert.equal(sessions[0]?.state, "stopped");
     const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
-    assert.equal(events.length, 2);
-    assert.equal(events[1]?.eventType, "stop.completed");
-    assert.equal(events[1]?.payload.cleanupPerformed, false);
+    assert.equal(events.length, 3);
+    assert.equal(events[2]?.eventType, "stop.completed");
+    assert.equal(events[2]?.payload.outcome, "already_not_running");
+    assert.equal(events[2]?.payload.cleanupPerformed, false);
+    assert.equal(events[2]?.payload.cleanupReason, "not_merged");
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);
@@ -499,6 +501,13 @@ test("stopCommand refuses merged cleanup for legacy sessions without stored base
 
     await access(worktreePath);
     await git(repoDir, ["rev-parse", "--verify", "agents/agent-legacy-target"]);
+
+    const events = await listEvents(repoDir, { sessionId: "session-legacy-target" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "stop.completed");
+    assert.equal(events[0]?.payload.outcome, "already_not_running");
+    assert.equal(events[0]?.payload.cleanupPerformed, false);
+    assert.equal(events[0]?.payload.cleanupReason, "missing_base_branch_metadata");
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);
@@ -560,6 +569,61 @@ test("stopCommand allows explicit abandon cleanup when branch metadata is missin
     baseBranch: "main"
   });
   assert.match(writes.join(""), /Cleanup: removed worktree and branch after explicit abandon\./);
+});
+
+test("stopCommand records cleanup failure details when artifact removal fails after stopping", async () => {
+  const repoDir = await createInitializedRepo();
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cleanup-failure");
+
+  try {
+    await slingCommand({
+      agentName: "Agent Cleanup Failure",
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 4545,
+          command: {
+            command: "codex",
+            args: []
+          },
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    await assert.rejects(
+      async () => {
+        await stopCommand({
+          selector: "agent-cleanup-failure",
+          cleanup: true,
+          abandon: true,
+          startDir: repoDir,
+          isRuntimeAlive: (pid) => pid === 4545,
+          stopRuntime: async () => true,
+          removeSessionWorktree: async () => {
+            throw new Error("simulated remove failure");
+          }
+        });
+      },
+      /Cleanup failed for agent-cleanup-failure: simulated remove failure/
+    );
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "stopped");
+    assert.equal(sessions[0]?.runtimePid, null);
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+    assert.equal(events.length, 2);
+    assert.equal(events[1]?.eventType, "stop.completed");
+    assert.equal(events[1]?.payload.outcome, "stopped");
+    assert.equal(events[1]?.payload.cleanupPerformed, false);
+    assert.equal(events[1]?.payload.cleanupReason, "cleanup_failed");
+    assert.equal(events[1]?.payload.cleanupError, "simulated remove failure");
+
+    await access(worktreePath);
+    await git(repoDir, ["rev-parse", "--verify", "agents/agent-cleanup-failure"]);
+  } finally {
+    await removeTempDir(repoDir);
+  }
 });
 
 test("stopCommand still stops an active unmerged session when cleanup is refused", async () => {

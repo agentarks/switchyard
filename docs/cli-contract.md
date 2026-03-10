@@ -122,6 +122,7 @@ Current contract:
 - command requires `--cleanup --abandon` to discard work that is not confirmed merged
 - command rejects `--abandon` unless `--cleanup` is also set
 - command reports already-absent artifacts as already absent instead of reporting a removal that did not happen
+- command records a durable `stop.completed` event with cleanup failure details when cleanup is blocked or artifact removal fails after the stop state is already known
 
 Future target:
 - revisit alternate runtime control only if the pid-based path proves too narrow in real operator workflows
