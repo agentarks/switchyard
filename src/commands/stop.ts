@@ -15,6 +15,18 @@ import {
 import { updateSessionState } from "../sessions/store.js";
 import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
 import { removeWorktree } from "../worktrees/manager.js";
+type StopCleanupReason = CleanupReason | "cleanup_failed";
+
+class StopCleanupError extends StopError {
+  readonly cleanupReason: StopCleanupReason;
+  readonly cleanupError?: string;
+
+  constructor(message: string, cleanupReason: StopCleanupReason, cleanupError?: string) {
+    super(message);
+    this.cleanupReason = cleanupReason;
+    this.cleanupError = cleanupError;
+  }
+}
 
 interface StopCommandCliOptions {
   cleanup?: boolean;
@@ -63,15 +75,30 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
 
   if (!isActiveSessionState(session.state)) {
     if (options.cleanup) {
-      const cleanup = await resolveCleanupRequest({
-        projectRoot: config.project.root,
-        canonicalBranch: config.project.canonicalBranch,
-        session,
-        cleanupRequested: options.cleanup,
-        abandon: options.abandon,
-        failOnBlocked: true,
-        removeSessionWorktree
-      });
+      let cleanup;
+
+      try {
+        cleanup = await resolveCleanupRequest({
+          projectRoot: config.project.root,
+          canonicalBranch: config.project.canonicalBranch,
+          session,
+          cleanupRequested: options.cleanup,
+          abandon: options.abandon,
+          failOnBlocked: true,
+          removeSessionWorktree
+        });
+      } catch (error) {
+        await recordStopCompletedEvent(recordEvent, config.project.root, session, {
+          previousState: session.state,
+          nextState: session.state,
+          outcome: "already_not_running",
+          cleanupRequested: true,
+          cleanupPerformed: false,
+          ...buildCleanupFailurePayload(error)
+        });
+        throw error;
+      }
+
       await recordEventWithFallback(recordEvent, config.project.root, {
         sessionId: session.id,
         agentName: session.agentName,
@@ -100,15 +127,30 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       state: "failed",
       runtimePid: null
     });
-    const cleanup = await resolveCleanupRequest({
-      projectRoot: config.project.root,
-      canonicalBranch: config.project.canonicalBranch,
-      session,
-      cleanupRequested: options.cleanup,
-      abandon: options.abandon,
-      failOnBlocked: false,
-      removeSessionWorktree
-    });
+    let cleanup;
+
+    try {
+      cleanup = await resolveCleanupRequest({
+        projectRoot: config.project.root,
+        canonicalBranch: config.project.canonicalBranch,
+        session,
+        cleanupRequested: options.cleanup,
+        abandon: options.abandon,
+        failOnBlocked: false,
+        removeSessionWorktree
+      });
+    } catch (error) {
+      await recordStopCompletedEvent(recordEvent, config.project.root, nextSession, {
+        previousState: session.state,
+        nextState: nextSession.state,
+        outcome: "missing_runtime_pid",
+        cleanupRequested: options.cleanup ? true : false,
+        cleanupPerformed: false,
+        ...buildCleanupFailurePayload(error)
+      });
+      throw error;
+    }
+
     await recordEventWithFallback(recordEvent, config.project.root, {
       sessionId: nextSession.id,
       agentName: nextSession.agentName,
@@ -151,29 +193,38 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     runtimePid: null
   });
 
-  const cleanup = await resolveCleanupRequest({
-    projectRoot: config.project.root,
-    canonicalBranch: config.project.canonicalBranch,
-    session,
-    cleanupRequested: options.cleanup,
-    abandon: options.abandon,
-    failOnBlocked: false,
-    removeSessionWorktree
-  });
+  let cleanup;
 
-  await recordEventWithFallback(recordEvent, config.project.root, {
-    sessionId: nextSession.id,
-    agentName: nextSession.agentName,
-    eventType: "stop.completed",
-    payload: {
+  try {
+    cleanup = await resolveCleanupRequest({
+      projectRoot: config.project.root,
+      canonicalBranch: config.project.canonicalBranch,
+      session,
+      cleanupRequested: options.cleanup,
+      abandon: options.abandon,
+      failOnBlocked: false,
+      removeSessionWorktree
+    });
+  } catch (error) {
+    await recordStopCompletedEvent(recordEvent, config.project.root, nextSession, {
       previousState: session.state,
       nextState: nextSession.state,
       outcome: determineStopOutcome(wasAlive, stopped, nextState),
       cleanupRequested: options.cleanup ? true : false,
-      cleanupPerformed: cleanup.performed,
-      ...(cleanup.cleanupMode ? { cleanupMode: cleanup.cleanupMode } : {}),
-      ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {})
-    }
+      cleanupPerformed: false,
+      ...buildCleanupFailurePayload(error)
+    });
+    throw error;
+  }
+
+  await recordStopCompletedEvent(recordEvent, config.project.root, nextSession, {
+    previousState: session.state,
+    nextState: nextSession.state,
+    outcome: determineStopOutcome(wasAlive, stopped, nextState),
+    cleanupRequested: options.cleanup ? true : false,
+    cleanupPerformed: cleanup.performed,
+    ...(cleanup.cleanupMode ? { cleanupMode: cleanup.cleanupMode } : {}),
+    ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {})
   });
 
   if (nextState === "failed") {
@@ -210,7 +261,7 @@ async function cleanupSessionArtifacts(options: {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new StopError(`Cleanup failed for ${options.session.agentName}: ${message}`);
+    throw new StopCleanupError(`Cleanup failed for ${options.session.agentName}: ${message}`, "cleanup_failed", message);
   }
 }
 
@@ -236,7 +287,7 @@ async function resolveCleanupRequest(options: {
 
   if (decision.kind === "blocked") {
     if (options.failOnBlocked) {
-      throw new StopError(decision.message);
+      throw new StopCleanupError(decision.message, decision.reason);
     }
 
     return {
@@ -285,4 +336,37 @@ function determineStopOutcome(
 function formatRelativePath(projectRoot: string, path: string): string {
   const relativePath = relative(projectRoot, path);
   return relativePath.length > 0 ? relativePath : ".";
+}
+
+async function recordStopCompletedEvent(
+  recordEvent: EventRecorder,
+  projectRoot: string,
+  session: SessionRecord,
+  payload: Record<string, string | number | boolean>
+): Promise<void> {
+  await recordEventWithFallback(recordEvent, projectRoot, {
+    sessionId: session.id,
+    agentName: session.agentName,
+    eventType: "stop.completed",
+    payload
+  });
+}
+
+function buildCleanupFailurePayload(error: unknown): {
+  cleanupReason: StopCleanupReason;
+  cleanupError?: string;
+} {
+  if (error instanceof StopCleanupError) {
+    return {
+      cleanupReason: error.cleanupReason,
+      ...(error.cleanupError ? { cleanupError: error.cleanupError } : {})
+    };
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+
+  return {
+    cleanupReason: "cleanup_failed",
+    cleanupError: message
+  };
 }
