@@ -8,6 +8,7 @@ import { createMail, readUnreadMailForSession } from "../mail/store.js";
 import { createSession, listSessions } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
+import { slingCommand } from "./sling.js";
 import { statusCommand } from "./status.js";
 
 test("statusCommand prints an empty-state message when no sessions exist", async () => {
@@ -279,6 +280,59 @@ test("statusCommand prints only the selected session and reconciles only that se
     /failed\tsession-1\tagent-one\tagents\/agent-one\t\.switchyard\/worktrees\/agent-one\t2026-03-08T10:00:00.000Z\t0\t[^\t]+\t2026-03-08T10:00:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=1111/
   );
   assert.doesNotMatch(output, /session-2/);
+});
+
+test("statusCommand shows the launch task handoff for one selected session", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const task = "Inspect the preserved worktree and summarize the highest-risk changes.";
+
+  try {
+    await slingCommand({
+      agentName: "Agent Task Status",
+      task,
+      startDir: repoDir,
+      spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
+        const runtime = {
+          pid: 8181,
+          command: {
+            command: "codex",
+            args: runtimeArgs
+          }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await statusCommand({
+      selector: "agent-task-status",
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 8181,
+      now: () => "2026-03-09T12:00:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  const sessionIdMatch = output.match(/Status for agent-task-status \(([0-9a-f-]{36})\):/);
+  assert.ok(sessionIdMatch);
+  assert.match(output, new RegExp(`Task: ${task}`));
+  assert.match(output, new RegExp(`Spec: \\.switchyard/specs/agent-task-status-${sessionIdMatch[1]}\\.md`));
+  assert.match(output, /Recent: 2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=8181/);
 });
 
 test("statusCommand selected-session view surfaces stored base branch and runtime pid even when a later event becomes recent", async () => {

@@ -4,16 +4,16 @@ This file is the owner-facing execution guide for the next meaningful slice. If 
 
 ## Goal Of The Next Slice
 
-Stop treating generic hardening as the default next step.
+Stop treating generic hardening as the default next step now that the `sy sling` task-handoff slice exists.
 
 Target outcome:
-- choose one named operator-visible slice inside the current repo-local loop before writing more code
-- make `sy sling` accept a first-class operator task input instead of relying on future-reserved positional args alone
+- reassess whether the current repo-local loop needs another concrete slice at all
+- if a new slice is justified, name it before coding
 - avoid "find the next gap" work that does not clearly change operator behavior
 
 ## Why This Is Next
 
-The core loop is now mostly real. Leaving "pick the next hardening gap" as the standing instruction risks turning progress into an open-ended cleanup exercise instead of a product decision.
+The core loop is now mostly real, and the start-of-loop product gap that justified the last slice is no longer open. Leaving "pick the next hardening gap" as the standing instruction still risks turning progress into an open-ended cleanup exercise instead of a product decision.
 
 Without that discipline:
 - effort can drift into speculative lifecycle cleanup with no clear finish line
@@ -23,11 +23,11 @@ Without that discipline:
 ## Exact Order
 
 1. Name the next slice before coding
-   - the next slice is `sy sling` task input
+   - the next slice is not automatically "more hardening"
    - "more hardening" is not a valid slice name
 
 2. Only do lifecycle work when it is anchored
-   - tie it to a reproduced failure, a confusing operator workflow, or the `sy sling` task-input slice
+   - tie it to a reproduced failure or a confusing operator workflow
    - if the work does not change operator behavior, defer it
 
 3. Update docs only where priorities truly changed
@@ -35,17 +35,11 @@ Without that discipline:
 
 ## Named Slice
 
-`sy sling` needs one explicit operator task handoff.
+No new named slice is locked yet.
 
-Desired behavior:
-- accept one clear task or instruction input at launch time
-- write that instruction into a durable file under `.switchyard/specs/`
-- surface enough launch output that the operator can see what task was handed off and where it lives
-
-Why this slice:
-- it improves the start of the operator loop instead of tuning internals again
-- it uses an existing repo-local path the project already creates
-- it turns a vague future target into a reviewable product change
+Decision rule:
+- if current launch output, `sy events`, and exact-session `sy status` already give enough task-handoff visibility, do not invent another slice just to stay busy
+- if operators hit a concrete gap, name that gap explicitly before writing code
 
 ## What To Keep Small
 
@@ -59,8 +53,8 @@ Do not build these unless a concrete operator workflow now requires them:
 
 ## Definition Of Done
 
-The next slice is done when all of these are true:
-- it is a named operator-visible slice in the current CLI surface, or a reproduced bug fix
+The next session is on track when all of these are true:
+- it either confirms no new slice is needed yet or names one concrete operator-visible slice
 - tests and docs match the resulting behavior when behavior changed
 - the work did not broaden scope just to stay busy
 

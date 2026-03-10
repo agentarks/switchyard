@@ -8,6 +8,7 @@ import { SlingError } from "../errors.js";
 import { stopProcess } from "../runtimes/process.js";
 import { createSession } from "../sessions/store.js";
 import type { CreateSessionInput } from "../sessions/types.js";
+import { summarizeTask, writeTaskSpec, type TaskSpecRecord } from "../specs/task.js";
 import {
   type SpawnedRuntimeProcess,
   type SpawnedRuntimeSession,
@@ -17,6 +18,7 @@ import { createWorktree, type ManagedWorktree, removeWorktree } from "../worktre
 
 interface SlingOptions {
   agentName: string;
+  task?: string;
   runtimeArgs?: string[];
   startDir?: string;
   spawnRuntime?: (options: {
@@ -34,13 +36,15 @@ export function createSlingCommand(): Command {
   return new Command("sling")
     .description("Spawn one Codex agent into an isolated worktree")
     .argument("<agent>", "Deterministic agent name")
+    .requiredOption("--task <instruction>", "Operator task or instruction to hand off")
     .argument("[args...]", "Arguments reserved for future Codex/runtime inputs")
-    .action(async (agentName: string, runtimeArgs: string[]) => {
-      await slingCommand({ agentName, runtimeArgs });
+    .action(async (agentName: string, runtimeArgs: string[], commandOptions: { task: string }) => {
+      await slingCommand({ agentName, task: commandOptions.task, runtimeArgs });
     });
 }
 
 export async function slingCommand(options: SlingOptions): Promise<void> {
+  const task = validateTask(options.task);
   const config = await loadConfig(options.startDir);
   const recordEvent = options.recordEvent ?? recordEventBestEffort;
   const createSessionRecord = options.createSessionRecord ?? createSession;
@@ -55,15 +59,30 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     return await spawnCodexSession({ runtimeArgs, worktreePath });
   });
   const runtimeArgs = options.runtimeArgs ?? [];
+  const runtimeArgsWithTask = [...runtimeArgs, task];
   const createdAt = new Date().toISOString();
   let lastLifecycleTimestamp = createdAt;
   const sessionId = randomUUID();
+  const taskSummary = summarizeTask(task);
   let runtimeSession: SpawnedRuntimeSession;
+  let taskSpec: TaskSpecRecord | undefined;
 
   try {
+    taskSpec = await writeTaskSpec({
+      projectRoot: config.project.root,
+      sessionId,
+      agentName: managedWorktree.agentName,
+      task,
+      createdAt,
+      branch: managedWorktree.branch,
+      baseBranch: managedWorktree.baseBranch,
+      worktreePath: managedWorktree.path
+    });
+    const taskSpecPath = taskSpec.relativePath;
+
     runtimeSession = await spawnRuntime({
       agentName: managedWorktree.agentName,
-      runtimeArgs,
+      runtimeArgs: runtimeArgsWithTask,
       worktreePath: managedWorktree.path,
       onSpawned: async (spawnedRuntime) => {
         const spawnedAt = nextLifecycleTimestamp(lastLifecycleTimestamp);
@@ -78,8 +97,10 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
             branch: managedWorktree.branch,
             baseBranch: managedWorktree.baseBranch,
             worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
+            taskSummary,
+            taskSpecPath,
             runtimePid: spawnedRuntime.pid,
-            runtimeCommand: formatRuntimeCommand(spawnedRuntime)
+            runtimeCommand: formatRuntimeCommandForOperator(spawnedRuntime, task)
           }
         });
       }
@@ -108,6 +129,8 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
         branch: managedWorktree.branch,
         worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
         errorMessage: formatErrorMessage(error),
+        taskSummary,
+        taskSpecPath: taskSpec?.relativePath ?? null,
         cleanupSucceeded: cleanupError ? false : true
       }
     });
@@ -117,6 +140,10 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     }
 
     throw error;
+  }
+
+  if (!taskSpec) {
+    throw new SlingError("Task spec was not created before launch completion.");
   }
 
   const completedAt = nextLifecycleTimestamp(lastLifecycleTimestamp);
@@ -150,6 +177,8 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
         branch: managedWorktree.branch,
         worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
         errorMessage: formatErrorMessage(error),
+        taskSummary,
+        taskSpecPath: taskSpec?.relativePath ?? null,
         runtimePid: runtimeSession.pid,
         runtimeStopped: teardown.stopError ? false : true,
         cleanupSucceeded: teardown.cleanupError ? false : true
@@ -168,8 +197,10 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       branch: managedWorktree.branch,
       baseBranch: managedWorktree.baseBranch,
       worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
+      taskSummary,
+      taskSpecPath: taskSpec.relativePath,
       runtimePid: runtimeSession.pid,
-      runtimeCommand: formatRuntimeCommand(runtimeSession),
+      runtimeCommand: formatRuntimeCommandForOperator(runtimeSession, task),
       readyAfterMs: runtimeSession.readyAfterMs
     }
   });
@@ -179,8 +210,10 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   process.stdout.write("State: starting\n");
   process.stdout.write(`Branch: ${managedWorktree.branch}\n`);
   process.stdout.write(`Base: ${managedWorktree.baseBranch}\n`);
+  process.stdout.write(`Task: ${taskSummary}\n`);
+  process.stdout.write(`Spec: ${taskSpec.relativePath}\n`);
   process.stdout.write(`Worktree: ${formatRelativePath(config.project.root, managedWorktree.path)}\n`);
-  process.stdout.write(`Runtime: ${formatRuntimeCommand(runtimeSession)}\n`);
+  process.stdout.write(`Runtime: ${formatRuntimeCommandForOperator(runtimeSession, task)}\n`);
   process.stdout.write(`Ready: initial launch check passed after ${runtimeSession.readyAfterMs}ms\n`);
 }
 
@@ -192,6 +225,24 @@ function formatRelativePath(projectRoot: string, path: string): string {
 function formatRuntimeCommand(runtimeSession: SpawnedRuntimeProcess): string {
   const parts = [runtimeSession.command.command, ...runtimeSession.command.args];
   return parts.join(" ");
+}
+
+function formatRuntimeCommandForOperator(runtimeSession: SpawnedRuntimeProcess, task: string): string {
+  const args = [...runtimeSession.command.args];
+
+  if (args.at(-1) === task) {
+    args.pop();
+  }
+
+  return [runtimeSession.command.command, ...args].join(" ");
+}
+
+function validateTask(task: string | undefined): string {
+  if (typeof task !== "string" || task.trim().length === 0) {
+    throw new SlingError("Missing task. Use '--task <instruction>' to hand off one explicit task.");
+  }
+
+  return task;
 }
 
 async function cleanupFailedLaunch(projectRoot: string, worktree: ManagedWorktree): Promise<Error | undefined> {

@@ -17,6 +17,7 @@ Switchyard is through the first operator-loop milestones:
 - merge-target metadata retention for canonical-branch drift is now minimally real
 - first readiness and early-failure handling are now minimally real as hardening work ahead of M8
 - end-to-end repo-bootstrap regression coverage for `sy init` is now minimally real
+- first-class task input for `sy sling` is now minimally real, including durable spec handoff files
 - later milestones remain design targets, not implementation commitments
 
 ## Near-Term Rule
@@ -34,15 +35,12 @@ If a change does not move that workflow forward or reduce meaningful risk inside
 
 ## Recommended Next Slice
 
-The next slice should be first-class task input for `sy sling`:
-- add one explicit operator task handoff at launch time
-- write that handoff into `.switchyard/specs/`
-- keep the slice grounded in the current repo-local loop rather than broader automation
+No new slice is automatically next.
 
-Why this is next:
-- the repo already creates `.switchyard/specs/`, but the launch path does not use it yet
-- task handoff is a concrete operator-facing gap at the start of the current loop
-- it is a product slice, not open-ended cleanup
+What to do instead:
+- reassess whether the current loop needs another concrete operator-visible slice at all
+- if one is needed, name it before coding and keep it grounded in the current repo-local loop
+- do not default back to generic lifecycle hardening
 
 ## Order After That
 

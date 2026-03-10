@@ -43,21 +43,22 @@ Failure rules:
 ## `sy sling [args...]`
 
 Current contract:
-- command requires one `<agent>` argument and accepts additional positional runtime args
+- command requires one `<agent>` argument, one explicit `--task <instruction>`, and may accept additional positional runtime args
 - command loads config from the canonical repo root
 - command creates one deterministic branch and worktree under `.switchyard/worktrees/`
+- command writes one durable task handoff file under `.switchyard/specs/`
+- command passes the explicit task text to Codex as the initial prompt
 - command starts one detached Codex process from that worktree
 - on supported Unix platforms, detached launch uses the system `script` utility so Codex startup still gets a pseudo-terminal
 - command persists one `starting` session record in `sessions.db`, including the original canonical branch as session `baseBranch`
-- command records `sling.spawned` when the runtime pid exists
-- command records `sling.completed` after the initial launch window succeeds
-- if Codex exits during the launch window, command records `sling.failed` with the launch error and leaves the session failed instead of pretending the launch succeeded
-- command prints the durable session id, launch state, created branch, base branch, worktree path, runtime command line, and initial readiness delay
+- command records `sling.spawned` when the runtime pid exists, including `taskSummary` and `taskSpecPath`
+- command records `sling.completed` after the initial launch window succeeds, including the same task handoff metadata plus `readyAfterMs`
+- if Codex exits during the launch window, command records `sling.failed` with the launch error and preserves task handoff metadata when available
+- command prints the durable session id, launch state, created branch, base branch, task summary, task spec path, worktree path, runtime command line, and initial readiness delay
 - if the `script` wrapper is unavailable on a supported platform, command fails explicitly instead of pretending the launch succeeded
 - on unsupported platforms, detached launch falls back to direct Codex spawn
 
 Future target:
-- next slice: add first-class operator task/instruction input with a durable handoff artifact under `.switchyard/specs/`
 - add richer runtime metadata only if operator workflows require attach or transcript inspection
 
 ## `sy status [session]`
@@ -90,7 +91,7 @@ Current contract:
 - command keeps operator-relevant `stop.failed` context in the recent-event summary, including shutdown failure reason, runtime pid, and error text when those details exist
 - command keeps operator-relevant `stop.completed` cleanup mode in the recent-event summary so later status inspection still shows whether cleanup happened after a confirmed merge or an explicit abandon
 - when the same `sy status` run also records an automatic runtime reconciliation event, command still keeps a latest pre-existing `stop.failed` visible in the current recent summary instead of immediately replacing it with that synthetic runtime event
-- with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, creation time, unread-mail count, cleanup-readiness label, and the full recent-event summary
+- with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, creation time, latest launch task summary, latest launch spec path, unread-mail count, cleanup-readiness label, and the full recent-event summary
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
 - when sessions exist, print a concise tab-separated table ordered by most recent update
 
@@ -104,6 +105,7 @@ Current contract:
 - command accepts `--limit <count>` to control the size of the recent-event window
 - without a selector, command reads the recent durable event timeline from `events.db`
 - with a selector, command resolves one session, one orphaned session-id event stream, or one orphaned agent-name event stream when no tracked session row remains
+- launch events from `sy sling` carry task handoff metadata such as `taskSummary` and `taskSpecPath`
 - command rejects selectors that could refer to different session-id, agent-name, or orphaned-event targets
 - command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
 - command rejects orphaned agent-name selectors that would combine events from multiple session ids and requires an exact session id instead

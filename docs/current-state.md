@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn with launch-time session-id visibility, readiness-aware status with session-id visibility plus unread-mail counts, cleanup-readiness inspection, and exact per-session inspection that now surfaces stored base-branch and runtime-pid metadata plus the full recent-event summary, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window and orphaned agent-name recovery when the session row is gone, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop. Merge conflicts now also surface the conflicting paths directly in `sy merge`, with compact conflict metadata carried into durable events and recent status context, repo-root merge-in-progress preflight now fails with an explicit recovery message instead of a generic dirty-worktree error, session-scoped merge preflight refusals now also record durable `merge.failed` events so later `sy status` and `sy events` inspection still show what blocked reintegration, `sy stop` shutdown failures before any state mutation now also record durable `stop.failed` events so later `sy status` and `sy events` inspection still show what blocked shutdown, `sy status` now keeps higher-value merge-failure context like branch-drift targets, preserved-worktree paths, git error text, stop-failure shutdown diagnostics, and stop cleanup mode in its recent-event summary, cleanup inspection now also distinguishes when a preserved worktree has already gone missing while the branch still remains so `sy status`, `sy stop --cleanup`, and later durable `stop.completed` history no longer collapse that partial-artifact-loss case into the harmless already-absent path, and Unix zombie runtime pids are now treated as stale dead sessions instead of being misreported as healthy just because the pid still answers a signal probe.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn with launch-time session-id visibility, first-class `sy sling --task` handoff with durable spec files under `.switchyard/specs/`, readiness-aware status with session-id visibility plus unread-mail counts, cleanup-readiness inspection, and exact per-session inspection that now surfaces stored base-branch and runtime-pid metadata plus the full recent-event summary and latest launch task handoff, stop, events with explicit selector disambiguation plus an operator-controlled recent-event window and orphaned agent-name recovery when the session row is gone, durable mail with unread consumption plus both full-history and unread-only read-only inspection, and a narrow merge path for the documented reintegration workflow all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The repo bootstrap contract now also has one realistic end-to-end CLI-path regression test. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop. The `sy sling` launch flow now also forwards the explicit task text to Codex as the initial prompt and records the task summary plus durable spec path in launch output and launch events. Merge conflicts now also surface the conflicting paths directly in `sy merge`, with compact conflict metadata carried into durable events and recent status context, repo-root merge-in-progress preflight now fails with an explicit recovery message instead of a generic dirty-worktree error, session-scoped merge preflight refusals now also record durable `merge.failed` events so later `sy status` and `sy events` inspection still show what blocked reintegration, `sy stop` shutdown failures before any state mutation now also record durable `stop.failed` events so later `sy status` and `sy events` inspection still show what blocked shutdown, `sy status` now keeps higher-value merge-failure context like branch-drift targets, preserved-worktree paths, git error text, stop-failure shutdown diagnostics, and stop cleanup mode in its recent-event summary, cleanup inspection now also distinguishes when a preserved worktree has already gone missing while the branch still remains so `sy status`, `sy stop --cleanup`, and later durable `stop.completed` history no longer collapse that partial-artifact-loss case into the harmless already-absent path, and Unix zombie runtime pids are now treated as stale dead sessions instead of being misreported as healthy just because the pid still answers a signal probe.
 
 ## What Exists
 
@@ -33,6 +33,8 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - narrow Codex runtime seam that builds and spawns one detached command
 - pseudo-terminal-backed detached Codex launch compatibility on supported Unix platforms via `script`
 - launch-time session-id visibility in `sy sling` so operators can target an exact preserved session immediately
+- first-class task handoff in `sy sling` via required `--task <instruction>`
+- durable task-spec files under `.switchyard/specs/` that are keyed by agent name and session id
 - initial readiness waiting that requires the spawned Codex process to survive a short launch window before the session is marked usable
 - narrow process liveness and stop helpers for detached Codex sessions
 - Unix zombie-process detection in runtime liveness checks so stale sessions fail closed instead of staying `running`
@@ -46,7 +48,8 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - explicit selector disambiguation across session-targeting commands when one normalized agent name matches multiple preserved sessions
 - operator-controlled recent-event window selection in `sy events --limit`
 - exact per-session inspection in `sy status`, including explicit selector disambiguation between session-id and agent-name matches
-- exact per-session inspection in `sy status` now also surfaces stored `baseBranch`, current `runtimePid`, creation time, and the full recent-event summary before the one-row table
+- exact per-session inspection in `sy status` now also surfaces stored `baseBranch`, current `runtimePid`, creation time, latest launch task summary, launch spec path, and the full recent-event summary before the one-row table
+- launch-event inspection in `sy events` now also carries `taskSummary` and `taskSpecPath` for `sling.spawned`, `sling.completed`, and `sling.failed`
 - explicit selector disambiguation in `sy stop` and `sy merge` when one raw selector could name different sessions by session-id and agent-name
 - first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
 - merge preflight failures that now surface the blocking git status entries for dirty repo-root and preserved-worktree states
@@ -93,22 +96,24 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - rejects reused agent-name selectors when multiple sessions share that normalized agent name, and requires an exact session id instead
   - prints an empty-state message when no events exist
 - `sy sling [args...]`
-  - requires an agent name
+  - requires an agent name plus `--task <instruction>`
   - creates one deterministic branch under `agents/`
   - creates one worktree under `.switchyard/worktrees/`
+  - writes one durable task handoff file under `.switchyard/specs/`
+  - passes the explicit task text to Codex as the initial prompt
   - spawns one Codex process from that worktree
   - uses the system `script` utility on macOS, Linux, and BSD platforms so detached Codex startup still gets a pseudo-terminal
   - persists the original canonical branch as session `baseBranch`
-  - prints the durable session id in the initial launch summary
+  - prints the durable session id, task summary, and task spec path in the initial launch summary
   - records `sling.spawned` once the runtime pid exists
   - waits for one short initial readiness window before persisting the session as `starting`
-  - records `sling.completed` after that launch window succeeds, including `readyAfterMs`
-  - records `sling.failed` when the runtime exits during that launch window
+  - records `sling.completed` after that launch window succeeds, including `readyAfterMs`, `taskSummary`, and `taskSpecPath`
+  - records `sling.failed` when the runtime exits during that launch window, preserving task handoff metadata when available
   - falls back to direct detached Codex spawn on other platforms
 - `sy status [session]`
   - loads config and session state
   - optionally resolves one session by id or normalized agent name and renders only that session
-  - when a selector is present, prints a small detail block ahead of the one-row table so operators can inspect stored `baseBranch`, current `runtimePid`, creation time, unread-mail count, cleanup-readiness label, and the full recent-event summary without reading the database
+  - when a selector is present, prints a small detail block ahead of the one-row table so operators can inspect stored `baseBranch`, current `runtimePid`, creation time, latest launch task summary, launch spec path, unread-mail count, cleanup-readiness label, and the full recent-event summary without reading the database
   - accepts an exact session id before agent-name normalization, even when the raw selector is not a valid agent name
   - rejects ambiguous selectors that would match different sessions by id and agent name
   - rejects reused agent-name selectors when multiple sessions share that normalized agent name, and requires an exact session id instead
@@ -201,9 +206,9 @@ This repository now has a minimal but real operator loop for one repo-local Code
 ## Recommended Next Task
 
 Do not default to another generic hardening pass:
-- the named next slice is first-class task input for `sy sling`
-- use the existing `.switchyard/specs/` directory for the durable handoff artifact
-- only do lifecycle hardening when it is tied to a reproduced operator problem or this slice
+- first reassess whether the loop needs another concrete slice at all before naming one
+- only pick a new slice if it changes operator behavior or fixes a reproduced operator problem
+- keep generic lifecycle hardening deferred unless a real workflow now proves it necessary
 
 ## How To Use This File
 

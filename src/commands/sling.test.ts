@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { access, mkdir } from "node:fs/promises";
+import { access, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
@@ -13,6 +13,7 @@ import { slingCommand } from "./sling.js";
 test("slingCommand creates a worktree and persists a started session", async () => {
   const repoDir = await createInitializedRepo();
   const nestedDir = join(repoDir, "apps", "api");
+  const task = "Implement the next operator-visible slice.";
   const writes: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
 
@@ -26,10 +27,11 @@ test("slingCommand creates a worktree and persists a started session", async () 
   try {
     await slingCommand({
       agentName: "Agent One",
+      task,
       runtimeArgs: ["--model", "gpt-5"],
       startDir: nestedDir,
       spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
-        assert.deepEqual(runtimeArgs, ["--model", "gpt-5"]);
+        assert.deepEqual(runtimeArgs, ["--model", "gpt-5", task]);
         const runtime = {
           pid: 4242,
           command: {
@@ -61,6 +63,8 @@ test("slingCommand creates a worktree and persists a started session", async () 
   assert.equal(sessions[0]?.branch, "agents/agent-one");
   assert.equal(sessions[0]?.baseBranch, "main");
   assert.equal(sessions[0]?.worktreePath, join(repoDir, ".switchyard", "worktrees", "agent-one"));
+  const specPath = join(repoDir, ".switchyard", "specs", `agent-one-${sessions[0]?.id}.md`);
+  const specDocument = await readFile(specPath, "utf8");
 
   const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
   assert.equal(events.length, 2);
@@ -70,25 +74,59 @@ test("slingCommand creates a worktree and persists a started session", async () 
   assert.equal(spawnedEvent?.payload.runtimePid, 4242);
   assert.equal(spawnedEvent?.payload.branch, "agents/agent-one");
   assert.equal(spawnedEvent?.payload.baseBranch, "main");
+  assert.equal(spawnedEvent?.payload.taskSummary, task);
+  assert.equal(spawnedEvent?.payload.taskSpecPath, `.switchyard/specs/agent-one-${sessions[0]?.id}.md`);
+  assert.equal(spawnedEvent?.payload.runtimeCommand, "codex --model gpt-5");
   assert.equal(completedEvent?.agentName, "agent-one");
   assert.equal(completedEvent?.payload.runtimePid, 4242);
   assert.equal(completedEvent?.payload.branch, "agents/agent-one");
   assert.equal(completedEvent?.payload.baseBranch, "main");
+  assert.equal(completedEvent?.payload.taskSummary, task);
+  assert.equal(completedEvent?.payload.taskSpecPath, `.switchyard/specs/agent-one-${sessions[0]?.id}.md`);
+  assert.equal(completedEvent?.payload.runtimeCommand, "codex --model gpt-5");
   assert.equal(completedEvent?.payload.readyAfterMs, 500);
   assert.ok(
     typeof spawnedEvent?.createdAt === "string"
     && typeof completedEvent?.createdAt === "string"
     && spawnedEvent.createdAt < completedEvent.createdAt
   );
+  assert.match(specDocument, /# Switchyard Task Handoff/);
+  assert.match(specDocument, new RegExp(`Session: ${sessions[0]?.id}`));
+  assert.match(specDocument, /Agent: agent-one/);
+  assert.match(specDocument, /Branch: agents\/agent-one/);
+  assert.match(specDocument, /Base: main/);
+  assert.match(specDocument, /Worktree: \.switchyard\/worktrees\/agent-one/);
+  assert.match(specDocument, new RegExp(task));
 
   assert.match(writes.join(""), /Spawned agent-one/);
   assert.match(writes.join(""), new RegExp(`Session: ${sessions[0]?.id}`));
   assert.match(writes.join(""), /State: starting/);
   assert.match(writes.join(""), /Base: main/);
+  assert.match(writes.join(""), new RegExp(`Task: ${task}`));
+  assert.match(writes.join(""), new RegExp(`Spec: \\.switchyard/specs/agent-one-${sessions[0]?.id}\\.md`));
   assert.match(writes.join(""), /Runtime: codex --model gpt-5/);
   assert.match(writes.join(""), /Ready: initial launch check passed after 500ms/);
 
   await removeTempDir(repoDir);
+});
+
+test("slingCommand rejects launches without an explicit task", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(
+      () => slingCommand({
+        agentName: "Agent Missing Task",
+        startDir: repoDir
+      }),
+      /Missing task\. Use '--task <instruction>' to hand off one explicit task\./
+    );
+
+    const sessions = await listSessions(repoDir);
+    assert.deepEqual(sessions, []);
+  } finally {
+    await removeTempDir(repoDir);
+  }
 });
 
 test("statusCommand promotes a started session to running after the first successful liveness check", async () => {
@@ -104,6 +142,7 @@ test("statusCommand promotes a started session to running after the first succes
 
     await slingCommand({
       agentName: "Agent Two",
+      task: "Validate that the runtime transitions to running.",
       startDir: repoDir,
       spawnRuntime: async ({ onSpawned }) => {
         const runtime = {
@@ -171,6 +210,7 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
     await assert.rejects(async () => {
       await slingCommand({
         agentName: "Agent Three",
+        task: "Fail this launch so the retry path is exercised.",
         startDir: repoDir,
         spawnRuntime: async () => {
           attempts += 1;
@@ -200,6 +240,7 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
 
     await slingCommand({
       agentName: "Agent Three",
+      task: "Retry the launch after the first failure.",
       startDir: repoDir,
       spawnRuntime: async ({ onSpawned }) => {
         attempts += 1;
@@ -245,10 +286,18 @@ test("slingCommand cleans up failed worktrees and allows retrying the same agent
 
 test("slingCommand keeps a started session when event persistence fails", async () => {
   const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
 
   try {
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
     await slingCommand({
       agentName: "Agent Four",
+      task: "Keep the session even if event persistence fails.",
       startDir: repoDir,
       spawnRuntime: async () => {
         return {
@@ -271,7 +320,20 @@ test("slingCommand keeps a started session when event persistence fails", async 
     assert.equal(sessions[0]?.runtimePid, 4040);
     const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
     assert.deepEqual(events, []);
+
+    writes.length = 0;
+    await statusCommand({
+      selector: sessions[0]?.id,
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 4040,
+      now: () => "2026-03-09T14:00:00.000Z"
+    });
+
+    const output = writes.join("");
+    assert.match(output, /Task: Keep the session even if event persistence fails\./);
+    assert.match(output, new RegExp(`Spec: \\.switchyard/specs/agent-four-${sessions[0]?.id}\\.md`));
   } finally {
+    process.stdout.write = originalWrite;
     await removeTempDir(repoDir);
   }
 });
@@ -283,6 +345,7 @@ test("slingCommand records an early readiness failure after launch", async () =>
     await assert.rejects(async () => {
       await slingCommand({
         agentName: "Agent Crash",
+        task: "Exercise the early readiness failure path.",
         startDir: repoDir,
         spawnRuntime: async ({ onSpawned }) => {
           const runtime = {
@@ -330,6 +393,7 @@ test("slingCommand stops the launched runtime and cleans up when session persist
     await assert.rejects(async () => {
       await slingCommand({
         agentName: "Agent Persist Fail",
+        task: "Exercise the post-spawn session persistence failure path.",
         startDir: repoDir,
         spawnRuntime: async ({ onSpawned }) => {
           const runtime = {
