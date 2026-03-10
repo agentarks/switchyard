@@ -10,11 +10,12 @@ import { inspectProcessLiveness, isProcessAlive, type ProcessLiveness } from "..
 import { getCleanupReadinessLabel } from "../sessions/cleanup.js";
 import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
 import { getSessionById, listSessions, updateSessionState } from "../sessions/store.js";
-import { readTaskSpecHandoff } from "../specs/task.js";
+import { readTaskInstruction, readTaskSpecHandoff } from "../specs/task.js";
 import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 
 interface StatusOptions {
   selector?: string;
+  showTask?: boolean;
   startDir?: string;
   isRuntimeAlive?: (pid: number) => boolean;
   inspectRuntimeLiveness?: (pid: number) => ProcessLiveness;
@@ -32,12 +33,17 @@ export function createStatusCommand(): Command {
   return new Command("status")
     .description("Show active and recent agent sessions")
     .argument("[session]", "Optional session id or agent name")
-    .action(async (selector: string | undefined) => {
-      await statusCommand({ selector });
+    .option("--task", "Show the full stored launch task for one selected session")
+    .action(async (selector: string | undefined, commandOptions: { task?: boolean }) => {
+      await statusCommand({ selector, showTask: commandOptions.task === true });
     });
 }
 
 export async function statusCommand(options: StatusOptions = {}): Promise<void> {
+  if (options.showTask && !options.selector) {
+    throw new StatusError("Full task inspection requires an exact session selector. Use 'sy status <session> --task'.");
+  }
+
   const config = await loadConfig(options.startDir);
   const selectedSession = options.selector
     ? await resolveSession(config.project.root, options.selector)
@@ -84,6 +90,11 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     sessions,
     options.getCleanupReadiness ?? getCleanupReadinessLabel
   );
+  const selectedSessionDetails = await loadSelectedSessionDetails(
+    config.project.root,
+    selectedSession ? sessions[0] : undefined,
+    options.showTask === true
+  );
 
   process.stdout.write(`${formatStatusHeading(config.project.name, sessions.length === 1 ? sessions[0] : undefined, selectedSession !== undefined)}\n`);
 
@@ -91,7 +102,6 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     const session = sessions[0];
 
     if (session) {
-      const launchTaskHandoff = await loadLatestLaunchTaskHandoff(config.project.root, session);
       const unreadCount = unreadMailCounts.available
         ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
         : "?";
@@ -105,12 +115,21 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       process.stdout.write(`Base: ${formatOptionalField(session.baseBranch)}\n`);
       process.stdout.write(`Runtime pid: ${formatOptionalField(session.runtimePid)}\n`);
       process.stdout.write(`Created: ${session.createdAt}\n`);
-      process.stdout.write(`Task: ${launchTaskHandoff?.taskSummary ?? "-"}\n`);
-      process.stdout.write(`Spec: ${launchTaskHandoff?.taskSpecPath ?? "-"}\n`);
+      process.stdout.write(`Task: ${selectedSessionDetails?.taskHandoff?.taskSummary ?? "-"}\n`);
+      process.stdout.write(`Spec: ${selectedSessionDetails?.taskHandoff?.taskSpecPath ?? "-"}\n`);
       process.stdout.write(`Unread: ${unreadCount}\n`);
       process.stdout.write(`Cleanup: ${cleanup}\n`);
       process.stdout.write(`Recent: ${formatRecentEventSummary(recentEvent, { truncate: false })}\n`);
+
+      if (options.showTask) {
+        process.stdout.write("\nInstruction:\n");
+        process.stdout.write(`${selectedSessionDetails?.taskInstruction}\n`);
+      }
     }
+  }
+
+  if (selectedSession && options.showTask) {
+    process.stdout.write("\n");
   }
 
   process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tRECENT\n");
@@ -468,6 +487,34 @@ async function loadLatestLaunchTaskHandoff(
   }
 
   return await readTaskSpecHandoff(projectRoot, session.agentName, session.id);
+}
+
+async function loadLatestLaunchTaskInstruction(projectRoot: string, session: SessionRecord): Promise<string | undefined> {
+  return await readTaskInstruction(projectRoot, session.agentName, session.id);
+}
+
+async function loadSelectedSessionDetails(
+  projectRoot: string,
+  session: SessionRecord | undefined,
+  showTask: boolean
+): Promise<{ taskHandoff?: { taskSummary?: string; taskSpecPath?: string }; taskInstruction?: string } | undefined> {
+  if (!session) {
+    return undefined;
+  }
+
+  const taskHandoff = await loadLatestLaunchTaskHandoff(projectRoot, session);
+  const taskInstruction = showTask
+    ? await loadLatestLaunchTaskInstruction(projectRoot, session)
+    : undefined;
+
+  if (showTask && !taskInstruction) {
+    throw new StatusError(`Stored task text is unavailable for session '${session.id}'.`);
+  }
+
+  return {
+    taskHandoff,
+    taskInstruction
+  };
 }
 
 function selectRecentEventDetailKeys(event: EventRecord): string[] {

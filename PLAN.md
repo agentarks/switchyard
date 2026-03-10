@@ -172,7 +172,7 @@ These are the current project decisions and should be treated as the default unt
 ## Open Decisions
 
 These still need to be resolved or confirmed:
-- Whether the current task-handoff visibility is already sufficient, or whether a narrower follow-up inspection slice is justified by real operator use
+- Whether `sy status <session> --task` closes the current task-handoff inspection gap, or whether any further operator inspection is justified by real use
 
 ## Suggested Order For Our Next Sessions
 

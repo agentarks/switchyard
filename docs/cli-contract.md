@@ -65,6 +65,7 @@ Future target:
 
 Current contract:
 - command accepts one optional session id or agent name selector
+- command accepts `--task` only alongside an exact selector and uses it to print the full stored launch instruction
 - command loads `.switchyard/config.yaml` from the canonical repo root
 - command reads durable session state from `sessions.db`
 - without a selector, command reads and renders all recorded sessions ordered by most recent update
@@ -92,6 +93,9 @@ Current contract:
 - command keeps operator-relevant `stop.completed` cleanup mode in the recent-event summary so later status inspection still shows whether cleanup happened after a confirmed merge or an explicit abandon
 - when the same `sy status` run also records an automatic runtime reconciliation event, command still keeps a latest pre-existing `stop.failed` visible in the current recent summary instead of immediately replacing it with that synthetic runtime event
 - with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, creation time, latest launch task summary, latest launch spec path, unread-mail count, cleanup-readiness label, and the full recent-event summary
+- with `--task` plus a selector, command also prints the full stored launch instruction from `.switchyard/specs/`
+- command rejects `--task` without an exact selector
+- command fails explicitly when `--task` is requested but the stored task text cannot be read
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
 - when sessions exist, print a concise tab-separated table ordered by most recent update
 

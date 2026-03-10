@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { createEvent, listEvents } from "../events/store.js";
 import { createMail, readUnreadMailForSession } from "../mail/store.js";
 import { createSession, listSessions } from "../sessions/store.js";
+import { summarizeTask } from "../specs/task.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
 import { slingCommand } from "./sling.js";
@@ -333,6 +334,136 @@ test("statusCommand shows the launch task handoff for one selected session", asy
   assert.match(output, new RegExp(`Task: ${task}`));
   assert.match(output, new RegExp(`Spec: \\.switchyard/specs/agent-task-status-${sessionIdMatch[1]}\\.md`));
   assert.match(output, /Recent: 2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=8181/);
+});
+
+test("statusCommand prints the full stored task text when requested for one selected session", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const task = [
+    "Inspect the preserved worktree and produce an operator-facing merge-risk summary that calls out cleanup blockers.",
+    "",
+    "Also include:",
+    "- the latest stop failure details",
+    "- any branch drift that would break reintegration"
+  ].join("\n");
+
+  try {
+    await slingCommand({
+      agentName: "Agent Task Full",
+      task,
+      startDir: repoDir,
+      spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
+        const runtime = {
+          pid: 8282,
+          command: {
+            command: "codex",
+            args: runtimeArgs
+          }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await statusCommand({
+      selector: "agent-task-full",
+      showTask: true,
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 8282,
+      now: () => "2026-03-09T12:05:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, new RegExp(`Task: ${summarizeTask(task).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  assert.match(
+    output,
+    /Instruction:\nInspect the preserved worktree and produce an operator-facing merge-risk summary that calls out cleanup blockers\.\n\nAlso include:\n- the latest stop failure details\n- any branch drift that would break reintegration/
+  );
+  assert.match(output, /\n\nSTATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tRECENT\n/);
+});
+
+test("statusCommand rejects full task inspection without an exact selector", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(
+      () => statusCommand({ startDir: repoDir, showTask: true }),
+      (error) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal(
+          (error as Error).message,
+          "Full task inspection requires an exact session selector. Use 'sy status <session> --task'."
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("statusCommand fails explicitly when the stored task spec is missing", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await slingCommand({
+      agentName: "Agent Task Missing",
+      task: "Inspect the task spec failure path.",
+      startDir: repoDir,
+      spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
+        const runtime = {
+          pid: 8383,
+          command: {
+            command: "codex",
+            args: runtimeArgs
+          }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    const sessionId = (await listSessions(repoDir))[0]?.id;
+    assert.ok(sessionId);
+    await rm(join(repoDir, ".switchyard", "specs", `agent-task-missing-${sessionId}.md`));
+
+    await assert.rejects(
+      () =>
+        statusCommand({
+          selector: sessionId,
+          showTask: true,
+          startDir: repoDir,
+          isRuntimeAlive: (pid) => pid === 8383
+        }),
+      (error) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, `Stored task text is unavailable for session '${sessionId}'.`);
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
 });
 
 test("statusCommand selected-session view surfaces stored base branch and runtime pid even when a later event becomes recent", async () => {

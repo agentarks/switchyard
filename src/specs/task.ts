@@ -53,17 +53,8 @@ export async function readTaskSpecHandoff(
   agentName: string,
   sessionId: string
 ): Promise<StoredTaskHandoff | undefined> {
-  const path = getTaskSpecPath(projectRoot, agentName, sessionId);
-  const taskSpecPath = formatRelativePath(projectRoot, path);
-
-  let document: string;
-  try {
-    document = await readFile(path, "utf8");
-  } catch {
-    return undefined;
-  }
-
-  const instruction = extractTaskInstruction(document);
+  const taskSpecPath = getRelativeTaskSpecPath(projectRoot, agentName, sessionId);
+  const instruction = await readTaskInstruction(projectRoot, agentName, sessionId);
 
   if (!instruction) {
     return undefined;
@@ -73,6 +64,27 @@ export async function readTaskSpecHandoff(
     taskSummary: summarizeTask(instruction),
     taskSpecPath
   };
+}
+
+export async function readTaskInstruction(
+  projectRoot: string,
+  agentName: string,
+  sessionId: string
+): Promise<string | undefined> {
+  const path = getTaskSpecPath(projectRoot, agentName, sessionId);
+
+  let document: string;
+  try {
+    document = await readFile(path, "utf8");
+  } catch {
+    return undefined;
+  }
+
+  return extractTaskInstruction(document);
+}
+
+export function getRelativeTaskSpecPath(projectRoot: string, agentName: string, sessionId: string): string {
+  return formatRelativePath(projectRoot, getTaskSpecPath(projectRoot, agentName, sessionId));
 }
 
 function buildTaskSpecDocument(input: WriteTaskSpecInput): string {
