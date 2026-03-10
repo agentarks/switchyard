@@ -83,6 +83,7 @@ Current contract:
 - command includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`
 - active sessions show the post-stop cleanup result with a `stop-then:` prefix instead of hiding whether cleanup would be merged-safe or abandon-only
 - if cleanup readiness cannot be evaluated for a session, command still renders status and prints `?` in the cleanup column instead of failing
+- with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, creation time, unread-mail count, cleanup-readiness label, and the full recent-event summary
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
 - when sessions exist, print a concise tab-separated table ordered by most recent update
 

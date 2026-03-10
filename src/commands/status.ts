@@ -80,6 +80,26 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
   );
 
   process.stdout.write(`${formatStatusHeading(config.project.name, sessions.length === 1 ? sessions[0] : undefined, selectedSession !== undefined)}\n`);
+
+  if (selectedSession) {
+    const session = sessions[0];
+
+    if (session) {
+      const unreadCount = unreadMailCounts.available
+        ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
+        : "?";
+      const cleanup = cleanupReadiness.get(session.id) ?? "?";
+      const recentEvent = reconciledEventsBySession.get(session.id) ?? latestEventsBySession.get(session.id);
+
+      process.stdout.write(`Base: ${formatOptionalField(session.baseBranch)}\n`);
+      process.stdout.write(`Runtime pid: ${formatOptionalField(session.runtimePid)}\n`);
+      process.stdout.write(`Created: ${session.createdAt}\n`);
+      process.stdout.write(`Unread: ${unreadCount}\n`);
+      process.stdout.write(`Cleanup: ${cleanup}\n`);
+      process.stdout.write(`Recent: ${formatRecentEventSummary(recentEvent, { truncate: false })}\n`);
+    }
+  }
+
   process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tRECENT\n");
 
   for (const session of sessions) {
@@ -213,12 +233,25 @@ function formatStatusHeading(projectName: string, session: SessionRecord | undef
   return `Sessions for ${projectName}:`;
 }
 
+function formatOptionalField(value: number | string | null | undefined): string {
+  if (typeof value === "undefined" || value === null) {
+    return "-";
+  }
+
+  return String(value);
+}
+
 function formatWorktreePath(projectRoot: string, worktreePath: string): string {
   const relativePath = relative(projectRoot, worktreePath);
   return relativePath.length > 0 ? relativePath : ".";
 }
 
-function formatRecentEventSummary(event?: EventRecord): string {
+function formatRecentEventSummary(
+  event?: EventRecord,
+  options: {
+    truncate?: boolean;
+  } = {}
+): string {
   if (!event) {
     return "-";
   }
@@ -228,7 +261,11 @@ function formatRecentEventSummary(event?: EventRecord): string {
     ? `${event.createdAt} ${event.eventType} ${detailSummary}`
     : `${event.createdAt} ${event.eventType}`;
 
-  return summary.length <= 120 ? summary : `${summary.slice(0, 117)}...`;
+  if (options.truncate === false || summary.length <= 120) {
+    return summary;
+  }
+
+  return `${summary.slice(0, 117)}...`;
 }
 
 function formatRecentEventDetails(event: EventRecord): string {
