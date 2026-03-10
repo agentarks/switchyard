@@ -39,6 +39,7 @@ Completed slice:
 - exact launch-task inspection in `sy status <session> --task`
 - exact session-id visibility in operator-facing `sy stop` output
 - exact session-id visibility in operator-facing `sy mail check` and `sy mail list` output
+- exact session-id visibility in empty selected `sy events` output
 
 Decision rule:
 - if current launch output, `sy events`, exact-session `sy status`, and `sy status <session> --task` already give enough task-handoff visibility, do not invent another slice just to stay busy

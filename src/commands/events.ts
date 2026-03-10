@@ -53,6 +53,7 @@ export async function eventsCommand(options: EventsCommandOptions = {}): Promise
   if (events.length === 0) {
     if (session) {
       process.stdout.write(`No events recorded yet for ${session.agentName}.\n`);
+      process.stdout.write(`Session: ${session.id}\n`);
       return;
     }
 
