@@ -4,11 +4,11 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Reassess whether any real operator gap remains now that `sy status <session> --task` can print the full stored launch instruction, `sy stop` echoes the exact session id in handled output, mail inspection now does the same, and empty selected `sy events` output also preserves the resolved session id
+1. Hold the current loop steady until a reproduced operator-visible gap justifies a new named slice
 
 ## Next
 
-2. If a real operator gap remains, name one small operator-visible slice before coding
+2. If a real operator gap appears, name one small operator-visible slice before coding
 
 ## After That
 

@@ -171,17 +171,16 @@ These are the current project decisions and should be treated as the default unt
 
 ## Open Decisions
 
-These still need to be resolved or confirmed:
-- Whether `sy status <session> --task` closes the current task-handoff inspection gap, or whether any further operator inspection is justified by real use
+No blocking product decision is open right now for the current loop.
+
+Any new operator inspection or lifecycle slice should be justified by a reproduced workflow gap before it is named.
 
 ## Suggested Order For Our Next Sessions
 
-1. Approve or revise the assumptions in this file.
-2. Finalize the stack and v1 scope.
-3. Scaffold the repo and core types.
-4. Implement `init` and session persistence.
-5. Implement spawn/status/stop.
-6. Add mail and inspection.
+1. Preserve the current single-repo, single-agent loop unless a reproduced operator-visible gap justifies a new named slice.
+2. Improve diagnostics or lifecycle behavior only when a reproduced workflow proves the current loop is insufficient.
+3. Add tests and docs updates that reduce risk in the current operator loop.
+4. Revisit broader scope only after the current loop stops being the right constraint.
 
 ## Success Criteria
 
