@@ -234,11 +234,74 @@ test("statusCommand prints only the selected session and reconciles only that se
 
   const output = writes.join("");
   assert.match(output, /^Status for agent-one \(session-1\):/m);
+  assert.match(output, /Base: -/);
+  assert.match(output, /Runtime pid: -/);
+  assert.match(output, /Created: 2026-03-08T09:00:00.000Z/);
+  assert.match(output, /Unread: 0/);
+  assert.match(output, /Cleanup: [^\n]+/);
+  assert.match(output, /Recent: 2026-03-08T10:00:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=1111/);
   assert.match(
     output,
     /failed\tsession-1\tagent-one\tagents\/agent-one\t\.switchyard\/worktrees\/agent-one\t2026-03-08T10:00:00.000Z\t0\t[^\t]+\t2026-03-08T10:00:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=1111/
   );
   assert.doesNotMatch(output, /session-2/);
+});
+
+test("statusCommand selected-session view surfaces stored base branch and runtime pid even when a later event becomes recent", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-selected",
+    agentName: "agent-selected",
+    branch: "agents/agent-selected",
+    baseBranch: "main",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-selected"),
+    state: "running",
+    runtimePid: 5151,
+    createdAt: "2026-03-08T12:00:00.000Z",
+    updatedAt: "2026-03-08T12:05:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-selected",
+    agentName: "agent-selected",
+    eventType: "mail.sent",
+    payload: {
+      sender: "operator",
+      bodyLength: 18
+    },
+    createdAt: "2026-03-08T12:06:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-selected",
+      isRuntimeAlive: (pid) => pid === 5151
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /^Status for agent-selected \(session-selected\):/m);
+  assert.match(output, /Base: main/);
+  assert.match(output, /Runtime pid: 5151/);
+  assert.match(output, /Created: 2026-03-08T12:00:00.000Z/);
+  assert.match(output, /Unread: 0/);
+  assert.match(output, /Cleanup: [^\n]+/);
+  assert.match(output, /Recent: 2026-03-08T12:06:00.000Z mail\.sent sender=operator, bodyLength=18/);
+  assert.match(
+    output,
+    /running\tsession-selected\tagent-selected\tagents\/agent-selected\t\.switchyard\/worktrees\/agent-selected\t2026-03-08T12:05:00.000Z\t0\t[^\t]+\t2026-03-08T12:06:00.000Z mail\.sent sender=operator, bodyLength=18/
+  );
 });
 
 test("statusCommand resolves an exact session id even when the selector is not a valid agent name", async () => {

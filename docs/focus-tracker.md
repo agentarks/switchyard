@@ -34,6 +34,7 @@ Completed enough to count as minimally real:
 - cleanup-readiness visibility in `sy status`
 - session-id visibility in `sy status`
 - exact per-session inspection in `sy status`
+- richer exact-session inspection in `sy status` for stored base-branch, runtime-pid, and full recent-event context
 - M7 first event inspection path
 - operator-controlled recent-event window selection in `sy events`
 - first merge and reintegration CLI path
