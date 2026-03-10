@@ -58,6 +58,7 @@ export async function mergeCommand(options: MergeCommandOptions): Promise<void> 
         eventType: "merge.failed",
         payload: error.payload
       });
+      process.stderr.write(`Session: ${session.id}\n`);
     }
 
     throw error;

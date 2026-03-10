@@ -34,6 +34,7 @@ For the current v0 loop, reintegration is still manual-first even though `sy mer
 3. Reintegrate from the canonical branch in the main repository.
    - Prefer `sy merge <session>` once review is complete.
    - The command checks that the session is no longer active, refuses legacy rows that do not have stored `baseBranch` metadata, verifies the preserved branch still exists, refuses to silently retarget a session whose stored `baseBranch` no longer matches `.switchyard/config.yaml`, verifies that the preserved worktree path still resolves to the expected git worktree root, requires both the preserved agent worktree and the repo-root worktree to be clean, switches to the intended canonical branch, and then runs the explicit git merge.
+   - `sy merge` now also echoes the resolved session id in its handled output, including merge-conflict and other session-scoped failure paths, so the next `events`, `status`, `mail`, or cleanup command does not require a separate lookup.
    - The equivalent git path remains:
 
 ```bash

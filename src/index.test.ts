@@ -177,6 +177,63 @@ test("sy merge merges a preserved branch through the real CLI entrypoint", async
   }
 });
 
+test("sy merge reports the resolved session id when a preserved merge stops with conflicts", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-merge-conflict-test-");
+  const conflictPath = join(repoDir, "conflict.txt");
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-conflict");
+
+  try {
+    await writeFile(conflictPath, "shared\n", "utf8");
+    await git(repoDir, ["add", "conflict.txt"]);
+    await git(repoDir, ["commit", "-m", "Add merge conflict base"]);
+    await git(repoDir, ["switch", "-c", "agents/agent-cli-conflict"]);
+    await writeFile(conflictPath, "agent version\n", "utf8");
+    await git(repoDir, ["add", "conflict.txt"]);
+    await git(repoDir, ["commit", "-m", "Agent merge conflict change"]);
+    await git(repoDir, ["switch", "main"]);
+    await writeFile(conflictPath, "main version\n", "utf8");
+    await git(repoDir, ["add", "conflict.txt"]);
+    await git(repoDir, ["commit", "-m", "Main merge conflict change"]);
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-cli-conflict"]);
+
+    await createSession(repoDir, {
+      id: "session-cli-conflict",
+      agentName: "agent-cli-conflict",
+      branch: "agents/agent-cli-conflict",
+      baseBranch: "main",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-10T10:10:00.000Z",
+      updatedAt: "2026-03-10T10:15:00.000Z"
+    });
+
+    await assert.rejects(
+      () => execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "merge", "agent-cli-conflict"], {
+        cwd: repoDir
+      }),
+      (error: unknown) => {
+        assert.ok(error && typeof error === "object" && "stdout" in error && "stderr" in error);
+        const cliError = error as { stdout: string; stderr: string; code: number };
+        assert.equal(cliError.code, 1);
+        assert.equal(cliError.stdout, "");
+        assert.match(cliError.stderr, /Session: session-cli-conflict/);
+        assert.match(
+          cliError.stderr,
+          /MERGE_ERROR: Merge stopped with conflicts between 'main' and 'agents\/agent-cli-conflict'\. Conflicting paths: conflict\.txt\./
+        );
+        return true;
+      }
+    );
+
+    const events = await listEvents(repoDir, { sessionId: "session-cli-conflict" });
+    assert.equal(events.at(-1)?.eventType, "merge.failed");
+    assert.equal(events.at(-1)?.payload.reason, "merge_conflict");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("sy mail list --unread preserves unread state through the real CLI entrypoint", async () => {
   const repoDir = await createInitializedRepo("switchyard-cli-mail-test-");
 

@@ -167,6 +167,7 @@ Current contract:
 - command verifies the preserved local branch still exists
 - command switches the repo root to the configured canonical branch when needed
 - command runs `git merge --no-ff <agent-branch>` from the repo root
+- command prints the resolved durable session id in operator-facing handled output, including merge-conflict and other session-scoped failure paths, so later follow-up commands can reuse the exact preserved session
 - command records durable merge events for success, already-integrated no-op merges, session-scoped preflight refusals, and git-stopped conflict states
 - command leaves conflict resolution, validation, and cleanup explicit for the operator
 
