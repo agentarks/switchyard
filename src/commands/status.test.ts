@@ -166,7 +166,107 @@ test("statusCommand shows latest run task ownership for concurrent sessions", as
   );
   assert.match(
     output,
-    /stopped\tsession-beta\tagent-beta[^\n]*\tPrepare the preserved branch for manual merge review\.\tfinished:stopped\treview-merge\t-/
+    /stopped\tsession-beta\tagent-beta[^\n]*\tPrepare the preserved branch for manual merge review\.\tfinished:stopped\tinspect\t-/
+  );
+});
+
+test("statusCommand does not let a stopped run override current cleanup blockers", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-blocked-stop",
+    agentName: "agent-blocked-stop",
+    branch: "agents/agent-blocked-stop",
+    baseBranch: "main",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-blocked-stop"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-06T13:00:00.000Z",
+    updatedAt: "2026-03-06T13:05:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-blocked-stop",
+    sessionId: "session-blocked-stop",
+    agentName: "agent-blocked-stop",
+    taskSummary: "Investigate preserved artifact drift before any cleanup.",
+    state: "finished",
+    outcome: "stopped",
+    createdAt: "2026-03-06T13:00:00.000Z",
+    updatedAt: "2026-03-06T13:05:00.000Z",
+    finishedAt: "2026-03-06T13:05:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false,
+      getCleanupReadiness: async () => "abandon-only:worktree-missing"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /stopped\tsession-blocked-stop\tagent-blocked-stop[^\n]*\tabandon-only:worktree-missing\tInvestigate preserved artifact drift before any cleanup\.\tfinished:stopped\tinspect\t-/
+  );
+});
+
+test("statusCommand does not let a merged run override current cleanup uncertainty", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-merged-uncertain",
+    agentName: "agent-merged-uncertain",
+    branch: "agents/agent-merged-uncertain",
+    baseBranch: "main",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-merged-uncertain"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-06T14:00:00.000Z",
+    updatedAt: "2026-03-06T14:05:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-merged-uncertain",
+    sessionId: "session-merged-uncertain",
+    agentName: "agent-merged-uncertain",
+    taskSummary: "Verify cleanup safety after merge drift.",
+    state: "finished",
+    outcome: "merged",
+    createdAt: "2026-03-06T14:00:00.000Z",
+    updatedAt: "2026-03-06T14:05:00.000Z",
+    finishedAt: "2026-03-06T14:05:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false,
+      getCleanupReadiness: async () => "?"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /stopped\tsession-merged-uncertain\tagent-merged-uncertain[^\n]*\t\?\tVerify cleanup safety after merge drift\.\tfinished:merged\t-\t-/
   );
 });
 

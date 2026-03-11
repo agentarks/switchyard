@@ -362,11 +362,11 @@ function formatFollowUpAction(
     return "done";
   }
 
-  if (cleanup === "ready:merged" || run?.outcome === "merged") {
+  if (cleanup === "ready:merged") {
     return "cleanup";
   }
 
-  if (cleanup === "abandon-only:not-merged" || run?.outcome === "stopped") {
+  if (cleanup === "abandon-only:not-merged") {
     return "review-merge";
   }
 
