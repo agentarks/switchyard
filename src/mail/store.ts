@@ -189,6 +189,48 @@ export async function listLatestUnreadMailBySession(
   });
 }
 
+export async function listLatestInboundMailBySession(
+  projectRoot: string,
+  sessionIds: string[],
+  options: {
+    excludeSender?: string;
+  } = {}
+): Promise<Map<string, MailRecord>> {
+  if (sessionIds.length === 0) {
+    return new Map();
+  }
+
+  return await withMailDatabase(projectRoot, (db) => {
+    const placeholders = sessionIds.map(() => "?").join(", ");
+    const filters = [`session_id IN (${placeholders})`];
+    const params: Array<string> = [...sessionIds];
+
+    if (typeof options.excludeSender === "string") {
+      filters.push("sender != ?");
+      params.push(options.excludeSender);
+    }
+
+    const rows = db.prepare(`
+      SELECT id, session_id, sender, recipient, body, created_at, read_at
+      FROM mail_messages
+      WHERE ${filters.join(" AND ")}
+      ORDER BY session_id ASC, created_at DESC, id DESC
+    `).all(...params) as unknown as MailRow[];
+
+    const latestMail = new Map<string, MailRecord>();
+
+    for (const row of rows) {
+      if (latestMail.has(row.session_id)) {
+        continue;
+      }
+
+      latestMail.set(row.session_id, mapMailRow(row));
+    }
+
+    return latestMail;
+  });
+}
+
 async function withMailDatabase<T>(projectRoot: string, operation: (db: DatabaseSync) => T): Promise<T> {
   const { DatabaseSync } = await importSqlite();
   const dbPath = join(projectRoot, ".switchyard", "mail.db");

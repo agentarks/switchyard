@@ -33,7 +33,8 @@ test("statusCommand prints an empty-state message when no sessions exist", async
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-06T09:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -77,7 +78,8 @@ test("statusCommand prints stored sessions with relative worktree paths", async 
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-06T09:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -152,7 +154,8 @@ test("statusCommand shows latest run task ownership for concurrent sessions", as
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-06T09:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -231,7 +234,8 @@ test("statusCommand orders concurrent sessions by follow-up priority before rece
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-06T15:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -516,7 +520,8 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
 
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-08T09:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -708,7 +713,8 @@ test("statusCommand prioritizes unread mail in the selected session follow-up si
     await statusCommand({
       startDir: repoDir,
       selector: "session-selected-mail",
-      isRuntimeAlive: (pid) => pid === 7272
+      isRuntimeAlive: (pid) => pid === 7272,
+      now: () => "2026-03-09T12:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -726,6 +732,160 @@ test("statusCommand prioritizes unread mail in the selected session follow-up si
   assert.match(
     output,
     /running\tsession-selected-mail\tagent-selected-mail\tagents\/agent-selected-mail\t\.switchyard\/worktrees\/agent-selected-mail\t2026-03-09T12:11:00.000Z\t1\t[^\t]+\t-\t-\tmail\t2026-03-09T12:11:00.000Z mail\.unread unreadCount=1, sender=agent-selected-mail, bodyPreview="Ready for review\."/
+  );
+});
+
+test("statusCommand marks a quiet running session as inspect when agent activity is older than the stalled threshold", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stalled-row",
+    agentName: "agent-stalled-row",
+    branch: "agents/agent-stalled-row",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stalled-row"),
+    state: "running",
+    runtimePid: 7171,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:20:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stalled-row",
+    agentName: "agent-stalled-row",
+    eventType: "runtime.ready",
+    payload: {
+      signal: "pid_alive",
+      runtimePid: 7171
+    },
+    createdAt: "2026-03-09T12:00:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 7171,
+      now: () => "2026-03-09T12:35:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /running\tsession-stalled-row\tagent-stalled-row\tagents\/agent-stalled-row\t\.switchyard\/worktrees\/agent-stalled-row\t2026-03-09T12:20:00.000Z\t0\t[^\t]+\t-\t-\tinspect\t2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=7171; runtime\.stalled idleFor=35m/
+  );
+});
+
+test("statusCommand shows the stalled hint in the selected-session view for a quiet running session", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-selected-stalled",
+    agentName: "agent-selected-stalled",
+    branch: "agents/agent-selected-stalled",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-selected-stalled"),
+    state: "running",
+    runtimePid: 7272,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:20:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-selected-stalled",
+    agentName: "agent-selected-stalled",
+    eventType: "runtime.ready",
+    payload: {
+      signal: "pid_alive",
+      runtimePid: 7272
+    },
+    createdAt: "2026-03-09T12:00:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-selected-stalled",
+      isRuntimeAlive: (pid) => pid === 7272,
+      now: () => "2026-03-09T12:35:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /^Status for agent-selected-stalled \(session-selected-stalled\):/m);
+  assert.match(output, /Next: inspect/);
+  assert.match(
+    output,
+    /Recent: 2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=7272; runtime\.stalled idleFor=35m/
+  );
+  assert.match(
+    output,
+    /running\tsession-selected-stalled\tagent-selected-stalled\tagents\/agent-selected-stalled\t\.switchyard\/worktrees\/agent-selected-stalled\t2026-03-09T12:20:00.000Z\t0\t[^\t]+\t-\t-\tinspect\t2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=7272; runtime\.stalled idleFor=35m/
+  );
+});
+
+test("statusCommand keeps the stalled hint visible when the all-session recent summary is truncated", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stalled-truncated",
+    agentName: "agent-stalled-truncated",
+    branch: "agents/agent-stalled-truncated",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stalled-truncated"),
+    state: "running",
+    runtimePid: 7282,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:20:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stalled-truncated",
+    agentName: "agent-stalled-truncated",
+    eventType: "sling.completed",
+    payload: {
+      runtimePid: 7282,
+      baseBranch: "main",
+      readyAfterMs: 500,
+      taskSummary: "This is a deliberately long task summary that should force the all-session RECENT column to truncate before the stalled hint unless the formatter reserves space for it."
+    },
+    createdAt: "2026-03-09T12:00:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 7282,
+      now: () => "2026-03-09T12:35:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /running\tsession-stalled-truncated\tagent-stalled-truncated[^\n]*\tinspect\t[^\n]*runtime\.stalled idleFor=35m/
   );
 });
 
@@ -794,6 +954,129 @@ test("statusCommand keeps a newer blocking event in RECENT even when unread mail
   );
 });
 
+test("statusCommand does not let operator-only activity reset the stalled idle clock", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stalled-operator-activity",
+    agentName: "agent-stalled-operator-activity",
+    branch: "agents/agent-stalled-operator-activity",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stalled-operator-activity"),
+    state: "running",
+    runtimePid: 7373,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:25:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stalled-operator-activity",
+    agentName: "agent-stalled-operator-activity",
+    eventType: "runtime.ready",
+    payload: {
+      signal: "pid_alive",
+      runtimePid: 7373
+    },
+    createdAt: "2026-03-09T12:00:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stalled-operator-activity",
+    agentName: "agent-stalled-operator-activity",
+    eventType: "mail.sent",
+    payload: {
+      sender: "operator",
+      bodyLength: 31
+    },
+    createdAt: "2026-03-09T12:25:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-stalled-operator-activity",
+      isRuntimeAlive: (pid) => pid === 7373,
+      now: () => "2026-03-09T12:40:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Next: inspect/);
+  assert.match(
+    output,
+    /Recent: 2026-03-09T12:25:00.000Z mail\.sent sender=operator, bodyLength=31; runtime\.stalled idleFor=40m/
+  );
+});
+
+test("statusCommand preserves a higher-value concrete recent summary and appends the stalled hint", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stalled-blocked",
+    agentName: "agent-stalled-blocked",
+    branch: "agents/agent-stalled-blocked",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stalled-blocked"),
+    state: "running",
+    runtimePid: 7474,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:20:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stalled-blocked",
+    agentName: "agent-stalled-blocked",
+    eventType: "runtime.ready",
+    payload: {
+      signal: "pid_alive",
+      runtimePid: 7474
+    },
+    createdAt: "2026-03-09T12:00:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stalled-blocked",
+    agentName: "agent-stalled-blocked",
+    eventType: "stop.failed",
+    payload: {
+      reason: "runtime_stop_failed",
+      runtimePid: 7474,
+      errorMessage: "still running"
+    },
+    createdAt: "2026-03-09T12:25:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-stalled-blocked",
+      isRuntimeAlive: (pid) => pid === 7474,
+      now: () => "2026-03-09T12:40:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Next: inspect/);
+  assert.match(
+    output,
+    /Recent: 2026-03-09T12:25:00.000Z stop\.failed reason=runtime_stop_failed, runtimePid=7474, errorMessage="still running"; runtime\.stalled idleFor=40m/
+  );
+});
+
 test("statusCommand does not switch the follow-up signal to mail for unread outbound operator mail", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
@@ -837,7 +1120,8 @@ test("statusCommand does not switch the follow-up signal to mail for unread outb
     await statusCommand({
       startDir: repoDir,
       selector: "session-outbound-mail",
-      isRuntimeAlive: (pid) => pid === 7373
+      isRuntimeAlive: (pid) => pid === 7373,
+      now: () => "2026-03-09T12:25:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -850,6 +1134,65 @@ test("statusCommand does not switch the follow-up signal to mail for unread outb
   assert.match(
     output,
     /running\tsession-outbound-mail\tagent-outbound-mail\tagents\/agent-outbound-mail\t\.switchyard\/worktrees\/agent-outbound-mail\t2026-03-09T12:22:00.000Z\t1\t[^\t]+\t-\t-\twait\t2026-03-09T12:22:00.000Z mail\.sent sender=operator, bodyLength=33/
+  );
+});
+
+test("statusCommand keeps unread inbound operator mail as the higher-priority next action even when the session is stalled", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stalled-unread-mail",
+    agentName: "agent-stalled-unread-mail",
+    branch: "agents/agent-stalled-unread-mail",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stalled-unread-mail"),
+    state: "running",
+    runtimePid: 7575,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:10:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stalled-unread-mail",
+    agentName: "agent-stalled-unread-mail",
+    eventType: "runtime.ready",
+    payload: {
+      signal: "pid_alive",
+      runtimePid: 7575
+    },
+    createdAt: "2026-03-09T12:00:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-stalled-unread-mail",
+    sender: "agent-stalled-unread-mail",
+    recipient: "operator",
+    body: "Need your sign-off.",
+    createdAt: "2026-03-09T12:10:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-stalled-unread-mail",
+      isRuntimeAlive: (pid) => pid === 7575,
+      now: () => "2026-03-09T12:40:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Unread: 1/);
+  assert.match(output, /Next: mail/);
+  assert.match(
+    output,
+    /Recent: 2026-03-09T12:10:00.000Z mail\.unread unreadCount=1, sender=agent-stalled-unread-mail, bodyPreview="Need your sign-off\."/
   );
 });
 
@@ -1178,7 +1521,8 @@ test("statusCommand selected-session view surfaces stored base branch and runtim
     await statusCommand({
       startDir: repoDir,
       selector: "session-selected",
-      isRuntimeAlive: (pid) => pid === 5151
+      isRuntimeAlive: (pid) => pid === 5151,
+      now: () => "2026-03-08T12:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -1391,7 +1735,8 @@ test("statusCommand prints the latest event summary for each session", async () 
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-08T09:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -1840,7 +2185,8 @@ test("statusCommand includes the readiness detail for a freshly launched session
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 2222
+      isRuntimeAlive: (pid) => pid === 2222,
+      now: () => "2026-03-08T11:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -2123,7 +2469,8 @@ test("statusCommand prioritizes unread mail over wait in the all-session follow-
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 2323 || pid === 2424
+      isRuntimeAlive: (pid) => pid === 2323 || pid === 2424,
+      now: () => "2026-03-08T11:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -2538,6 +2885,7 @@ test("statusCommand selected-session header follows the same degraded unread-mai
       startDir: repoDir,
       selector: "session-selected-mail-degraded",
       isRuntimeAlive: (pid) => pid === 9292,
+      now: () => "2026-03-09T12:25:00.000Z",
       listUnreadMailCounts: async () => {
         throw new Error("mail unavailable");
       },

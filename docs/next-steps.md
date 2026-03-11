@@ -9,13 +9,13 @@ The first concurrent proving workflow is now complete enough to stop being the d
 Current outcome:
 - stop treating the first two-session proof as the open gap
 - use that proved workflow to choose one small operator-visible blind spot instead of expanding surface area blindly
-- the named blind spot is passive stalled-session visibility in `sy status`
+- the passive stalled-session visibility slice in `sy status` is now complete
 - keep the all-session `sy status` view as the default control plane for concurrent task ownership and follow-up state
-- avoid drifting back into generic inspection polish unless the proved workflow exposes a real operator risk
+- choose the next blind spot only after the proved workflow exposes a real operator risk
 
 ## Why This Is Next
 
-The repo now proves the first two-session path end to end. The next product gap is no longer "can concurrent work be followed safely at all?" but "what is the next concrete blind spot that still makes that workflow harder than it should be?"
+The repo now proves the first two-session path end to end, including passive stalled-session visibility. The next product gap is no longer "can concurrent work be followed safely at all?" but "what is the next concrete blind spot that still makes that workflow harder than it should be?"
 
 Without naming this slice:
 - effort drifts back into generic hardening instead of a named operator problem
@@ -25,11 +25,14 @@ Without naming this slice:
 ## Exact Order
 
 1. Fix the named blind spot: passive stalled-session visibility in `sy status`
+   - completed on 2026-03-11
+
+2. Choose the next concrete operator-visible blind spot from the proved concurrent workflow
    - keep `sy status` sufficient for understanding concurrent state at a glance
    - keep follow-up commands exact-session-safe
    - do not make operators reconstruct state from raw events unless the blind spot specifically requires it
 
-2. Keep the slice narrow
+3. Keep the slice narrow
    - do not broaden into dashboards, automation, transcript capture, or generic workflow engines
    - do not invent another broad multi-agent milestone until a concrete gap earns it
    - update docs only where the named blind spot changes project meaningfully
@@ -59,6 +62,7 @@ Completed slice:
 - synthesized unread-mail recency summaries in `sy status`
 - mail-bucket ordering in `sy status` by newest unread inbound mail instead of stale session timestamps
 - freshest-activity `UPDATED` timestamps and same-bucket ordering in `sy status` so recent merge, mail, and runtime changes are not hidden behind stale session-row timestamps
+- passive stalled-session visibility in `sy status`, including a separate idle clock from `UPDATED` plus appended `runtime.stalled idleFor=...` summaries
 - end-to-end proof that two concurrent delegated sessions can be followed through status, mail review, merge, and cleanup without losing the untouched session's run or reintegration state
 
 Decision rule:
@@ -68,7 +72,8 @@ Decision rule:
 
 Current status:
 - the first concurrent proving workflow is now materially real
-- the next slice is passive stalled-session visibility in `sy status`, not another generic hardening pass
+- passive stalled-session visibility in `sy status` is complete
+- the next slice should be another concrete operator-visible blind spot, not another generic hardening pass
 
 ## What To Keep Small
 

@@ -170,6 +170,40 @@ export async function listLatestEventsBySession(
   });
 }
 
+export async function listLatestEventsBySessionForTypes(
+  projectRoot: string,
+  sessionIds: string[],
+  eventTypes: string[]
+): Promise<Map<string, EventRecord>> {
+  if (sessionIds.length === 0 || eventTypes.length === 0) {
+    return new Map();
+  }
+
+  return await withEventDatabase(projectRoot, (db) => {
+    const sessionPlaceholders = sessionIds.map(() => "?").join(", ");
+    const eventTypePlaceholders = eventTypes.map(() => "?").join(", ");
+    const rows = db.prepare(`
+      SELECT id, session_id, agent_name, event_type, payload_json, created_at
+      FROM events
+      WHERE session_id IN (${sessionPlaceholders})
+        AND event_type IN (${eventTypePlaceholders})
+      ORDER BY created_at DESC, id DESC
+    `).all(...sessionIds, ...eventTypes) as unknown as EventRow[];
+
+    const latestEvents = new Map<string, EventRecord>();
+
+    for (const row of rows) {
+      if (!row.session_id || latestEvents.has(row.session_id)) {
+        continue;
+      }
+
+      latestEvents.set(row.session_id, mapEventRow(row));
+    }
+
+    return latestEvents;
+  });
+}
+
 export async function listDistinctSessionIdsForAgentEvents(
   projectRoot: string,
   agentName: string

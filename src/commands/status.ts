@@ -2,11 +2,21 @@ import { relative } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
-import { listEvents, listLatestEventsBySession, recordEventBestEffort, type EventRecorder } from "../events/store.js";
+import {
+  listEvents,
+  listLatestEventsBySession,
+  listLatestEventsBySessionForTypes,
+  recordEventBestEffort,
+  type EventRecorder
+} from "../events/store.js";
 import type { EventPayloadValue, EventRecord } from "../events/types.js";
 import { StatusError } from "../errors.js";
-import { listLatestUnreadMailBySession, listUnreadMailCountsBySession } from "../mail/store.js";
-import type { UnreadMailSummary } from "../mail/types.js";
+import {
+  listLatestInboundMailBySession,
+  listLatestUnreadMailBySession,
+  listUnreadMailCountsBySession
+} from "../mail/store.js";
+import type { MailRecord, UnreadMailSummary } from "../mail/types.js";
 import { inspectProcessLiveness, isProcessAlive, type ProcessLiveness } from "../runtimes/process.js";
 import { listLatestRunsBySession, updateLatestRunForSession } from "../runs/store.js";
 import type { RunRecord, UpdateRunInput } from "../runs/types.js";
@@ -25,6 +35,16 @@ interface StatusOptions {
   listUnreadMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
   listUnreadOperatorMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
   listLatestUnreadOperatorMail?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, UnreadMailSummary>>;
+  listLatestRuntimeProgressEvents?: (
+    projectRoot: string,
+    sessionIds: string[],
+    eventTypes: string[]
+  ) => Promise<Map<string, EventRecord>>;
+  listLatestInboundMail?: (
+    projectRoot: string,
+    sessionIds: string[],
+    options?: { excludeSender?: string }
+  ) => Promise<Map<string, MailRecord>>;
   listLatestRuns?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, RunRecord>>;
   updateLatestRun?: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>;
   recordEvent?: EventRecorder;
@@ -36,6 +56,11 @@ interface StatusOptions {
   now?: () => string;
 }
 
+interface DerivedStalledHint {
+  idleSince: string;
+  idleForMs: number;
+}
+
 interface StatusRowContext {
   session: SessionRecord;
   unreadCount: string;
@@ -44,8 +69,20 @@ interface StatusRowContext {
   followUp: string;
   recentEvent?: EventRecord;
   unreadOperatorMailSummary?: UnreadMailSummary;
+  stalledHint?: DerivedStalledHint;
   activityAt: string;
 }
+
+const STALLED_SESSION_THRESHOLD_MS = 30 * 60 * 1000;
+const RUNTIME_PROGRESS_EVENT_TYPES = [
+  "sling.spawned",
+  "sling.completed",
+  "sling.failed",
+  "runtime.ready",
+  "runtime.exited",
+  "runtime.exited_early"
+] as const;
+const RUNTIME_PROGRESS_EVENT_TYPE_SET = new Set<string>(RUNTIME_PROGRESS_EVENT_TYPES);
 
 export function createStatusCommand(): Command {
   return new Command("status")
@@ -98,6 +135,19 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 
   const sessionIds = sessions.map((session) => session.id);
   const latestEventsBySession = await listLatestEventsBySession(config.project.root, sessionIds);
+  const latestRuntimeProgressEvents = await loadLatestEventsBestEffort(
+    config.project.root,
+    sessionIds,
+    options.listLatestRuntimeProgressEvents ?? listLatestEventsBySessionForTypes,
+    [...RUNTIME_PROGRESS_EVENT_TYPES],
+    "latest runtime progress events"
+  );
+  const latestInboundMail = await loadLatestInboundMailBestEffort(
+    config.project.root,
+    sessionIds,
+    options.listLatestInboundMail ?? listLatestInboundMailBySession,
+    "latest inbound mail"
+  );
   const latestRuns = await loadLatestRunsBestEffort(
     config.project.root,
     sessionIds,
@@ -152,7 +202,10 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     latestEventsBeforeReconcile,
     latestEventsBySession,
     reconciledEventsBySession,
-    unreadOperatorMailSummaries: effectiveUnreadOperatorMailSummaries
+    unreadOperatorMailSummaries: effectiveUnreadOperatorMailSummaries,
+    latestRuntimeProgressEvents: latestRuntimeProgressEvents.available ? latestRuntimeProgressEvents.eventsBySession : undefined,
+    latestInboundMail: latestInboundMail.available ? latestInboundMail.mailBySession : undefined,
+    now: (options.now ?? (() => new Date().toISOString()))()
   });
 
   process.stdout.write(`${formatStatusHeading(config.project.name, sessions.length === 1 ? sessions[0] : undefined, selectedSession !== undefined)}\n`);
@@ -173,7 +226,12 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       process.stdout.write(`Run: ${formatRunSummary(rowContext.latestRun, latestRuns.available)}\n`);
       process.stdout.write(`Next: ${rowContext.followUp}\n`);
       process.stdout.write(
-        `Recent: ${formatRelevantRecentSummary(rowContext.recentEvent, rowContext.unreadOperatorMailSummary, { truncate: false })}\n`
+        `Recent: ${formatRelevantRecentSummary(
+          rowContext.recentEvent,
+          rowContext.unreadOperatorMailSummary,
+          rowContext.stalledHint,
+          { truncate: false }
+        )}\n`
       );
 
       if (options.showTask) {
@@ -195,7 +253,11 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     const session = rowContext.session;
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
     process.stdout.write(
-      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${rowContext.activityAt}\t${rowContext.unreadCount}\t${rowContext.cleanup}\t${formatTaskSummary(rowContext.latestRun, latestRuns.available)}\t${formatRunSummary(rowContext.latestRun, latestRuns.available)}\t${rowContext.followUp}\t${formatRelevantRecentSummary(rowContext.recentEvent, rowContext.unreadOperatorMailSummary)}\n`
+      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${rowContext.activityAt}\t${rowContext.unreadCount}\t${rowContext.cleanup}\t${formatTaskSummary(rowContext.latestRun, latestRuns.available)}\t${formatRunSummary(rowContext.latestRun, latestRuns.available)}\t${rowContext.followUp}\t${formatRelevantRecentSummary(
+        rowContext.recentEvent,
+        rowContext.unreadOperatorMailSummary,
+        rowContext.stalledHint
+      )}\n`
     );
   }
 }
@@ -210,6 +272,9 @@ function buildStatusRowContexts(options: {
   latestEventsBySession: Map<string, EventRecord>;
   reconciledEventsBySession: Map<string, EventRecord>;
   unreadOperatorMailSummaries: Map<string, UnreadMailSummary>;
+  latestRuntimeProgressEvents?: Map<string, EventRecord>;
+  latestInboundMail?: Map<string, MailRecord>;
+  now: string;
 }): Map<string, StatusRowContext> {
   const rowContexts = new Map<string, StatusRowContext>();
 
@@ -221,6 +286,16 @@ function buildStatusRowContexts(options: {
       latestStoredEvent: options.latestEventsBySession.get(session.id),
       reconciledEvent: options.reconciledEventsBySession.get(session.id)
     });
+    const latestRuntimeProgressEvent = selectLatestRuntimeProgressEvent({
+      latestStoredRuntimeProgressEvent: options.latestRuntimeProgressEvents?.get(session.id),
+      reconciledEvent: options.reconciledEventsBySession.get(session.id)
+    });
+    const stalledHint = deriveStalledHint({
+      session,
+      latestRuntimeProgressEvent,
+      latestInboundMail: options.latestInboundMail?.get(session.id),
+      now: options.now
+    });
     const unreadOperatorMailSummary = options.unreadOperatorMailSummaries.get(session.id);
     const cleanup = options.cleanupReadiness.get(session.id) ?? "?";
 
@@ -231,9 +306,10 @@ function buildStatusRowContexts(options: {
         : String(options.unreadMailCounts.get(session.id) ?? 0),
       cleanup,
       latestRun,
-      followUp: formatFollowUpAction(session, latestRun, cleanup, unreadOperatorCount),
+      followUp: formatFollowUpAction(session, latestRun, cleanup, unreadOperatorCount, stalledHint),
       recentEvent,
       unreadOperatorMailSummary,
+      stalledHint,
       activityAt: deriveStatusActivityTimestamp(session, recentEvent, unreadOperatorMailSummary)
     });
   }
@@ -275,6 +351,55 @@ async function loadLatestRunsBestEffort(
     process.stderr.write(`WARN: failed to load latest runs: ${formatErrorMessage(error)}\n`);
     return {
       runsBySession: new Map(),
+      available: false
+    };
+  }
+}
+
+async function loadLatestEventsBestEffort(
+  projectRoot: string,
+  sessionIds: string[],
+  listLatestEvents: (
+    projectRoot: string,
+    sessionIds: string[],
+    eventTypes: string[]
+  ) => Promise<Map<string, EventRecord>>,
+  eventTypes: string[],
+  label = "latest events"
+): Promise<{ eventsBySession: Map<string, EventRecord>; available: boolean }> {
+  try {
+    return {
+      eventsBySession: await listLatestEvents(projectRoot, sessionIds, eventTypes),
+      available: true
+    };
+  } catch (error) {
+    process.stderr.write(`WARN: failed to load ${label}: ${formatErrorMessage(error)}\n`);
+    return {
+      eventsBySession: new Map(),
+      available: false
+    };
+  }
+}
+
+async function loadLatestInboundMailBestEffort(
+  projectRoot: string,
+  sessionIds: string[],
+  listLatestInboundMail: (
+    projectRoot: string,
+    sessionIds: string[],
+    options?: { excludeSender?: string }
+  ) => Promise<Map<string, MailRecord>>,
+  label = "latest inbound mail"
+): Promise<{ mailBySession: Map<string, MailRecord>; available: boolean }> {
+  try {
+    return {
+      mailBySession: await listLatestInboundMail(projectRoot, sessionIds, { excludeSender: "operator" }),
+      available: true
+    };
+  } catch (error) {
+    process.stderr.write(`WARN: failed to load ${label}: ${formatErrorMessage(error)}\n`);
+    return {
+      mailBySession: new Map(),
       available: false
     };
   }
@@ -454,10 +579,15 @@ function formatFollowUpAction(
   session: SessionRecord,
   run: RunRecord | undefined,
   cleanup: string,
-  unreadCount?: number
+  unreadCount?: number,
+  stalledHint?: DerivedStalledHint
 ): string {
   if ((unreadCount ?? 0) > 0) {
     return "mail";
+  }
+
+  if (stalledHint) {
+    return "inspect";
   }
 
   if (isActiveSessionState(session.state)) {
@@ -590,15 +720,26 @@ function formatRecentEventSummary(
 function formatRelevantRecentSummary(
   event: EventRecord | undefined,
   unreadMailSummary: UnreadMailSummary | undefined,
+  stalledHint: DerivedStalledHint | undefined,
   options: {
     truncate?: boolean;
   } = {}
 ): string {
-  if (unreadMailSummary && shouldPreferUnreadMailSummary(event, unreadMailSummary)) {
-    return formatUnreadMailSummary(unreadMailSummary, options);
+  const baseSummary = unreadMailSummary && shouldPreferUnreadMailSummary(event, unreadMailSummary)
+    ? formatUnreadMailSummary(unreadMailSummary, { truncate: false })
+    : formatRecentEventSummary(event, { truncate: false });
+
+  if (!stalledHint) {
+    return formatStatusSummaryText(baseSummary, options);
   }
 
-  return formatRecentEventSummary(event, options);
+  const stalledSummary = formatStalledHintSummary(stalledHint);
+
+  if (baseSummary === "-") {
+    return formatStatusSummaryText(stalledSummary, options);
+  }
+
+  return formatStatusSummaryTextWithTrailingSuffix(baseSummary, stalledSummary, options);
 }
 
 function shouldPreferUnreadMailSummary(
@@ -644,6 +785,49 @@ function formatStatusSummaryText(
   return `${summary.slice(0, 117)}...`;
 }
 
+function formatStatusSummaryTextWithTrailingSuffix(
+  summary: string,
+  trailingSuffix: string,
+  options: {
+    truncate?: boolean;
+  } = {}
+): string {
+  const separator = "; ";
+  const combinedSummary = `${summary}${separator}${trailingSuffix}`;
+
+  if (options.truncate === false || combinedSummary.length <= 120) {
+    return combinedSummary;
+  }
+
+  const maxSummaryLength = 120 - separator.length - trailingSuffix.length;
+  const truncatedSummary = maxSummaryLength <= 3
+    ? "..."
+    : `${summary.slice(0, maxSummaryLength - 3)}...`;
+
+  return `${truncatedSummary}${separator}${trailingSuffix}`;
+}
+
+function formatStalledHintSummary(stalledHint: DerivedStalledHint): string {
+  return `runtime.stalled idleFor=${formatIdleDuration(stalledHint.idleForMs)}`;
+}
+
+function formatIdleDuration(durationMs: number): string {
+  const totalMinutes = Math.max(0, Math.floor(durationMs / 60_000));
+
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m`;
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (minutes === 0) {
+    return `${hours}h`;
+  }
+
+  return `${hours}h${minutes}m`;
+}
+
 function deriveStatusActivityTimestamp(
   session: SessionRecord,
   event: EventRecord | undefined,
@@ -660,6 +844,51 @@ function deriveStatusActivityTimestamp(
   }
 
   return activityAt;
+}
+
+function deriveAgentActivityTimestamp(
+  session: SessionRecord,
+  latestRuntimeProgressEvent: EventRecord | undefined,
+  latestInboundMail: MailRecord | undefined
+): string {
+  let activityAt = session.createdAt;
+
+  if (latestRuntimeProgressEvent && latestRuntimeProgressEvent.createdAt > activityAt) {
+    activityAt = latestRuntimeProgressEvent.createdAt;
+  }
+
+  if (latestInboundMail && latestInboundMail.createdAt > activityAt) {
+    activityAt = latestInboundMail.createdAt;
+  }
+
+  return activityAt;
+}
+
+function deriveStalledHint(options: {
+  session: SessionRecord;
+  latestRuntimeProgressEvent?: EventRecord;
+  latestInboundMail?: MailRecord;
+  now: string;
+}): DerivedStalledHint | undefined {
+  if (!isActiveSessionState(options.session.state)) {
+    return undefined;
+  }
+
+  const idleSince = deriveAgentActivityTimestamp(
+    options.session,
+    options.latestRuntimeProgressEvent,
+    options.latestInboundMail
+  );
+  const idleForMs = Date.parse(options.now) - Date.parse(idleSince);
+
+  if (!Number.isFinite(idleForMs) || idleForMs < STALLED_SESSION_THRESHOLD_MS) {
+    return undefined;
+  }
+
+  return {
+    idleSince,
+    idleForMs
+  };
 }
 
 function formatRecentEventDetails(event: EventRecord): string {
@@ -822,6 +1051,25 @@ function selectRecentEventForStatus(options: {
   }
 
   return options.reconciledEvent;
+}
+
+function selectLatestRuntimeProgressEvent(options: {
+  latestStoredRuntimeProgressEvent?: EventRecord;
+  reconciledEvent?: EventRecord;
+}): EventRecord | undefined {
+  if (!options.reconciledEvent || !RUNTIME_PROGRESS_EVENT_TYPE_SET.has(options.reconciledEvent.eventType)) {
+    return options.latestStoredRuntimeProgressEvent;
+  }
+
+  if (!options.latestStoredRuntimeProgressEvent) {
+    return options.reconciledEvent;
+  }
+
+  if (options.reconciledEvent.createdAt > options.latestStoredRuntimeProgressEvent.createdAt) {
+    return options.reconciledEvent;
+  }
+
+  return options.latestStoredRuntimeProgressEvent;
 }
 
 function shouldPreservePreReconcileRecentEvent(
