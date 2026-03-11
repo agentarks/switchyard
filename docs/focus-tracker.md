@@ -89,14 +89,14 @@ Completed enough to count as minimally real:
 Current planning state:
 - the run-tracking slice is now materially real in the current operator loop
 - the first concurrent proving workflow on top of that run model is now materially real
-- the next named slice should be one small operator-visible blind spot inside that proved workflow
-- do not spend another session on output-only inspection polish unless it directly supports that blind spot
+- the next named slice is passive stalled-session visibility in `sy status`
+- do not spend another session on output-only inspection polish unless it directly supports that stalled-session blind spot
 - treat raw event visibility as supporting detail, not as the primary answer to "what happened to this task?"
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- reduce one named blind spot inside the proved two-session workflow
+- implement passive stalled-session visibility in `sy status`
 - keep task ownership visible in the all-session view so concurrent sessions do not require immediate drilldown
 - keep latest run state and terminal outcome trustworthy as concurrent sessions overlap
 - improve operator inspection only when it directly supports the concurrent workflow

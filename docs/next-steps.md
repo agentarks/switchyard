@@ -9,6 +9,7 @@ The first concurrent proving workflow is now complete enough to stop being the d
 Current outcome:
 - stop treating the first two-session proof as the open gap
 - use that proved workflow to choose one small operator-visible blind spot instead of expanding surface area blindly
+- the named blind spot is passive stalled-session visibility in `sy status`
 - keep the all-session `sy status` view as the default control plane for concurrent task ownership and follow-up state
 - avoid drifting back into generic inspection polish unless the proved workflow exposes a real operator risk
 
@@ -23,16 +24,12 @@ Without naming this slice:
 
 ## Exact Order
 
-1. Name one small blind spot exposed by the proved concurrent workflow
-   - prefer a gap the operator can hit while following two delegated sessions in one repository
-   - keep it operator-visible and easy to review
-
-2. Fix only that blind spot
+1. Fix the named blind spot: passive stalled-session visibility in `sy status`
    - keep `sy status` sufficient for understanding concurrent state at a glance
    - keep follow-up commands exact-session-safe
    - do not make operators reconstruct state from raw events unless the blind spot specifically requires it
 
-3. Keep the slice narrow
+2. Keep the slice narrow
    - do not broaden into dashboards, automation, transcript capture, or generic workflow engines
    - do not invent another broad multi-agent milestone until a concrete gap earns it
    - update docs only where the named blind spot changes project meaningfully
@@ -71,7 +68,7 @@ Decision rule:
 
 Current status:
 - the first concurrent proving workflow is now materially real
-- the next slice should be one named blind spot inside that workflow, not another generic hardening pass
+- the next slice is passive stalled-session visibility in `sy status`, not another generic hardening pass
 
 ## What To Keep Small
 
