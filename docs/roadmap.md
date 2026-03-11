@@ -49,17 +49,17 @@ That rule exists to build a stronger base for later breadth, not to permanently 
 
 ## Recommended Next Slice
 
-The run-tracking slice is now in place.
+The run-tracking slice and the first concurrent proving workflow are now in place.
 
 What to do next:
-- make the smallest useful multi-agent workflow real on top of that run model
-- prove that two concurrent delegated sessions can be launched, inspected, and followed through reintegration without selector confusion or run-state loss
-- avoid defaulting back to generic lifecycle hardening unless it directly supports this slice
+- name one small operator-visible blind spot exposed by that proved workflow
+- fix that blind spot without broadening into a generic multi-agent system
+- avoid defaulting back to generic lifecycle hardening unless it directly supports the named gap
 
 ## Order After That
 
 1. improve diagnostics only if operator workflows require them
-2. widen the multi-agent workflow only after the first concurrent proving slice is clear and reliable
+2. widen the multi-agent workflow only after a concrete blind spot proves the current slice is no longer enough
 3. add broader runtime breadth only if the current Codex-first loop stops being the right constraint
 4. revisit automation only after the operator can clearly understand and recover the explicit workflow
 

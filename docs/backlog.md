@@ -4,11 +4,11 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Make the smallest useful multi-agent workflow real on top of the new run-tracking model
+1. Name one small operator-visible blind spot exposed by the proved two-session workflow
 
 ## Next
 
-2. If that concurrent workflow exposes a remaining blind spot, name one small operator-visible follow-up slice before coding
+2. Fix that blind spot in one focused slice
 
 ## After That
 
