@@ -506,6 +506,175 @@ test("sy status orders mail rows by latest unread inbound mail through the real 
   }
 });
 
+test("sy supports a two-session operator workflow through mail review, merge, and cleanup without losing concurrent state", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-concurrent-workflow-test-");
+  const mailWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-mail-flow");
+  const mergeWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-merge-flow");
+  const mergeNotesPath = join(repoDir, "merge-flow.txt");
+
+  try {
+    await git(repoDir, ["config", "user.name", "Switchyard Test"]);
+    await git(repoDir, ["config", "user.email", "switchyard@example.com"]);
+
+    await git(repoDir, ["switch", "-c", "agents/agent-cli-mail-flow"]);
+    await git(repoDir, ["commit", "--allow-empty", "-m", "Mail flow branch work"]);
+    await git(repoDir, ["switch", "main"]);
+    await mkdir(mailWorktreePath, { recursive: true });
+
+    await git(repoDir, ["switch", "-c", "agents/agent-cli-merge-flow"]);
+    await git(repoDir, ["commit", "--allow-empty", "-m", "Merge flow branch start"]);
+    await git(repoDir, ["switch", "main"]);
+    await git(repoDir, ["switch", "--detach"]);
+    await git(repoDir, ["worktree", "add", mergeWorktreePath, "agents/agent-cli-merge-flow"]);
+    await writeFile(join(mergeWorktreePath, "merge-flow.txt"), "merge candidate\n", "utf8");
+    await git(mergeWorktreePath, ["add", "merge-flow.txt"]);
+    await git(mergeWorktreePath, ["commit", "-m", "Add merge flow notes"]);
+
+    await createSession(repoDir, {
+      id: "session-cli-mail-flow",
+      agentName: "agent-cli-mail-flow",
+      branch: "agents/agent-cli-mail-flow",
+      baseBranch: "main",
+      worktreePath: mailWorktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-10T13:00:00.000Z",
+      updatedAt: "2026-03-10T13:00:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-cli-merge-flow",
+      agentName: "agent-cli-merge-flow",
+      branch: "agents/agent-cli-merge-flow",
+      baseBranch: "main",
+      worktreePath: mergeWorktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-10T13:05:00.000Z",
+      updatedAt: "2026-03-10T13:05:00.000Z"
+    });
+
+    await createRun(repoDir, {
+      id: "run-cli-mail-flow",
+      sessionId: "session-cli-mail-flow",
+      agentName: "agent-cli-mail-flow",
+      taskSummary: "Review the preserved branch after the agent reply.",
+      state: "finished",
+      outcome: "stopped",
+      createdAt: "2026-03-10T13:00:00.000Z",
+      updatedAt: "2026-03-10T13:00:00.000Z",
+      finishedAt: "2026-03-10T13:00:00.000Z"
+    });
+    await createRun(repoDir, {
+      id: "run-cli-merge-flow",
+      sessionId: "session-cli-merge-flow",
+      agentName: "agent-cli-merge-flow",
+      taskSummary: "Prepare the preserved branch for reintegration.",
+      state: "finished",
+      outcome: "stopped",
+      createdAt: "2026-03-10T13:05:00.000Z",
+      updatedAt: "2026-03-10T13:05:00.000Z",
+      finishedAt: "2026-03-10T13:05:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-cli-mail-flow",
+      sender: "agent-cli-mail-flow",
+      recipient: "operator",
+      body: "Need merge decision.",
+      createdAt: "2026-03-10T13:10:00.000Z"
+    });
+
+    const initialStatus = await execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "status"], {
+      cwd: repoDir
+    });
+    assert.equal(initialStatus.stderr, "");
+    assert.match(
+      initialStatus.stdout,
+      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\tfinished:stopped\tmail\t2026-03-10T13:10:00.000Z mail\.unread unreadCount=1, sender=agent-cli-mail-flow, bodyPreview="Need merge decision\."/
+    );
+    assert.match(
+      initialStatus.stdout,
+      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\tfinished:stopped\treview-merge\t-/
+    );
+    assert.ok(
+      initialStatus.stdout.indexOf("session-cli-mail-flow") < initialStatus.stdout.indexOf("session-cli-merge-flow")
+    );
+
+    const mailCheck = await execFileAsync(
+      process.execPath,
+      [tsxCliPath, cliEntryPath, "mail", "check", "session-cli-mail-flow"],
+      { cwd: repoDir }
+    );
+    assert.equal(mailCheck.stderr, "");
+    assert.match(mailCheck.stdout, /Unread mail for agent-cli-mail-flow:/);
+    assert.match(mailCheck.stdout, /Session: session-cli-mail-flow/);
+    assert.match(mailCheck.stdout, /Body:\n  Need merge decision\.\n/);
+
+    const postMailStatus = await execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "status"], {
+      cwd: repoDir
+    });
+    assert.equal(postMailStatus.stderr, "");
+    assert.match(
+      postMailStatus.stdout,
+      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\t0\tabandon-only:not-merged\tReview the preserved branch after the agent reply\.\tfinished:stopped\treview-merge\t/
+    );
+    assert.match(
+      postMailStatus.stdout,
+      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\t0\tabandon-only:not-merged\tPrepare the preserved branch for reintegration\.\tfinished:stopped\treview-merge\t-/
+    );
+
+    const mergeResult = await execFileAsync(
+      process.execPath,
+      [tsxCliPath, cliEntryPath, "merge", "session-cli-merge-flow"],
+      { cwd: repoDir }
+    );
+    assert.equal(mergeResult.stderr, "");
+    assert.match(mergeResult.stdout, /Merged agent-cli-merge-flow into main/);
+    assert.match(mergeResult.stdout, /Session: session-cli-merge-flow/);
+    assert.equal(await readFile(mergeNotesPath, "utf8"), "merge candidate\n");
+
+    const postMergeStatus = await execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "status"], {
+      cwd: repoDir
+    });
+    assert.equal(postMergeStatus.stderr, "");
+    assert.match(
+      postMergeStatus.stdout,
+      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\tready:merged\tPrepare the preserved branch for reintegration\.\tfinished:merged\tcleanup\t/
+    );
+    assert.match(
+      postMergeStatus.stdout,
+      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\tfinished:stopped\treview-merge\t/
+    );
+
+    const cleanupResult = await execFileAsync(
+      process.execPath,
+      [tsxCliPath, cliEntryPath, "stop", "session-cli-merge-flow", "--cleanup"],
+      { cwd: repoDir }
+    );
+    assert.equal(cleanupResult.stderr, "");
+    assert.match(cleanupResult.stdout, /Session agent-cli-merge-flow is already stopped\./);
+    assert.match(cleanupResult.stdout, /Session: session-cli-merge-flow/);
+    assert.match(cleanupResult.stdout, /Cleanup: removed worktree and branch after confirming merge into main\./);
+
+    await assert.rejects(() => access(mergeWorktreePath));
+    await assert.rejects(() => git(repoDir, ["rev-parse", "--verify", "agents/agent-cli-merge-flow"]));
+
+    const finalStatus = await execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "status"], {
+      cwd: repoDir
+    });
+    assert.equal(finalStatus.stderr, "");
+    assert.match(
+      finalStatus.stdout,
+      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\tabandon-only:not-merged\tReview the preserved branch after the agent reply\.\tfinished:stopped\treview-merge\t/
+    );
+    assert.match(
+      finalStatus.stdout,
+      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\tready:absent\tPrepare the preserved branch for reintegration\.\tfinished:merged\tdone\t/
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("sy mail send preserves the exact body and reports the resolved session id through the real CLI entrypoint", async () => {
   const repoDir = await createInitializedRepo("switchyard-cli-mail-send-test-");
   const body = "  Review the preserved branch diff.\nSecond line stays intact.  ";

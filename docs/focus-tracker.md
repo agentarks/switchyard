@@ -87,17 +87,18 @@ Completed enough to count as minimally real:
 
 Current planning state:
 - the run-tracking slice is now materially real in the current operator loop
-- the next named slice is the smallest useful multi-agent workflow on top of that run model
-- do not spend another session on output-only inspection polish unless it directly supports that slice
+- the first concurrent proving workflow on top of that run model is now materially real
+- the next named slice should be one small operator-visible blind spot inside that proved workflow
+- do not spend another session on output-only inspection polish unless it directly supports that blind spot
 - treat raw event visibility as supporting detail, not as the primary answer to "what happened to this task?"
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- make the first concurrent delegated workflow real without losing exact session targeting or run visibility
+- reduce one named blind spot inside the proved two-session workflow
 - keep task ownership visible in the all-session view so concurrent sessions do not require immediate drilldown
 - keep latest run state and terminal outcome trustworthy as concurrent sessions overlap
-- improve operator inspection only when it directly supports the concurrent-workflow slice
+- improve operator inspection only when it directly supports the concurrent workflow
 - harden lifecycle behavior only when a reproduced failure blocks the current loop
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
@@ -132,7 +133,8 @@ Use this rough project view instead of one flat percentage:
 
 - Core v0 operator loop: mostly complete
 - run-tracking visibility: now minimally real
-- concurrent multi-session proving workflow: next missing product slice
+- concurrent multi-session proving workflow: now minimally real
+- next missing product slice: one named blind spot inside that workflow
 - v0 hardening: exception-only, not the default mode
 - merge/reintegration workflow: minimally real, still intentionally narrow
 - broader long-term vision: intended, but earned in stages rather than copied all at once
