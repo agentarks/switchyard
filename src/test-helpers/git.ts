@@ -22,6 +22,14 @@ export async function createTempGitRepo(prefix = "switchyard-git-test-"): Promis
   return repoDir;
 }
 
+export async function createUnbornTempGitRepo(prefix = "switchyard-git-test-"): Promise<string> {
+  const repoDir = await realpath(await mkdtemp(join(tmpdir(), prefix)));
+  await git(repoDir, ["init", "-b", "main"]);
+  await git(repoDir, ["config", "user.name", "Switchyard Test"]);
+  await git(repoDir, ["config", "user.email", "switchyard@example.com"]);
+  return repoDir;
+}
+
 export async function removeTempDir(path: string): Promise<void> {
   await rm(path, { recursive: true, force: true });
 }

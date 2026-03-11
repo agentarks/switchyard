@@ -21,6 +21,8 @@ Expected behavior:
 - write all bootstrap artifacts under that resolved canonical repo root rather than the invocation directory
 - detect a project name from the repo directory unless `--name` is provided
 - detect the canonical branch from `origin/HEAD` when available
+- keep bootstrap successful even when the chosen canonical branch does not point to a commit yet
+- warn explicitly when the chosen canonical branch does not point to a commit yet, and tell the operator to create an initial commit before running `sy sling`
 - create `.switchyard/`
 - create `.switchyard/worktrees/`, `.switchyard/logs/`, `.switchyard/agents/`, and `.switchyard/specs/`
 - write `.switchyard/config.yaml`
@@ -50,6 +52,7 @@ Current contract:
 - command passes the explicit task text to Codex as the initial prompt, whether it came from the CLI flag or a task file
 - command starts one detached Codex process from that worktree
 - on supported Unix platforms, detached launch uses the system `script` utility so Codex startup still gets a pseudo-terminal
+- command fails explicitly before worktree creation when the configured canonical branch does not resolve to a commit yet, instead of surfacing raw `git worktree` invalid-reference output
 - command persists one `starting` session record in `sessions.db`, including the original canonical branch as session `baseBranch`
 - command creates one durable run record in `runs.db` for that launched task
 - command records `sling.spawned` when the runtime pid exists, including `taskSummary` and `taskSpecPath`

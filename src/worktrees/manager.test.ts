@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { buildDefaultConfig, loadConfig, writeConfig } from "../config.js";
 import { WorktreeError } from "../errors.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
-import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
+import { createTempGitRepo, createUnbornTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
 import { createWorktree } from "./manager.js";
 
 test("createWorktree creates a deterministic branch and path from the repo root", async () => {
@@ -66,8 +66,30 @@ test("createWorktree rejects deterministic name collisions", async () => {
   }
 });
 
+test("createWorktree fails explicitly when the canonical branch does not point to a commit yet", async () => {
+  const repoDir = await createUnbornInitializedRepo("switchyard-worktree-test-");
+
+  try {
+    const config = await loadConfig(repoDir);
+
+    await assert.rejects(
+      () => createWorktree(config, "Writer"),
+      /Configured canonical branch 'main' does not point to a commit yet\. Make an initial commit on that branch before running 'sy sling'\./
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createInitializedRepo(prefix: string): Promise<string> {
   const repoDir = await createTempGitRepo(prefix);
+  await bootstrapSwitchyardLayout(repoDir);
+  await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "main"));
+  return repoDir;
+}
+
+async function createUnbornInitializedRepo(prefix: string): Promise<string> {
+  const repoDir = await createUnbornTempGitRepo(prefix);
   await bootstrapSwitchyardLayout(repoDir);
   await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "main"));
   return repoDir;

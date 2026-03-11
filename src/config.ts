@@ -50,6 +50,15 @@ export async function detectCanonicalBranch(projectRoot: string): Promise<string
   return "main";
 }
 
+export async function branchPointsToCommit(projectRoot: string, branch: string): Promise<boolean> {
+  try {
+    await runGit(projectRoot, ["rev-parse", "--verify", `${branch}^{commit}`]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function detectProjectRoot(startDir = process.cwd()): Promise<string> {
   while (true) {
     try {

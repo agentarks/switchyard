@@ -21,6 +21,7 @@ export async function createWorktree(config: SwitchyardConfig, requestedAgentNam
   const path = resolveWorktreePath(config, agentName);
 
   await ensureWorktreeTargetAvailable(config.project.root, branch, path);
+  await ensureCanonicalBranchIsReady(config.project.root, config.project.canonicalBranch);
   await mkdir(dirname(path), { recursive: true });
 
   try {
@@ -60,6 +61,17 @@ async function ensureWorktreeTargetAvailable(projectRoot: string, branch: string
 
   if (await localBranchExists(projectRoot, branch)) {
     throw new WorktreeError(`Worktree branch already exists: ${branch}`);
+  }
+}
+
+async function ensureCanonicalBranchIsReady(projectRoot: string, canonicalBranch: string): Promise<void> {
+  try {
+    await runGit(projectRoot, ["rev-parse", "--verify", `${canonicalBranch}^{commit}`]);
+  } catch {
+    throw new WorktreeError(
+      `Configured canonical branch '${canonicalBranch}' does not point to a commit yet. `
+      + "Make an initial commit on that branch before running 'sy sling'."
+    );
   }
 }
 

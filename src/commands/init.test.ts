@@ -6,7 +6,7 @@ import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
-import { createTempGitRepo, removeTempDir } from "../test-helpers/git.js";
+import { createTempGitRepo, createUnbornTempGitRepo, removeTempDir } from "../test-helpers/git.js";
 
 const execFileAsync = promisify(execFile);
 const tsxCliPath = fileURLToPath(new URL("../../node_modules/tsx/dist/cli.mjs", import.meta.url));
@@ -60,6 +60,43 @@ test("sy init bootstraps the repo root when invoked from a nested directory", as
     }
 
     await assert.rejects(() => access(join(nestedDir, ".switchyard", "config.yaml")));
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy init warns when the chosen canonical branch does not point to a commit yet", async () => {
+  const repoDir = await createUnbornTempGitRepo();
+
+  try {
+    const { stdout, stderr } = await execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "init"], {
+      cwd: repoDir
+    });
+
+    assert.match(stdout, new RegExp(`Initialized Switchyard in ${escapeRegExp(repoDir)}`));
+    assert.match(stdout, new RegExp(`Config: ${escapeRegExp(join(repoDir, ".switchyard", "config.yaml"))}`));
+    assert.match(
+      stderr,
+      /WARN: Canonical branch 'main' does not point to a commit yet\. Create an initial commit on that branch before running 'sy sling'\./
+    );
+
+    const configPath = join(repoDir, ".switchyard", "config.yaml");
+    const config = parse(await readFile(configPath, "utf8")) as Record<string, unknown>;
+
+    assert.deepEqual(config, {
+      project: {
+        name: basename(repoDir),
+        root: repoDir,
+        canonicalBranch: "main"
+      },
+      runtime: {
+        default: "codex",
+        useTmux: true
+      },
+      worktrees: {
+        baseDir: ".switchyard/worktrees"
+      }
+    });
   } finally {
     await removeTempDir(repoDir);
   }
