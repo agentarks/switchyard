@@ -117,6 +117,9 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
         : "?";
       const cleanup = cleanupReadiness.get(session.id) ?? "?";
       const latestRun = latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined;
+      const unreadCountValue = unreadMailCounts.available
+        ? unreadMailCounts.countsBySession.get(session.id) ?? 0
+        : undefined;
       const recentEvent = selectRecentEventForStatus({
         latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
         latestStoredEvent: latestEventsBySession.get(session.id),
@@ -132,7 +135,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       process.stdout.write(`Unread: ${unreadCount}\n`);
       process.stdout.write(`Cleanup: ${cleanup}\n`);
       process.stdout.write(`Run: ${formatRunSummary(latestRun, latestRuns.available)}\n`);
-      process.stdout.write(`Next: ${formatFollowUpAction(session, latestRun, cleanup)}\n`);
+      process.stdout.write(`Next: ${formatFollowUpAction(session, latestRun, cleanup, unreadCountValue)}\n`);
       process.stdout.write(`Recent: ${formatRecentEventSummary(recentEvent, { truncate: false })}\n`);
 
       if (options.showTask) {
@@ -157,7 +160,12 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     const latestRun = latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined;
     const task = formatTaskSummary(latestRun, latestRuns.available);
     const run = formatRunSummary(latestRun, latestRuns.available);
-    const followUp = formatFollowUpAction(session, latestRun, cleanup);
+    const followUp = formatFollowUpAction(
+      session,
+      latestRun,
+      cleanup,
+      unreadMailCounts.available ? unreadMailCounts.countsBySession.get(session.id) ?? 0 : undefined
+    );
     const recentEvent = formatRecentEventSummary(
       selectRecentEventForStatus({
         latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
@@ -352,8 +360,13 @@ function formatTaskSummary(run: RunRecord | undefined, available = true): string
 function formatFollowUpAction(
   session: SessionRecord,
   run: RunRecord | undefined,
-  cleanup: string
+  cleanup: string,
+  unreadCount?: number
 ): string {
+  if ((unreadCount ?? 0) > 0) {
+    return "mail";
+  }
+
   if (isActiveSessionState(session.state)) {
     return "wait";
   }

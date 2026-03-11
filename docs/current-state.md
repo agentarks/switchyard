@@ -74,7 +74,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
 - status output that now also joins each session to its latest durable run summary so operators can see `starting`, `active`, or `finished:<outcome>` at a glance
 - status output that now also surfaces the latest run task summary per session so concurrent delegated work stays attributable in the all-session view
-- status output that now also surfaces one derived next follow-up signal per session so concurrent delegated work stays actionable without decoding run and cleanup columns by hand
+- status output that now also surfaces one derived next follow-up signal per session so concurrent delegated work stays actionable without decoding unread-mail, run, and cleanup columns by hand
 - status output that now also surfaces durable `stop.failed` context such as shutdown-failure reason, runtime pid, and error text in recent-event summaries, including on the same render that records a follow-up runtime reconciliation event
 - status output that now also surfaces each session id in the main overview so later commands can target an exact preserved session without guesswork
 - status output that now also surfaces unread mail counts so operators can spot pending mailbox work without checking each session individually
@@ -151,7 +151,8 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - includes one unread-mail count per session from `mail.db`
   - includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`, with active sessions showing the post-stop outcome as `stop-then:*`
   - includes the latest durable run task summary per session in that table so overlapping delegated work stays attributable without drilling into exact-session views
-  - includes one derived next follow-up signal per session so the all-session view stays readable when concurrent sessions need different operator actions such as waiting, review/merge, cleanup, or inspection
+  - includes one derived next follow-up signal per session so the all-session view stays readable when concurrent sessions need different operator actions such as mailbox review, waiting, review/merge, cleanup, or inspection
+  - prioritizes `mail` in that follow-up signal when unread mailbox items exist for a session, instead of leaving the operator to infer it only from the unread-count column
   - distinguishes partial preserved-artifact loss in that cleanup-readiness label when the branch still exists but the preserved worktree path is already missing
   - includes one concise recent-event summary per session when event history exists, including `readyAfterMs` for fresh `sling.completed` events, shutdown-failure details from `stop.failed`, cleanup mode and missing-worktree details from `stop.completed`, and higher-value merge-failure details such as drift targets, preserved-worktree paths, and git errors when those fields exist
   - when that same status run also records a runtime reconciliation event, keeps a latest pre-existing `stop.failed` visible in the current recent summary instead of immediately replacing it with the synthetic runtime event
