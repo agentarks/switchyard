@@ -581,6 +581,65 @@ test("statusCommand prioritizes unread mail in the selected session follow-up si
   );
 });
 
+test("statusCommand does not switch the follow-up signal to mail for unread outbound operator mail", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-outbound-mail",
+    agentName: "agent-outbound-mail",
+    branch: "agents/agent-outbound-mail",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-outbound-mail"),
+    state: "running",
+    runtimePid: 7373,
+    createdAt: "2026-03-09T12:20:00.000Z",
+    updatedAt: "2026-03-09T12:20:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-outbound-mail",
+    sender: "operator",
+    recipient: "agent-outbound-mail",
+    body: "Please continue the current task.",
+    createdAt: "2026-03-09T12:21:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-outbound-mail",
+    agentName: "agent-outbound-mail",
+    eventType: "mail.sent",
+    payload: {
+      sender: "operator",
+      recipient: "agent-outbound-mail",
+      bodyLength: 33
+    },
+    createdAt: "2026-03-09T12:22:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-outbound-mail",
+      isRuntimeAlive: (pid) => pid === 7373
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Unread: 1/);
+  assert.match(output, /Next: wait/);
+  assert.match(
+    output,
+    /running\tsession-outbound-mail\tagent-outbound-mail\tagents\/agent-outbound-mail\t\.switchyard\/worktrees\/agent-outbound-mail\t2026-03-09T12:20:00.000Z\t1\t[^\t]+\t-\t-\twait\t2026-03-09T12:22:00.000Z mail\.sent sender=operator, bodyLength=33/
+  );
+});
+
 test("statusCommand preserves the launch command when the latest launch event is sling.failed", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];

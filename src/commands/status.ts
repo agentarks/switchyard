@@ -22,6 +22,7 @@ interface StatusOptions {
   isRuntimeAlive?: (pid: number) => boolean;
   inspectRuntimeLiveness?: (pid: number) => ProcessLiveness;
   listUnreadMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
+  listUnreadOperatorMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
   listLatestRuns?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, RunRecord>>;
   updateLatestRun?: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>;
   recordEvent?: EventRecorder;
@@ -89,10 +90,19 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     sessionIds,
     options.listLatestRuns ?? listLatestRunsBySession
   );
+  const unreadOperatorMailCounts = await loadUnreadMailCountsBestEffort(
+    config.project.root,
+    sessionIds,
+    options.listUnreadOperatorMailCounts ?? ((projectRoot, mailSessionIds) => {
+      return listUnreadMailCountsBySession(projectRoot, mailSessionIds, { recipient: "operator" });
+    }),
+    "operator unread mail counts"
+  );
   const unreadMailCounts = await loadUnreadMailCountsBestEffort(
     config.project.root,
     sessionIds,
-    options.listUnreadMailCounts ?? listUnreadMailCountsBySession
+    options.listUnreadMailCounts ?? listUnreadMailCountsBySession,
+    "unread mail counts"
   );
   const cleanupReadiness = await loadCleanupReadinessBestEffort(
     config.project.root,
@@ -117,8 +127,8 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
         : "?";
       const cleanup = cleanupReadiness.get(session.id) ?? "?";
       const latestRun = latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined;
-      const unreadCountValue = unreadMailCounts.available
-        ? unreadMailCounts.countsBySession.get(session.id) ?? 0
+      const unreadOperatorCount = unreadOperatorMailCounts.available
+        ? unreadOperatorMailCounts.countsBySession.get(session.id) ?? 0
         : undefined;
       const recentEvent = selectRecentEventForStatus({
         latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
@@ -135,7 +145,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       process.stdout.write(`Unread: ${unreadCount}\n`);
       process.stdout.write(`Cleanup: ${cleanup}\n`);
       process.stdout.write(`Run: ${formatRunSummary(latestRun, latestRuns.available)}\n`);
-      process.stdout.write(`Next: ${formatFollowUpAction(session, latestRun, cleanup, unreadCountValue)}\n`);
+      process.stdout.write(`Next: ${formatFollowUpAction(session, latestRun, cleanup, unreadOperatorCount)}\n`);
       process.stdout.write(`Recent: ${formatRecentEventSummary(recentEvent, { truncate: false })}\n`);
 
       if (options.showTask) {
@@ -164,7 +174,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       session,
       latestRun,
       cleanup,
-      unreadMailCounts.available ? unreadMailCounts.countsBySession.get(session.id) ?? 0 : undefined
+      unreadOperatorMailCounts.available ? unreadOperatorMailCounts.countsBySession.get(session.id) ?? 0 : undefined
     );
     const recentEvent = formatRecentEventSummary(
       selectRecentEventForStatus({
@@ -182,7 +192,8 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 async function loadUnreadMailCountsBestEffort(
   projectRoot: string,
   sessionIds: string[],
-  listUnreadMailCounts: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>
+  listUnreadMailCounts: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>,
+  label = "unread mail counts"
 ): Promise<{ countsBySession: Map<string, number>; available: boolean }> {
   try {
     return {
@@ -190,7 +201,7 @@ async function loadUnreadMailCountsBestEffort(
       available: true
     };
   } catch (error) {
-    process.stderr.write(`WARN: failed to load unread mail counts: ${formatErrorMessage(error)}\n`);
+    process.stderr.write(`WARN: failed to load ${label}: ${formatErrorMessage(error)}\n`);
     return {
       countsBySession: new Map(),
       available: false
