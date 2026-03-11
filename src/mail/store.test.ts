@@ -5,6 +5,7 @@ import { createTempGitRepo, removeTempDir } from "../test-helpers/git.js";
 import {
   createMail,
   initializeMailStore,
+  listLatestInboundMailBySession,
   listLatestUnreadMailBySession,
   listMailForSession,
   listUnreadMailCountsBySession,
@@ -292,6 +293,95 @@ test("listLatestUnreadMailBySession can filter unread summaries by recipient", a
     assert.equal(operatorSummaries.get("session-1")?.message.body, "Inbound unread");
     assert.equal(agentSummaries.get("session-1")?.unreadCount, 1);
     assert.equal(agentSummaries.get("session-1")?.message.body, "Outbound unread");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("listLatestInboundMailBySession returns the newest inbound message per requested session", async () => {
+  const repoDir = await createTempGitRepo("switchyard-mail-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "operator",
+      recipient: "agent-one",
+      body: "Operator follow-up",
+      createdAt: "2026-03-06T09:00:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "agent-one",
+      recipient: "operator",
+      body: "Latest inbound",
+      createdAt: "2026-03-06T09:05:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-2",
+      sender: "agent-two",
+      recipient: "operator",
+      body: "Other inbound",
+      createdAt: "2026-03-06T09:10:00.000Z"
+    });
+
+    const latestInboundMail = await listLatestInboundMailBySession(
+      repoDir,
+      ["session-1", "session-2", "session-3"],
+      { excludeSender: "operator" }
+    );
+
+    assert.equal(latestInboundMail.get("session-1")?.body, "Latest inbound");
+    assert.equal(latestInboundMail.get("session-1")?.createdAt, "2026-03-06T09:05:00.000Z");
+    assert.equal(latestInboundMail.get("session-2")?.body, "Other inbound");
+    assert.equal(latestInboundMail.get("session-2")?.createdAt, "2026-03-06T09:10:00.000Z");
+    assert.equal(latestInboundMail.get("session-3"), undefined);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("listLatestInboundMailBySession can exclude operator-authored mail while still including read inbound mail", async () => {
+  const repoDir = await createTempGitRepo("switchyard-mail-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "agent-one",
+      recipient: "operator",
+      body: "Older inbound",
+      createdAt: "2026-03-06T09:00:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "operator",
+      recipient: "agent-one",
+      body: "Newer operator note",
+      createdAt: "2026-03-06T09:06:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-2",
+      sender: "agent-two",
+      recipient: "operator",
+      body: "Read inbound should still count",
+      createdAt: "2026-03-06T09:08:00.000Z"
+    });
+    await readUnreadMailForSession(repoDir, "session-2");
+
+    const latestInboundMail = await listLatestInboundMailBySession(
+      repoDir,
+      ["session-1", "session-2"],
+      { excludeSender: "operator" }
+    );
+
+    assert.equal(latestInboundMail.get("session-1")?.body, "Older inbound");
+    assert.equal(latestInboundMail.get("session-1")?.createdAt, "2026-03-06T09:00:00.000Z");
+    assert.equal(latestInboundMail.get("session-2")?.body, "Read inbound should still count");
+    assert.equal(latestInboundMail.get("session-2")?.createdAt, "2026-03-06T09:08:00.000Z");
+    assert.match(latestInboundMail.get("session-2")?.readAt ?? "", /^2026-|^20\d{2}-/);
   } finally {
     await removeTempDir(repoDir);
   }

@@ -33,7 +33,8 @@ test("statusCommand prints an empty-state message when no sessions exist", async
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-06T09:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -77,7 +78,8 @@ test("statusCommand prints stored sessions with relative worktree paths", async 
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-06T09:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -152,7 +154,8 @@ test("statusCommand shows latest run task ownership for concurrent sessions", as
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-06T09:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -231,7 +234,8 @@ test("statusCommand orders concurrent sessions by follow-up priority before rece
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-06T15:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -516,7 +520,8 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
 
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-08T09:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -1064,7 +1069,8 @@ test("statusCommand does not switch the follow-up signal to mail for unread outb
     await statusCommand({
       startDir: repoDir,
       selector: "session-outbound-mail",
-      isRuntimeAlive: (pid) => pid === 7373
+      isRuntimeAlive: (pid) => pid === 7373,
+      now: () => "2026-03-09T12:25:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -1464,7 +1470,8 @@ test("statusCommand selected-session view surfaces stored base branch and runtim
     await statusCommand({
       startDir: repoDir,
       selector: "session-selected",
-      isRuntimeAlive: (pid) => pid === 5151
+      isRuntimeAlive: (pid) => pid === 5151,
+      now: () => "2026-03-08T12:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -1677,7 +1684,8 @@ test("statusCommand prints the latest event summary for each session", async () 
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 1111
+      isRuntimeAlive: (pid) => pid === 1111,
+      now: () => "2026-03-08T09:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -2126,7 +2134,8 @@ test("statusCommand includes the readiness detail for a freshly launched session
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 2222
+      isRuntimeAlive: (pid) => pid === 2222,
+      now: () => "2026-03-08T11:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -2409,7 +2418,8 @@ test("statusCommand prioritizes unread mail over wait in the all-session follow-
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 2323 || pid === 2424
+      isRuntimeAlive: (pid) => pid === 2323 || pid === 2424,
+      now: () => "2026-03-08T11:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -2824,6 +2834,7 @@ test("statusCommand selected-session header follows the same degraded unread-mai
       startDir: repoDir,
       selector: "session-selected-mail-degraded",
       isRuntimeAlive: (pid) => pid === 9292,
+      now: () => "2026-03-09T12:25:00.000Z",
       listUnreadMailCounts: async () => {
         throw new Error("mail unavailable");
       },

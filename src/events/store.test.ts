@@ -2,7 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, removeTempDir } from "../test-helpers/git.js";
-import { createEvent, initializeEventStore, listEvents, listLatestEventsBySession } from "./store.js";
+import {
+  createEvent,
+  initializeEventStore,
+  listEvents,
+  listLatestEventsBySession,
+  listLatestEventsBySessionForTypes
+} from "./store.js";
 
 test("initializeEventStore creates the events schema without records", async () => {
   const repoDir = await createTempGitRepo("switchyard-event-store-test-");
@@ -120,6 +126,75 @@ test("listLatestEventsBySession returns the newest event for each requested sess
     assert.equal(latestEvents.get("session-1")?.createdAt, "2026-03-08T10:00:00.000Z");
     assert.equal(latestEvents.get("session-2")?.eventType, "stop.completed");
     assert.equal(latestEvents.get("session-2")?.createdAt, "2026-03-08T11:00:00.000Z");
+    assert.equal(latestEvents.get("session-3"), undefined);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("listLatestEventsBySessionForTypes returns the newest matching event per requested session", async () => {
+  const repoDir = await createTempGitRepo("switchyard-event-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createEvent(repoDir, {
+      sessionId: "session-1",
+      agentName: "agent-one",
+      eventType: "runtime.ready",
+      payload: {
+        runtimePid: 4242
+      },
+      createdAt: "2026-03-08T09:00:00.000Z"
+    });
+    await createEvent(repoDir, {
+      sessionId: "session-1",
+      agentName: "agent-one",
+      eventType: "mail.sent",
+      payload: {
+        sender: "operator"
+      },
+      createdAt: "2026-03-08T10:00:00.000Z"
+    });
+    await createEvent(repoDir, {
+      sessionId: "session-1",
+      agentName: "agent-one",
+      eventType: "runtime.exited",
+      payload: {
+        reason: "pid_not_alive"
+      },
+      createdAt: "2026-03-08T11:00:00.000Z"
+    });
+    await createEvent(repoDir, {
+      sessionId: "session-2",
+      agentName: "agent-two",
+      eventType: "merge.failed",
+      payload: {
+        reason: "merge_conflict"
+      },
+      createdAt: "2026-03-08T12:00:00.000Z"
+    });
+    await createEvent(repoDir, {
+      sessionId: "session-2",
+      agentName: "agent-two",
+      eventType: "sling.completed",
+      payload: {
+        runtimePid: 4343
+      },
+      createdAt: "2026-03-08T12:05:00.000Z"
+    });
+
+    const latestEvents = await listLatestEventsBySessionForTypes(
+      repoDir,
+      ["session-1", "session-2", "session-3"],
+      ["runtime.ready", "runtime.exited", "sling.completed"]
+    );
+
+    assert.equal(latestEvents.size, 2);
+    assert.equal(latestEvents.get("session-1")?.eventType, "runtime.exited");
+    assert.equal(latestEvents.get("session-1")?.createdAt, "2026-03-08T11:00:00.000Z");
+    assert.equal(latestEvents.get("session-2")?.eventType, "sling.completed");
+    assert.equal(latestEvents.get("session-2")?.createdAt, "2026-03-08T12:05:00.000Z");
     assert.equal(latestEvents.get("session-3"), undefined);
   } finally {
     await removeTempDir(repoDir);
