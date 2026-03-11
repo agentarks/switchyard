@@ -15,6 +15,8 @@
 **Modify:**
 - `src/commands/status.ts`
 - `src/commands/status.test.ts`
+- `src/events/store.ts`
+- `src/events/store.test.ts`
 - `src/mail/store.ts`
 - `src/mail/store.test.ts`
 - `docs/cli-contract.md`
@@ -26,6 +28,8 @@
 **Why these files:**
 - `src/commands/status.ts` already owns row derivation, follow-up selection, recent-summary selection, and selected-session detail rendering.
 - `src/commands/status.test.ts` already contains the regression coverage for `NEXT`, `RECENT`, unread-mail precedence, and lifecycle reconciliation.
+- `src/events/store.ts` is the smallest place to add a latest-runtime-progress lookup that is not distorted by display-oriented `RECENT` precedence.
+- `src/events/store.test.ts` should lock down the filtered latest-event query so the idle clock reads the right runtime-side signal.
 - `src/mail/store.ts` is the smallest place to add a latest-inbound-mail query without broadening the mail command surface.
 - `src/mail/store.test.ts` should lock down the new mail query semantics so status does not accidentally treat operator-authored or read-state-only activity as agent progress.
 - `docs/cli-contract.md` is the operator-facing behavior contract for `sy status`.
@@ -52,20 +56,22 @@ test("statusCommand marks a quiet running session as inspect when agent activity
   // expect RECENT to append runtime.stalled idleFor=...
 });
 
-test("statusCommand marks a quiet starting session as inspect when startup activity is older than the stalled threshold", async () => {
-  // session.state === "starting"
-  // no reconcile-to-running or reconcile-to-failed transition
-  // latest startup-side activity is older than 10 minutes
+test("statusCommand shows the stalled hint in the selected-session view for a quiet running session", async () => {
+  // exact-session status render
+  // running session crosses the stalled threshold
   // expect NEXT=inspect
+  // expect RECENT to preserve the concrete summary and append runtime.stalled idleFor=...
 });
 ```
+
+Do not add a test for a long-lived live `starting` row in this slice. `statusCommand` reconciles a live `starting` session to `running` before row derivation, so startup-hang surfacing would require a separate lifecycle change instead of the passive status-only slice planned here.
 
 - [ ] **Step 2: Run the targeted tests to verify they fail**
 
 Run:
 
 ```bash
-npm test -- src/commands/status.test.ts
+node --import tsx --test src/commands/status.test.ts
 ```
 
 Expected:
@@ -100,7 +106,7 @@ test("statusCommand keeps unread inbound operator mail as the higher-priority ne
 Run:
 
 ```bash
-npm test -- src/commands/status.test.ts
+node --import tsx --test src/commands/status.test.ts
 ```
 
 Expected:
@@ -117,12 +123,48 @@ git commit -m "test: add stalled status expectations"
 ### Task 2: Implement the stalled hint in `sy status`
 
 **Files:**
+- Modify: `src/events/store.ts`
+- Modify: `src/events/store.test.ts`
 - Modify: `src/mail/store.ts`
 - Modify: `src/mail/store.test.ts`
 - Modify: `src/commands/status.ts`
 - Test: `src/commands/status.test.ts`
 
-- [ ] **Step 1: Add the minimal mail-store query for latest inbound non-operator activity**
+- [ ] **Step 1: Add the minimal events-store query for latest runtime-progress activity**
+
+Add a focused store helper and tests, for example:
+
+```ts
+export async function listLatestEventsBySessionForTypes(
+  projectRoot: string,
+  sessionIds: string[],
+  eventTypes: string[]
+): Promise<Map<string, EventRecord>>
+```
+
+Behavior:
+- return the newest matching event per requested session
+- preserve the same timestamp/id ordering semantics as the existing latest-event helper
+- support the runtime-progress event set the stalled idle clock needs, such as `sling.spawned`, `sling.completed`, `sling.failed`, `runtime.ready`, `runtime.exited`, and `runtime.exited_early`
+
+Add store tests that verify:
+- the helper returns the newest matching event per session
+- newer non-matching events like `merge.failed` or `mail.sent` do not replace the runtime-progress event result
+- sessions without a matching event are omitted
+
+- [ ] **Step 2: Run the targeted events-store tests to verify the helper passes before wiring status**
+
+Run:
+
+```bash
+node --import tsx --test src/events/store.test.ts
+```
+
+Expected:
+- PASS for the new events-store helper coverage
+- PASS for existing events-store regressions
+
+- [ ] **Step 3: Add the minimal mail-store query for latest inbound non-operator activity**
 
 Add a focused store helper and tests, for example:
 
@@ -144,19 +186,19 @@ Add store tests that verify:
 - operator-authored mail can be excluded
 - read mail still participates in the result when it is the newest inbound non-operator message
 
-- [ ] **Step 2: Run the targeted mail-store tests to verify the helper passes before wiring status**
+- [ ] **Step 4: Run the targeted mail-store tests to verify the helper passes before wiring status**
 
 Run:
 
 ```bash
-npm test -- src/mail/store.test.ts
+node --import tsx --test src/mail/store.test.ts
 ```
 
 Expected:
 - PASS for the new store helper coverage
 - PASS for existing mail-store regressions
 
-- [ ] **Step 3: Add explicit derived status metadata for stalled detection**
+- [ ] **Step 5: Add explicit derived status metadata for stalled detection**
 
 Refactor the row context shape so status rendering has both:
 - the existing operator-visible freshness timestamp for `UPDATED`
@@ -172,7 +214,7 @@ interface DerivedStalledHint {
 
 function deriveStalledHint(options: {
   session: SessionRecord;
-  recentEvent?: EventRecord;
+  latestRuntimeProgressEvent?: EventRecord;
   latestInboundMail?: MailRecord;
   now: string;
 }): DerivedStalledHint | undefined
@@ -183,18 +225,19 @@ and
 ```ts
 function deriveAgentActivityTimestamp(
   session: SessionRecord,
-  recentEvent: EventRecord | undefined,
+  latestRuntimeProgressEvent: EventRecord | undefined,
   latestInboundMail: MailRecord | undefined
 ): string
 ```
 
 The idle clock should:
 - start from `session.createdAt`
-- advance on runtime-side status events like `sling.spawned`, `sling.completed`, `sling.failed`, `runtime.ready`, `runtime.exited`, and `runtime.exited_early`
+- advance on the latest matching runtime-progress event returned by the new events-store helper
 - advance on the latest inbound non-operator mail returned by the new mail-store helper
 - ignore operator-only events such as `mail.sent`, `mail.checked`, and `mail.listed`
+- avoid using the display-oriented `recentEvent` selection as idle-clock input, because `RECENT` can intentionally preserve a newer blocking diagnostic such as `merge.failed`
 
-- [ ] **Step 4: Thread the stalled hint through follow-up selection**
+- [ ] **Step 6: Thread the stalled hint through follow-up selection**
 
 Update the follow-up logic so:
 
@@ -206,7 +249,7 @@ if (isActiveSessionState(session.state)) return "wait";
 
 Keep all existing post-stop and post-merge follow-up rules unchanged.
 
-- [ ] **Step 5: Thread the stalled hint through recent-summary formatting without replacing concrete diagnostics**
+- [ ] **Step 7: Thread the stalled hint through recent-summary formatting without replacing concrete diagnostics**
 
 Replace the current recent-summary formatter signature with one that can augment the chosen base summary:
 
@@ -224,32 +267,32 @@ Behavior:
 - append `; runtime.stalled idleFor=<duration>` when `stalledHint` exists and a base summary already exists
 - use `runtime.stalled idleFor=<duration>` by itself only when no concrete summary exists
 
-- [ ] **Step 6: Keep selected-session output aligned with the same stalled hint**
+- [ ] **Step 8: Keep selected-session output aligned with the same stalled hint**
 
 Use the same row context for the selected-session header so:
 - `Next:` shows `inspect` when stalled and no higher-priority mail follow-up exists
 - `Recent:` preserves the concrete summary and appends the stalled hint when appropriate
 
-- [ ] **Step 7: Add any small helper coverage needed to keep the implementation readable**
+- [ ] **Step 9: Add any small helper coverage needed to keep the implementation readable**
 
 Keep the implementation local to `src/commands/status.ts`. Do not add new event types, schema changes, or new command flags.
 
-- [ ] **Step 8: Run the targeted status tests to verify the implementation passes**
+- [ ] **Step 10: Run the targeted status tests to verify the implementation passes**
 
 Run:
 
 ```bash
-npm test -- src/commands/status.test.ts
+node --import tsx --test src/commands/status.test.ts
 ```
 
 Expected:
 - PASS for the newly added stalled-session tests
 - PASS for the existing `statusCommand` regressions around unread mail, blocking recent events, and lifecycle reconciliation
 
-- [ ] **Step 9: Commit the implementation checkpoint**
+- [ ] **Step 11: Commit the implementation checkpoint**
 
 ```bash
-git add src/mail/store.ts src/mail/store.test.ts src/commands/status.ts src/commands/status.test.ts
+git add src/events/store.ts src/events/store.test.ts src/mail/store.ts src/mail/store.test.ts src/commands/status.ts src/commands/status.test.ts
 git commit -m "feat: surface stalled sessions in status"
 ```
 
@@ -281,7 +324,7 @@ Add the completed slice to `docs/current-state.md` using the same operator-facin
 Run:
 
 ```bash
-rg -n "stalled|idle clock|runtime.stalled" docs/cli-contract.md docs/current-state.md src/mail/store.ts src/commands/status.ts src/commands/status.test.ts
+rg -n "stalled|idle clock|runtime.stalled" docs/cli-contract.md docs/current-state.md src/events/store.ts src/mail/store.ts src/commands/status.ts src/commands/status.test.ts
 ```
 
 Expected:
@@ -319,7 +362,7 @@ Run:
 
 ```bash
 git diff --stat origin/main...HEAD
-git diff origin/main...HEAD -- src/commands/status.ts src/commands/status.test.ts docs/cli-contract.md docs/current-state.md
+git diff origin/main...HEAD -- src/events/store.ts src/events/store.test.ts src/mail/store.ts src/mail/store.test.ts src/commands/status.ts src/commands/status.test.ts docs/cli-contract.md docs/current-state.md
 ```
 
 Expected:
@@ -331,7 +374,7 @@ Expected:
 Run a narrow example command or test fixture and record one before/after-style sample for the PR description, for example:
 
 ```bash
-npm test -- src/commands/status.test.ts
+node --import tsx --test src/commands/status.test.ts
 ```
 
 Then summarize one representative output line showing:
@@ -341,7 +384,7 @@ Then summarize one representative output line showing:
 - [ ] **Step 4: Commit any final polish if needed**
 
 ```bash
-git add src/mail/store.ts src/mail/store.test.ts src/commands/status.ts src/commands/status.test.ts docs/cli-contract.md docs/current-state.md
+git add src/events/store.ts src/events/store.test.ts src/mail/store.ts src/mail/store.test.ts src/commands/status.ts src/commands/status.test.ts docs/cli-contract.md docs/current-state.md
 git commit -m "chore: finalize stalled status slice"
 ```
 
