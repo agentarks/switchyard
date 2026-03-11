@@ -142,7 +142,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
         : "?";
       const cleanup = cleanupReadiness.get(session.id) ?? "?";
       const latestRun = latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined;
-      const unreadOperatorCount = unreadOperatorMailCounts.available
+      const unreadOperatorCount = unreadMailCounts.available && unreadOperatorMailCounts.available
         ? unreadOperatorMailCounts.countsBySession.get(session.id) ?? 0
         : undefined;
       const recentEvent = selectRecentEventForStatus({

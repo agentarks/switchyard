@@ -2427,6 +2427,71 @@ test("statusCommand keeps rendering when unread mail counts cannot be loaded", a
   assert.match(stderrWrites.join(""), /WARN: failed to load unread mail counts: mail unavailable/);
 });
 
+test("statusCommand selected-session header follows the same degraded unread-mail rule as the table", async () => {
+  const repoDir = await createInitializedRepo();
+  const stdoutWrites: string[] = [];
+  const stderrWrites: string[] = [];
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  await createSession(repoDir, {
+    id: "session-selected-mail-degraded",
+    agentName: "agent-selected-mail-degraded",
+    branch: "agents/agent-selected-mail-degraded",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-selected-mail-degraded"),
+    state: "running",
+    runtimePid: 9292,
+    createdAt: "2026-03-09T12:10:00.000Z",
+    updatedAt: "2026-03-09T12:10:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-selected-mail-degraded",
+    agentName: "agent-selected-mail-degraded",
+    eventType: "runtime.ready",
+    payload: {
+      signal: "pid_alive",
+      runtimePid: 9292
+    },
+    createdAt: "2026-03-09T12:10:30.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    stdoutWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stderr.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-selected-mail-degraded",
+      isRuntimeAlive: (pid) => pid === 9292,
+      listUnreadMailCounts: async () => {
+        throw new Error("mail unavailable");
+      },
+      listUnreadOperatorMailCounts: async () => {
+        return new Map([["session-selected-mail-degraded", 1]]);
+      }
+    });
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = stdoutWrites.join("");
+  assert.match(output, /Unread: \?/);
+  assert.match(output, /Next: wait/);
+  assert.match(
+    output,
+    /running\tsession-selected-mail-degraded\tagent-selected-mail-degraded\tagents\/agent-selected-mail-degraded\t\.switchyard\/worktrees\/agent-selected-mail-degraded\t2026-03-09T12:10:00.000Z\t\?\t[^\t]+\t-\t-\twait\t2026-03-09T12:10:30.000Z runtime\.ready signal=pid_alive, runtimePid=9292/
+  );
+  assert.match(stderrWrites.join(""), /WARN: failed to load unread mail counts: mail unavailable/);
+});
+
 test("statusCommand keeps rendering when run persistence fails during lifecycle reconciliation", async () => {
   const repoDir = await createInitializedRepo();
   const stdoutWrites: string[] = [];
