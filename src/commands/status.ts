@@ -739,7 +739,7 @@ function formatRelevantRecentSummary(
     return formatStatusSummaryText(stalledSummary, options);
   }
 
-  return formatStatusSummaryText(`${baseSummary}; ${stalledSummary}`, options);
+  return formatStatusSummaryTextWithTrailingSuffix(baseSummary, stalledSummary, options);
 }
 
 function shouldPreferUnreadMailSummary(
@@ -783,6 +783,28 @@ function formatStatusSummaryText(
   }
 
   return `${summary.slice(0, 117)}...`;
+}
+
+function formatStatusSummaryTextWithTrailingSuffix(
+  summary: string,
+  trailingSuffix: string,
+  options: {
+    truncate?: boolean;
+  } = {}
+): string {
+  const separator = "; ";
+  const combinedSummary = `${summary}${separator}${trailingSuffix}`;
+
+  if (options.truncate === false || combinedSummary.length <= 120) {
+    return combinedSummary;
+  }
+
+  const maxSummaryLength = 120 - separator.length - trailingSuffix.length;
+  const truncatedSummary = maxSummaryLength <= 3
+    ? "..."
+    : `${summary.slice(0, maxSummaryLength - 3)}...`;
+
+  return `${truncatedSummary}${separator}${trailingSuffix}`;
 }
 
 function formatStalledHintSummary(stalledHint: DerivedStalledHint): string {

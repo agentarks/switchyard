@@ -83,20 +83,21 @@ Completed enough to count as minimally real:
 - synthesized unread-mail recency summaries in `sy status` so concurrent mailbox follow-up stays visible
 - mail-bucket ordering in `sy status` by newest unread inbound mail
 - freshest-activity timestamps and same-bucket freshness ordering in `sy status` so recent merge, mail, and runtime changes stay visible in the control-plane view
+- passive stalled-session visibility in `sy status`, including a separate idle clock from `UPDATED` plus appended `runtime.stalled idleFor=...` summaries
 - terminal run outcomes from `sy stop` and `sy merge`
 - end-to-end coverage around `sy init`
 
 Current planning state:
 - the run-tracking slice is now materially real in the current operator loop
 - the first concurrent proving workflow on top of that run model is now materially real
-- the next named slice is passive stalled-session visibility in `sy status`
-- do not spend another session on output-only inspection polish unless it directly supports that stalled-session blind spot
+- the passive stalled-session visibility slice in `sy status` is now complete
+- the next named slice should be chosen from a newly reproduced operator-visible blind spot, not from generic inspection polish
 - treat raw event visibility as supporting detail, not as the primary answer to "what happened to this task?"
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- implement passive stalled-session visibility in `sy status`
+- choose the next operator-visible blind spot from the proved concurrent workflow
 - keep task ownership visible in the all-session view so concurrent sessions do not require immediate drilldown
 - keep latest run state and terminal outcome trustworthy as concurrent sessions overlap
 - improve operator inspection only when it directly supports the concurrent workflow
@@ -135,7 +136,7 @@ Use this rough project view instead of one flat percentage:
 - Core v0 operator loop: mostly complete
 - run-tracking visibility: now minimally real
 - concurrent multi-session proving workflow: now minimally real
-- next missing product slice: one named blind spot inside that workflow
+- next missing product slice: the next named blind spot inside that workflow, to be chosen from observed operator pain
 - v0 hardening: exception-only, not the default mode
 - merge/reintegration workflow: minimally real, still intentionally narrow
 - broader long-term vision: intended, but earned in stages rather than copied all at once

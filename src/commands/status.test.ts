@@ -713,7 +713,8 @@ test("statusCommand prioritizes unread mail in the selected session follow-up si
     await statusCommand({
       startDir: repoDir,
       selector: "session-selected-mail",
-      isRuntimeAlive: (pid) => pid === 7272
+      isRuntimeAlive: (pid) => pid === 7272,
+      now: () => "2026-03-09T12:20:00.000Z"
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -835,6 +836,56 @@ test("statusCommand shows the stalled hint in the selected-session view for a qu
   assert.match(
     output,
     /running\tsession-selected-stalled\tagent-selected-stalled\tagents\/agent-selected-stalled\t\.switchyard\/worktrees\/agent-selected-stalled\t2026-03-09T12:20:00.000Z\t0\t[^\t]+\t-\t-\tinspect\t2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=7272; runtime\.stalled idleFor=35m/
+  );
+});
+
+test("statusCommand keeps the stalled hint visible when the all-session recent summary is truncated", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-stalled-truncated",
+    agentName: "agent-stalled-truncated",
+    branch: "agents/agent-stalled-truncated",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-stalled-truncated"),
+    state: "running",
+    runtimePid: 7282,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:20:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-stalled-truncated",
+    agentName: "agent-stalled-truncated",
+    eventType: "sling.completed",
+    payload: {
+      runtimePid: 7282,
+      baseBranch: "main",
+      readyAfterMs: 500,
+      taskSummary: "This is a deliberately long task summary that should force the all-session RECENT column to truncate before the stalled hint unless the formatter reserves space for it."
+    },
+    createdAt: "2026-03-09T12:00:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 7282,
+      now: () => "2026-03-09T12:35:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    writes.join(""),
+    /running\tsession-stalled-truncated\tagent-stalled-truncated[^\n]*\tinspect\t[^\n]*runtime\.stalled idleFor=35m/
   );
 });
 
