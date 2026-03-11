@@ -170,6 +170,80 @@ test("statusCommand shows latest run task ownership for concurrent sessions", as
   );
 });
 
+test("statusCommand orders concurrent sessions by follow-up priority before recency", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-recent-wait",
+    agentName: "agent-recent-wait",
+    branch: "agents/agent-recent-wait",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-recent-wait"),
+    state: "running",
+    runtimePid: 1111,
+    createdAt: "2026-03-06T15:00:00.000Z",
+    updatedAt: "2026-03-06T15:00:00.000Z"
+  });
+  await createSession(repoDir, {
+    id: "session-older-mail",
+    agentName: "agent-older-mail",
+    branch: "agents/agent-older-mail",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-older-mail"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-06T14:00:00.000Z",
+    updatedAt: "2026-03-06T14:00:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-recent-wait",
+    sessionId: "session-recent-wait",
+    agentName: "agent-recent-wait",
+    taskSummary: "Keep working on the active branch.",
+    state: "active",
+    createdAt: "2026-03-06T15:00:00.000Z",
+    updatedAt: "2026-03-06T15:00:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-older-mail",
+    sessionId: "session-older-mail",
+    agentName: "agent-older-mail",
+    taskSummary: "Reply with the merge blocker details.",
+    state: "finished",
+    outcome: "stopped",
+    createdAt: "2026-03-06T14:00:00.000Z",
+    updatedAt: "2026-03-06T14:00:00.000Z",
+    finishedAt: "2026-03-06T14:00:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-older-mail",
+    sender: "agent-older-mail",
+    recipient: "operator",
+    body: "Need a decision before merge.",
+    createdAt: "2026-03-06T14:05:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 1111
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /stopped\tsession-older-mail\tagent-older-mail[^\n]*\tmail\t-/);
+  assert.match(output, /running\tsession-recent-wait\tagent-recent-wait[^\n]*\twait\t-/);
+  assert.ok(output.indexOf("session-older-mail") < output.indexOf("session-recent-wait"));
+});
+
 test("statusCommand does not let a stopped run override current cleanup blockers", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];

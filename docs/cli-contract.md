@@ -105,7 +105,8 @@ Current contract:
 - command rejects `--task` without an exact selector
 - command fails explicitly when `--task` is requested but the stored task text cannot be read
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
-- when sessions exist, print a concise tab-separated table ordered by most recent update, including `TASK`, `RUN`, and `NEXT` columns
+- when sessions exist, print a concise tab-separated table with the most actionable follow-up rows first and the most recent update first within the same follow-up bucket, including `TASK`, `RUN`, and `NEXT` columns
+- the current follow-up ordering is operator-first: `mail`, `inspect`, `review-merge`, `cleanup`, `wait`, `done`, then `-`
 
 Future target:
 - show concise operator-friendly status for active and recent sessions

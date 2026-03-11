@@ -351,6 +351,90 @@ test("sy status shows next follow-up actions for concurrent sessions through the
   }
 });
 
+test("sy status orders actionable concurrent sessions ahead of newer wait-only rows", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-status-order-test-");
+  const activeWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-order-wait");
+  const mailWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-order-mail");
+  const runtime = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    detached: true,
+    stdio: "ignore"
+  });
+  runtime.unref();
+
+  try {
+    assert.ok(runtime.pid);
+    await git(repoDir, ["branch", "agents/agent-cli-order-wait"]);
+    await git(repoDir, ["branch", "agents/agent-cli-order-mail"]);
+    await mkdir(activeWorktreePath, { recursive: true });
+    await mkdir(mailWorktreePath, { recursive: true });
+
+    await createSession(repoDir, {
+      id: "session-cli-order-wait",
+      agentName: "agent-cli-order-wait",
+      branch: "agents/agent-cli-order-wait",
+      baseBranch: "main",
+      worktreePath: activeWorktreePath,
+      state: "running",
+      runtimePid: runtime.pid,
+      createdAt: "2026-03-10T11:00:00.000Z",
+      updatedAt: "2026-03-10T11:00:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-cli-order-mail",
+      agentName: "agent-cli-order-mail",
+      branch: "agents/agent-cli-order-mail",
+      baseBranch: "main",
+      worktreePath: mailWorktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-10T10:00:00.000Z",
+      updatedAt: "2026-03-10T10:00:00.000Z"
+    });
+
+    await createRun(repoDir, {
+      id: "run-cli-order-wait",
+      sessionId: "session-cli-order-wait",
+      agentName: "agent-cli-order-wait",
+      taskSummary: "Keep processing the active branch.",
+      state: "active",
+      createdAt: "2026-03-10T11:00:00.000Z",
+      updatedAt: "2026-03-10T11:00:00.000Z"
+    });
+    await createRun(repoDir, {
+      id: "run-cli-order-mail",
+      sessionId: "session-cli-order-mail",
+      agentName: "agent-cli-order-mail",
+      taskSummary: "Send the merge-risk follow-up.",
+      state: "finished",
+      outcome: "stopped",
+      createdAt: "2026-03-10T10:00:00.000Z",
+      updatedAt: "2026-03-10T10:00:00.000Z",
+      finishedAt: "2026-03-10T10:00:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-cli-order-mail",
+      sender: "agent-cli-order-mail",
+      recipient: "operator",
+      body: "Need your merge decision.",
+      createdAt: "2026-03-10T10:05:00.000Z"
+    });
+
+    const { stdout, stderr } = await execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "status"], {
+      cwd: repoDir
+    });
+
+    assert.equal(stderr, "");
+    assert.match(stdout, /stopped\tsession-cli-order-mail\tagent-cli-order-mail[^\n]*\tmail\t-/);
+    assert.match(stdout, /running\tsession-cli-order-wait\tagent-cli-order-wait[^\n]*\twait\t-/);
+    assert.ok(stdout.indexOf("session-cli-order-mail") < stdout.indexOf("session-cli-order-wait"));
+  } finally {
+    if (runtime.pid) {
+      stopChildIfAlive(runtime.pid);
+    }
+    await removeTempDir(repoDir);
+  }
+});
+
 test("sy mail send preserves the exact body and reports the resolved session id through the real CLI entrypoint", async () => {
   const repoDir = await createInitializedRepo("switchyard-cli-mail-send-test-");
   const body = "  Review the preserved branch diff.\nSecond line stays intact.  ";
