@@ -82,6 +82,7 @@ const RUNTIME_PROGRESS_EVENT_TYPES = [
   "runtime.exited",
   "runtime.exited_early"
 ] as const;
+const RUNTIME_PROGRESS_EVENT_TYPE_SET = new Set<string>(RUNTIME_PROGRESS_EVENT_TYPES);
 
 export function createStatusCommand(): Command {
   return new Command("status")
@@ -1034,7 +1035,7 @@ function selectLatestRuntimeProgressEvent(options: {
   latestStoredRuntimeProgressEvent?: EventRecord;
   reconciledEvent?: EventRecord;
 }): EventRecord | undefined {
-  if (!options.reconciledEvent || !RUNTIME_PROGRESS_EVENT_TYPES.includes(options.reconciledEvent.eventType)) {
+  if (!options.reconciledEvent || !RUNTIME_PROGRESS_EVENT_TYPE_SET.has(options.reconciledEvent.eventType)) {
     return options.latestStoredRuntimeProgressEvent;
   }
 

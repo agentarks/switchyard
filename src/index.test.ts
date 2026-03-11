@@ -276,6 +276,7 @@ test("sy status shows next follow-up actions for concurrent sessions through the
   const repoDir = await createInitializedRepo("switchyard-cli-status-next-test-");
   const activeWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-active");
   const reviewWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-review");
+  const freshActiveAt = new Date(Date.now() - 5 * 60_000).toISOString();
   const runtime = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
     detached: true,
     stdio: "ignore"
@@ -299,8 +300,8 @@ test("sy status shows next follow-up actions for concurrent sessions through the
       worktreePath: activeWorktreePath,
       state: "running",
       runtimePid: runtime.pid,
-      createdAt: "2026-03-10T10:20:00.000Z",
-      updatedAt: "2026-03-10T10:20:00.000Z"
+      createdAt: freshActiveAt,
+      updatedAt: freshActiveAt
     });
     await createSession(repoDir, {
       id: "session-cli-review",
@@ -320,8 +321,8 @@ test("sy status shows next follow-up actions for concurrent sessions through the
       agentName: "agent-cli-active",
       taskSummary: "Keep working on the live branch.",
       state: "active",
-      createdAt: "2026-03-10T10:20:00.000Z",
-      updatedAt: "2026-03-10T10:20:00.000Z"
+      createdAt: freshActiveAt,
+      updatedAt: freshActiveAt
     });
     await createRun(repoDir, {
       id: "run-cli-review",
@@ -355,6 +356,7 @@ test("sy status orders actionable concurrent sessions ahead of newer wait-only r
   const repoDir = await createInitializedRepo("switchyard-cli-status-order-test-");
   const activeWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-order-wait");
   const mailWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-order-mail");
+  const freshActiveAt = new Date(Date.now() - 5 * 60_000).toISOString();
   const runtime = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
     detached: true,
     stdio: "ignore"
@@ -376,8 +378,8 @@ test("sy status orders actionable concurrent sessions ahead of newer wait-only r
       worktreePath: activeWorktreePath,
       state: "running",
       runtimePid: runtime.pid,
-      createdAt: "2026-03-10T11:00:00.000Z",
-      updatedAt: "2026-03-10T11:00:00.000Z"
+      createdAt: freshActiveAt,
+      updatedAt: freshActiveAt
     });
     await createSession(repoDir, {
       id: "session-cli-order-mail",
@@ -397,8 +399,8 @@ test("sy status orders actionable concurrent sessions ahead of newer wait-only r
       agentName: "agent-cli-order-wait",
       taskSummary: "Keep processing the active branch.",
       state: "active",
-      createdAt: "2026-03-10T11:00:00.000Z",
-      updatedAt: "2026-03-10T11:00:00.000Z"
+      createdAt: freshActiveAt,
+      updatedAt: freshActiveAt
     });
     await createRun(repoDir, {
       id: "run-cli-order-mail",
