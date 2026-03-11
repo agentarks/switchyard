@@ -522,6 +522,124 @@ test("statusCommand shows the launch task handoff for one selected session", asy
   assert.match(output, /Recent: 2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=8181/);
 });
 
+test("statusCommand prioritizes unread mail in the selected session follow-up signal", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-selected-mail",
+    agentName: "agent-selected-mail",
+    branch: "agents/agent-selected-mail",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-selected-mail"),
+    state: "running",
+    runtimePid: 7272,
+    createdAt: "2026-03-09T12:10:00.000Z",
+    updatedAt: "2026-03-09T12:10:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-selected-mail",
+    sender: "agent-selected-mail",
+    recipient: "operator",
+    body: "Ready for review.",
+    createdAt: "2026-03-09T12:11:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-selected-mail",
+    agentName: "agent-selected-mail",
+    eventType: "runtime.ready",
+    payload: {
+      signal: "pid_alive",
+      runtimePid: 7272
+    },
+    createdAt: "2026-03-09T12:12:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-selected-mail",
+      isRuntimeAlive: (pid) => pid === 7272
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /^Status for agent-selected-mail \(session-selected-mail\):/m);
+  assert.match(output, /Unread: 1/);
+  assert.match(output, /Next: mail/);
+  assert.match(
+    output,
+    /running\tsession-selected-mail\tagent-selected-mail\tagents\/agent-selected-mail\t\.switchyard\/worktrees\/agent-selected-mail\t2026-03-09T12:10:00.000Z\t1\t[^\t]+\t-\t-\tmail\t2026-03-09T12:12:00.000Z runtime\.ready signal=pid_alive, runtimePid=7272/
+  );
+});
+
+test("statusCommand does not switch the follow-up signal to mail for unread outbound operator mail", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-outbound-mail",
+    agentName: "agent-outbound-mail",
+    branch: "agents/agent-outbound-mail",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-outbound-mail"),
+    state: "running",
+    runtimePid: 7373,
+    createdAt: "2026-03-09T12:20:00.000Z",
+    updatedAt: "2026-03-09T12:20:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-outbound-mail",
+    sender: "operator",
+    recipient: "agent-outbound-mail",
+    body: "Please continue the current task.",
+    createdAt: "2026-03-09T12:21:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-outbound-mail",
+    agentName: "agent-outbound-mail",
+    eventType: "mail.sent",
+    payload: {
+      sender: "operator",
+      recipient: "agent-outbound-mail",
+      bodyLength: 33
+    },
+    createdAt: "2026-03-09T12:22:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-outbound-mail",
+      isRuntimeAlive: (pid) => pid === 7373
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Unread: 1/);
+  assert.match(output, /Next: wait/);
+  assert.match(
+    output,
+    /running\tsession-outbound-mail\tagent-outbound-mail\tagents\/agent-outbound-mail\t\.switchyard\/worktrees\/agent-outbound-mail\t2026-03-09T12:20:00.000Z\t1\t[^\t]+\t-\t-\twait\t2026-03-09T12:22:00.000Z mail\.sent sender=operator, bodyLength=33/
+  );
+});
+
 test("statusCommand preserves the launch command when the latest launch event is sling.failed", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
@@ -1655,7 +1773,7 @@ test("statusCommand includes preserved worktree path details in the recent event
   );
 });
 
-test("statusCommand shows unread mail counts alongside recent events", async () => {
+test("statusCommand prioritizes unread mail over wait in the all-session follow-up signal", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
@@ -1670,17 +1788,27 @@ test("statusCommand shows unread mail counts alongside recent events", async () 
     createdAt: "2026-03-08T11:10:00.000Z",
     updatedAt: "2026-03-08T11:10:00.000Z"
   });
+  await createSession(repoDir, {
+    id: "session-wait",
+    agentName: "agent-wait",
+    branch: "agents/agent-wait",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-wait"),
+    state: "running",
+    runtimePid: 2424,
+    createdAt: "2026-03-08T11:09:00.000Z",
+    updatedAt: "2026-03-08T11:09:00.000Z"
+  });
   await createMail(repoDir, {
     sessionId: "session-unread",
-    sender: "operator",
-    recipient: "agent-unread",
+    sender: "agent-unread",
+    recipient: "operator",
     body: "Unread one",
     createdAt: "2026-03-08T11:11:00.000Z"
   });
   await createMail(repoDir, {
     sessionId: "session-unread",
-    sender: "operator",
-    recipient: "agent-unread",
+    sender: "agent-unread",
+    recipient: "operator",
     body: "Unread two",
     createdAt: "2026-03-08T11:12:00.000Z"
   });
@@ -1694,6 +1822,16 @@ test("statusCommand shows unread mail counts alongside recent events", async () 
     },
     createdAt: "2026-03-08T11:13:00.000Z"
   });
+  await createEvent(repoDir, {
+    sessionId: "session-wait",
+    agentName: "agent-wait",
+    eventType: "runtime.ready",
+    payload: {
+      signal: "pid_alive",
+      runtimePid: 2424
+    },
+    createdAt: "2026-03-08T11:12:30.000Z"
+  });
 
   process.stdout.write = ((chunk: string | Uint8Array) => {
     writes.push(typeof chunk === "string" ? chunk : chunk.toString());
@@ -1703,7 +1841,7 @@ test("statusCommand shows unread mail counts alongside recent events", async () 
   try {
     await statusCommand({
       startDir: repoDir,
-      isRuntimeAlive: (pid) => pid === 2323
+      isRuntimeAlive: (pid) => pid === 2323 || pid === 2424
     });
   } finally {
     process.stdout.write = originalWrite;
@@ -1712,7 +1850,11 @@ test("statusCommand shows unread mail counts alongside recent events", async () 
 
   assert.match(
     writes.join(""),
-    /running\tsession-unread\tagent-unread\tagents\/agent-unread\t\.switchyard\/worktrees\/agent-unread\t2026-03-08T11:10:00.000Z\t2\t[^\t]+\t-\t-\twait\t2026-03-08T11:13:00.000Z runtime\.ready signal=pid_alive, runtimePid=2323/
+    /running\tsession-unread\tagent-unread\tagents\/agent-unread\t\.switchyard\/worktrees\/agent-unread\t2026-03-08T11:10:00.000Z\t2\t[^\t]+\t-\t-\tmail\t2026-03-08T11:13:00.000Z runtime\.ready signal=pid_alive, runtimePid=2323/
+  );
+  assert.match(
+    writes.join(""),
+    /running\tsession-wait\tagent-wait\tagents\/agent-wait\t\.switchyard\/worktrees\/agent-wait\t2026-03-08T11:09:00.000Z\t0\t[^\t]+\t-\t-\twait\t2026-03-08T11:12:30.000Z runtime\.ready signal=pid_alive, runtimePid=2424/
   );
 });
 

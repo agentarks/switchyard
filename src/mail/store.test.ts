@@ -174,3 +174,42 @@ test("listUnreadMailCountsBySession returns unread counts for the requested sess
     await removeTempDir(repoDir);
   }
 });
+
+test("listUnreadMailCountsBySession can filter unread counts by recipient", async () => {
+  const repoDir = await createTempGitRepo("switchyard-mail-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "operator",
+      recipient: "agent-one",
+      body: "Outbound unread",
+      createdAt: "2026-03-06T09:00:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "agent-one",
+      recipient: "operator",
+      body: "Inbound unread",
+      createdAt: "2026-03-06T09:05:00.000Z"
+    });
+
+    const operatorUnreadCounts = await listUnreadMailCountsBySession(
+      repoDir,
+      ["session-1"],
+      { recipient: "operator" }
+    );
+    const agentUnreadCounts = await listUnreadMailCountsBySession(
+      repoDir,
+      ["session-1"],
+      { recipient: "agent-one" }
+    );
+
+    assert.equal(operatorUnreadCounts.get("session-1"), 1);
+    assert.equal(agentUnreadCounts.get("session-1"), 1);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});

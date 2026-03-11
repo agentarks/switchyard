@@ -111,7 +111,10 @@ export async function readUnreadMailForSession(projectRoot: string, sessionId: s
 
 export async function listUnreadMailCountsBySession(
   projectRoot: string,
-  sessionIds: string[]
+  sessionIds: string[],
+  options: {
+    recipient?: string;
+  } = {}
 ): Promise<Map<string, number>> {
   if (sessionIds.length === 0) {
     return new Map();
@@ -119,12 +122,20 @@ export async function listUnreadMailCountsBySession(
 
   return await withMailDatabase(projectRoot, (db) => {
     const placeholders = sessionIds.map(() => "?").join(", ");
+    const filters = ["read_at IS NULL", `session_id IN (${placeholders})`];
+    const params: Array<string> = [...sessionIds];
+
+    if (typeof options.recipient === "string") {
+      filters.push("recipient = ?");
+      params.push(options.recipient);
+    }
+
     const rows = db.prepare(`
       SELECT session_id, COUNT(*) AS unread_count
       FROM mail_messages
-      WHERE read_at IS NULL AND session_id IN (${placeholders})
+      WHERE ${filters.join(" AND ")}
       GROUP BY session_id
-    `).all(...sessionIds) as unknown as UnreadMailCountRow[];
+    `).all(...params) as unknown as UnreadMailCountRow[];
 
     return new Map(rows.map((row) => [row.session_id, Number(row.unread_count)]));
   });
