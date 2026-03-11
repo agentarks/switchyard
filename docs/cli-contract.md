@@ -90,9 +90,14 @@ Current contract:
 - command includes one best-effort latest-run task summary per session from `runs.db`
 - command includes one best-effort latest-run state summary per session from `runs.db`
 - command uses the newest durable event or unread inbound operator mail timestamp for the `UPDATED` column when that activity is newer than the stored `sessions.db` row timestamp
+- command also derives a passive stalled-session hint for active sessions when the latest agent/runtime-side activity is older than the stalled threshold, without mutating durable session state
 - command includes one derived best-effort follow-up signal per session so concurrent sessions stay readable as `mail`, `wait`, `review-merge`, `cleanup`, `inspect`, or `done`
 - when unread mailbox items addressed to `operator` exist for a session, command prioritizes `mail` over the more generic lifecycle follow-up hint
+- when a session is passively stalled and no higher-priority unread inbound operator mail exists, command surfaces `inspect` as the follow-up hint instead of `wait`
 - when unread mailbox items addressed to `operator` exist for a session, command also surfaces a synthesized `mail.unread` recent summary from the newest unread inbound message instead of leaving `RECENT` focused on a less actionable lifecycle event
+- command keeps the stalled idle clock separate from `UPDATED`, so newer operator-visible diagnostics can stay in the `UPDATED` column without resetting passive stalled detection
+- when a stalled-session hint exists, command appends `runtime.stalled idleFor=...` to the chosen `RECENT` summary instead of replacing a higher-value concrete summary such as `mail.unread`, `stop.failed`, or `merge.failed`
+- operator-only activity such as `mail.sent`, `mail.checked`, and `mail.listed` does not reset the stalled idle clock
 - if run summaries cannot be loaded, command still renders status and prints `?` in both the task and run columns instead of failing
 - active sessions show the post-stop cleanup result with a `stop-then:` prefix instead of hiding whether cleanup would be merged-safe or abandon-only
 - command surfaces partial preserved-artifact loss in that cleanup-readiness label when the branch still exists but the preserved worktree is already missing
