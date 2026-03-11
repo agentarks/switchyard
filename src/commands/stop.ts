@@ -7,7 +7,7 @@ import { StopError } from "../errors.js";
 import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 import { stopProcess, isProcessAlive } from "../runtimes/process.js";
 import { updateLatestRunForSession } from "../runs/store.js";
-import type { RunOutcome } from "../runs/types.js";
+import type { RunOutcome, UpdateRunInput } from "../runs/types.js";
 import {
   determineCleanupDecision,
   formatCleanupMessage,
@@ -51,6 +51,7 @@ interface StopCommandOptions {
   stopRuntime?: (pid: number) => Promise<boolean>;
   removeSessionWorktree?: typeof removeWorktree;
   recordEvent?: EventRecorder;
+  updateLatestRun?: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>;
 }
 
 export function createStopCommand(): Command {
@@ -73,6 +74,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
   const session = await resolveSession(config.project.root, options.selector);
   const removeSessionWorktree = options.removeSessionWorktree ?? removeWorktree;
   const recordEvent = options.recordEvent ?? recordEventBestEffort;
+  const updateLatestRun = options.updateLatestRun ?? updateLatestRunForSession;
 
   if (!session) {
     throw new StopError(`No session found for '${options.selector}'.`);
@@ -128,7 +130,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
           ...(cleanup.cleanupDetails ?? {})
         }
       });
-      await updateRunAfterStop(config.project.root, session.id, session.state, cleanup.cleanupMode);
+      await updateRunAfterStopBestEffort(config.project.root, session.id, session.state, updateLatestRun, cleanup.cleanupMode);
       writeStopResult(
         `Session ${session.agentName} is already ${session.state}.`,
         session.id,
@@ -191,7 +193,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
         ...(cleanup.cleanupDetails ?? {})
       }
     });
-    await updateRunAfterStop(config.project.root, nextSession.id, nextSession.state, cleanup.cleanupMode);
+    await updateRunAfterStopBestEffort(config.project.root, nextSession.id, nextSession.state, updateLatestRun, cleanup.cleanupMode);
     writeStopResult(
       `Session ${session.agentName} has no recorded runtime pid. Marked failed.`,
       nextSession.id,
@@ -266,7 +268,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       cleanupPerformed: false,
       ...buildCleanupFailurePayload(error)
     });
-    await updateRunAfterStop(config.project.root, nextSession.id, nextSession.state);
+    await updateRunAfterStopBestEffort(config.project.root, nextSession.id, nextSession.state, updateLatestRun);
     writeStopResult(
       formatStopHeading(session.agentName, nextState),
       nextSession.id,
@@ -285,7 +287,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {}),
     ...(cleanup.cleanupDetails ?? {})
   });
-  await updateRunAfterStop(config.project.root, nextSession.id, nextSession.state, cleanup.cleanupMode);
+  await updateRunAfterStopBestEffort(config.project.root, nextSession.id, nextSession.state, updateLatestRun, cleanup.cleanupMode);
 
   writeStopResult(
     formatStopHeading(session.agentName, nextState),
@@ -465,21 +467,26 @@ function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function updateRunAfterStop(
+async function updateRunAfterStopBestEffort(
   projectRoot: string,
   sessionId: string,
   sessionState: SessionRecord["state"],
+  updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>,
   cleanupMode?: CleanupMode
 ): Promise<void> {
   const outcome = determineRunOutcomeAfterStop(sessionState, cleanupMode);
   const finishedAt = new Date().toISOString();
 
-  await updateLatestRunForSession(projectRoot, sessionId, {
-    state: "finished",
-    outcome,
-    updatedAt: finishedAt,
-    finishedAt
-  });
+  try {
+    await updateLatestRun(projectRoot, sessionId, {
+      state: "finished",
+      outcome,
+      updatedAt: finishedAt,
+      finishedAt
+    });
+  } catch (error) {
+    process.stderr.write(`WARN: failed to persist run state for session '${sessionId}': ${formatErrorMessage(error)}\n`);
+  }
 }
 
 function determineRunOutcomeAfterStop(

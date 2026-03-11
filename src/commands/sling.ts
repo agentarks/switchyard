@@ -8,7 +8,7 @@ import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } fr
 import { SlingError } from "../errors.js";
 import { stopProcess } from "../runtimes/process.js";
 import { createRun, updateRun } from "../runs/store.js";
-import type { RunRecord } from "../runs/types.js";
+import type { RunRecord, UpdateRunInput } from "../runs/types.js";
 import { createSession } from "../sessions/store.js";
 import type { CreateSessionInput } from "../sessions/types.js";
 import { summarizeTask, writeTaskSpec, type TaskSpecRecord } from "../specs/task.js";
@@ -33,6 +33,7 @@ interface SlingOptions {
   }) => Promise<SpawnedRuntimeSession>;
   recordEvent?: EventRecorder;
   createSessionRecord?: (projectRoot: string, input: CreateSessionInput) => Promise<unknown>;
+  updateRunRecord?: (projectRoot: string, input: UpdateRunInput) => Promise<unknown>;
   stopRuntime?: (pid: number) => Promise<boolean>;
 }
 
@@ -57,6 +58,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   const config = await loadConfig(options.startDir);
   const recordEvent = options.recordEvent ?? recordEventBestEffort;
   const createSessionRecord = options.createSessionRecord ?? createSession;
+  const updateRunRecord = options.updateRunRecord ?? updateRun;
   const stopRuntime = options.stopRuntime ?? stopProcess;
 
   if (config.runtime.default !== "codex") {
@@ -242,12 +244,12 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
     }
   });
   if (runRecord) {
-    await updateRun(config.project.root, {
+    await persistRunUpdateBestEffort(config.project.root, sessionId, {
       id: runRecord.id,
       state: "active",
       updatedAt: completedAt,
       finishedAt: null
-    });
+    }, updateRunRecord);
   }
 
   process.stdout.write(`Spawned ${managedWorktree.agentName}\n`);
@@ -360,6 +362,19 @@ function buildPostSpawnPersistenceError(
   }
 
   return new SlingError(details.join(" "));
+}
+
+async function persistRunUpdateBestEffort(
+  projectRoot: string,
+  sessionId: string,
+  input: UpdateRunInput,
+  updateRunRecord: (projectRoot: string, input: UpdateRunInput) => Promise<unknown>
+): Promise<void> {
+  try {
+    await updateRunRecord(projectRoot, input);
+  } catch (error) {
+    process.stderr.write(`WARN: failed to persist run state for session '${sessionId}': ${formatErrorMessage(error)}\n`);
+  }
 }
 
 function toError(error: unknown): Error {

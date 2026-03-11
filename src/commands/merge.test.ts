@@ -123,6 +123,81 @@ test("mergeCommand rejects selectors that match different sessions by id and age
   }
 });
 
+test("mergeCommand keeps a completed merge when run persistence fails", async () => {
+  const repoDir = await createInitializedRepo();
+  const stderrWrites: string[] = [];
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+  const notesPath = join(repoDir, "merge-warning.txt");
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-merge-warning");
+
+  try {
+    await writeFile(notesPath, "base\n", "utf8");
+    await git(repoDir, ["add", "merge-warning.txt"]);
+    await git(repoDir, ["commit", "-m", "Add merge warning notes"]);
+    await git(repoDir, ["switch", "-c", "agents/agent-merge-warning"]);
+    await writeFile(notesPath, "merged\n", "utf8");
+    await git(repoDir, ["add", "merge-warning.txt"]);
+    await git(repoDir, ["commit", "-m", "Agent merge warning change"]);
+    await git(repoDir, ["switch", "main"]);
+    await git(repoDir, ["switch", "--detach"]);
+    await git(repoDir, ["worktree", "add", worktreePath, "agents/agent-merge-warning"]);
+
+    await createSession(repoDir, {
+      id: "session-merge-warning",
+      agentName: "agent-merge-warning",
+      branch: "agents/agent-merge-warning",
+      baseBranch: "main",
+      worktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:05:00.000Z"
+    });
+    await createRun(repoDir, {
+      id: "run-merge-warning",
+      sessionId: "session-merge-warning",
+      agentName: "agent-merge-warning",
+      taskSummary: "Merge despite run warning",
+      taskSpecPath: ".switchyard/specs/agent-merge-warning-session-merge-warning.md",
+      state: "finished",
+      outcome: "stopped",
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:05:00.000Z",
+      finishedAt: "2026-03-08T09:05:00.000Z"
+    });
+
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    const output = await captureStdout(async () => {
+      await mergeCommand({
+        selector: "agent-merge-warning",
+        startDir: repoDir,
+        updateLatestRun: async () => {
+          throw new Error("runs unavailable");
+        }
+      });
+    });
+
+    assert.match(output, /Merged agent-merge-warning into main/);
+    assert.equal(await git(repoDir, ["branch", "--show-current"]), "main");
+    assert.equal(await readFile(notesPath, "utf8"), "merged\n");
+
+    const events = await listEvents(repoDir, { sessionId: "session-merge-warning" });
+    const latestRun = await getLatestRunForSession(repoDir, "session-merge-warning");
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "merge.completed");
+    assert.equal(latestRun?.outcome, "stopped");
+  } finally {
+    process.stderr.write = originalStderrWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(stderrWrites.join(""), /WARN: failed to persist run state for session 'session-merge-warning': runs unavailable/);
+});
+
 test("mergeCommand rejects selectors that match multiple sessions by agent name", async () => {
   const repoDir = await createInitializedRepo();
 

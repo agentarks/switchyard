@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { createEvent, listEvents } from "../events/store.js";
 import { createMail, readUnreadMailForSession } from "../mail/store.js";
+import { createRun } from "../runs/store.js";
 import { createSession, listSessions } from "../sessions/store.js";
 import { summarizeTask, writeTaskSpec } from "../specs/task.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
@@ -1866,6 +1867,78 @@ test("statusCommand keeps rendering when unread mail counts cannot be loaded", a
     /failed\tagent-mail-broken\tagent-mail-broken\tagents\/agent-mail-broken\t\.switchyard\/worktrees\/agent-mail-broken\t2026-03-08T10:05:00.000Z\t\?\t[^\t]+\t-\t2026-03-08T10:05:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=9191/
   );
   assert.match(stderrWrites.join(""), /WARN: failed to load unread mail counts: mail unavailable/);
+});
+
+test("statusCommand keeps rendering when run persistence fails during lifecycle reconciliation", async () => {
+  const repoDir = await createInitializedRepo();
+  const stdoutWrites: string[] = [];
+  const stderrWrites: string[] = [];
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  await createSession(repoDir, {
+    id: "session-run-broken",
+    agentName: "agent-run-broken",
+    branch: "agents/agent-run-broken",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-run-broken"),
+    state: "running",
+    runtimePid: 8181,
+    createdAt: "2026-03-06T09:00:00.000Z",
+    updatedAt: "2026-03-06T10:00:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-broken",
+    sessionId: "session-run-broken",
+    agentName: "agent-run-broken",
+    taskSummary: "Inspect the failed runtime.",
+    taskSpecPath: ".switchyard/specs/agent-run-broken-session-run-broken.md",
+    state: "active",
+    createdAt: "2026-03-06T09:00:00.000Z",
+    updatedAt: "2026-03-06T10:00:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    stdoutWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stderr.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false,
+      now: () => "2026-03-08T10:05:00.000Z",
+      updateLatestRun: async () => {
+        throw new Error("runs unavailable");
+      },
+      listLatestRuns: async () => {
+        throw new Error("runs unavailable");
+      }
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(sessions[0]?.runtimePid, null);
+
+    const events = await listEvents(repoDir, { sessionId: "session-run-broken" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "runtime.exited");
+    assert.equal(events[0]?.payload.reason, "pid_not_alive");
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(
+    stdoutWrites.join(""),
+    /failed\tsession-run-broken\tagent-run-broken\tagents\/agent-run-broken\t\.switchyard\/worktrees\/agent-run-broken\t2026-03-08T10:05:00.000Z\t0\t[^\t]+\t\?\t2026-03-08T10:05:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=8181/
+  );
+  assert.match(stderrWrites.join(""), /WARN: failed to persist run state for session 'session-run-broken': runs unavailable/);
+  assert.match(stderrWrites.join(""), /WARN: failed to load latest runs: runs unavailable/);
 });
 
 test("statusCommand keeps rendering when cleanup readiness cannot be evaluated", async () => {

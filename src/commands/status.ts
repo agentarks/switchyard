@@ -8,7 +8,7 @@ import { StatusError } from "../errors.js";
 import { listUnreadMailCountsBySession } from "../mail/store.js";
 import { inspectProcessLiveness, isProcessAlive, type ProcessLiveness } from "../runtimes/process.js";
 import { listLatestRunsBySession, updateLatestRunForSession } from "../runs/store.js";
-import type { RunRecord } from "../runs/types.js";
+import type { RunRecord, UpdateRunInput } from "../runs/types.js";
 import { getCleanupReadinessLabel } from "../sessions/cleanup.js";
 import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
 import { getSessionById, listSessions, updateSessionState } from "../sessions/store.js";
@@ -23,6 +23,7 @@ interface StatusOptions {
   inspectRuntimeLiveness?: (pid: number) => ProcessLiveness;
   listUnreadMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
   listLatestRuns?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, RunRecord>>;
+  updateLatestRun?: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>;
   recordEvent?: EventRecorder;
   getCleanupReadiness?: (options: {
     projectRoot: string;
@@ -73,6 +74,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     config.project.root,
     initialSessions,
     options.inspectRuntimeLiveness ?? createRuntimeLivenessInspector(options.isRuntimeAlive ?? isProcessAlive),
+    options.updateLatestRun ?? updateLatestRunForSession,
     options.recordEvent ?? recordEventBestEffort,
     options.now ?? (() => new Date().toISOString())
   );
@@ -236,6 +238,7 @@ async function reconcileSessionLifecycles(
   projectRoot: string,
   sessions: SessionRecord[],
   inspectRuntimeLiveness: (pid: number) => ProcessLiveness,
+  updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>,
   recordEvent: EventRecorder,
   now: () => string
 ): Promise<Map<string, EventRecord>> {
@@ -262,7 +265,7 @@ async function reconcileSessionLifecycles(
 
     const reconciledEvent = buildReconciledEvent(nextSession, nextState.eventType, nextState.payload, createdAt);
     reconciledEventsBySession.set(nextSession.id, reconciledEvent);
-    await syncRunStateAfterReconcile(projectRoot, nextSession.id, nextState.state, createdAt);
+    await syncRunStateAfterReconcile(projectRoot, nextSession.id, nextState.state, createdAt, updateLatestRun);
 
     await recordEventBestEffortForStatus(recordEvent, projectRoot, {
       sessionId: nextSession.id,
@@ -568,24 +571,29 @@ async function syncRunStateAfterReconcile(
   projectRoot: string,
   sessionId: string,
   nextState: SessionState,
-  updatedAt: string
+  updatedAt: string,
+  updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>
 ): Promise<void> {
-  if (nextState === "running") {
-    await updateLatestRunForSession(projectRoot, sessionId, {
-      state: "active",
-      updatedAt,
-      finishedAt: null
-    });
-    return;
-  }
+  try {
+    if (nextState === "running") {
+      await updateLatestRun(projectRoot, sessionId, {
+        state: "active",
+        updatedAt,
+        finishedAt: null
+      });
+      return;
+    }
 
-  if (nextState === "failed") {
-    await updateLatestRunForSession(projectRoot, sessionId, {
-      state: "finished",
-      outcome: "failed",
-      updatedAt,
-      finishedAt: updatedAt
-    });
+    if (nextState === "failed") {
+      await updateLatestRun(projectRoot, sessionId, {
+        state: "finished",
+        outcome: "failed",
+        updatedAt,
+        finishedAt: updatedAt
+      });
+    }
+  } catch (error) {
+    process.stderr.write(`WARN: failed to persist run state for session '${sessionId}': ${formatErrorMessage(error)}\n`);
   }
 }
 

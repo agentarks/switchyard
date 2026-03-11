@@ -9,6 +9,7 @@ import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } fr
 import { MergeError } from "../errors.js";
 import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 import { updateLatestRunForSession } from "../runs/store.js";
+import type { UpdateRunInput } from "../runs/types.js";
 import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
 
 const execFileAsync = promisify(execFile);
@@ -29,6 +30,7 @@ interface MergeCommandOptions {
   selector: string;
   startDir?: string;
   recordEvent?: EventRecorder;
+  updateLatestRun?: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>;
 }
 
 export function createMergeCommand(): Command {
@@ -43,6 +45,7 @@ export function createMergeCommand(): Command {
 export async function mergeCommand(options: MergeCommandOptions): Promise<void> {
   const config = await loadConfig(options.startDir);
   const recordEvent = options.recordEvent ?? recordEventBestEffort;
+  const updateLatestRun = options.updateLatestRun ?? updateLatestRunForSession;
   const session = await resolveSession(config.project.root, options.selector);
 
   if (!session) {
@@ -50,7 +53,7 @@ export async function mergeCommand(options: MergeCommandOptions): Promise<void> 
   }
 
   try {
-    await mergeResolvedSession(config.project.root, config.project.canonicalBranch, session, recordEvent, options.selector);
+    await mergeResolvedSession(config.project.root, config.project.canonicalBranch, session, recordEvent, updateLatestRun, options.selector);
   } catch (error) {
     if (error instanceof RecordedMergeError) {
       await recordEventWithFallback(recordEvent, config.project.root, {
@@ -71,6 +74,7 @@ async function mergeResolvedSession(
   configuredCanonicalBranch: string,
   session: SessionRecord,
   recordEvent: EventRecorder,
+  updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>,
   selector: string
 ): Promise<void> {
   const branch = session.branch.trim();
@@ -157,7 +161,7 @@ async function mergeResolvedSession(
         reason: "already_up_to_date"
       }
     });
-    await markRunMerged(projectRoot, session.id);
+    await markRunMergedBestEffort(projectRoot, session.id, updateLatestRun);
 
     process.stdout.write(`Session ${session.agentName} is already merged into ${canonicalBranch}\n`);
     process.stdout.write(`Session: ${session.id}\n`);
@@ -198,7 +202,7 @@ async function mergeResolvedSession(
       canonicalBranch
     }
   });
-  await markRunMerged(projectRoot, session.id);
+  await markRunMergedBestEffort(projectRoot, session.id, updateLatestRun);
 
   process.stdout.write(`Merged ${session.agentName} into ${canonicalBranch}\n`);
   process.stdout.write(`Session: ${session.id}\n`);
@@ -412,6 +416,10 @@ function formatGitError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function buildMergeFailurePayload(
   branch: string,
   canonicalBranch: string,
@@ -534,15 +542,23 @@ function formatRelativePath(projectRoot: string, path: string): string {
   return relativePath.length > 0 ? relativePath : ".";
 }
 
-async function markRunMerged(projectRoot: string, sessionId: string): Promise<void> {
+async function markRunMergedBestEffort(
+  projectRoot: string,
+  sessionId: string,
+  updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>
+): Promise<void> {
   const finishedAt = new Date().toISOString();
 
-  await updateLatestRunForSession(projectRoot, sessionId, {
-    state: "finished",
-    outcome: "merged",
-    updatedAt: finishedAt,
-    finishedAt
-  });
+  try {
+    await updateLatestRun(projectRoot, sessionId, {
+      state: "finished",
+      outcome: "merged",
+      updatedAt: finishedAt,
+      finishedAt
+    });
+  } catch (error) {
+    process.stderr.write(`WARN: failed to persist run state for session '${sessionId}': ${formatErrorMessage(error)}\n`);
+  }
 }
 
 async function pathExists(path: string): Promise<boolean> {

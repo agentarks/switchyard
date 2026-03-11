@@ -124,6 +124,68 @@ test("stopCommand rejects selectors that match different sessions by id and agen
   }
 });
 
+test("stopCommand keeps the handled stop result when run persistence fails", async () => {
+  const repoDir = await createInitializedRepo();
+  const stdoutWrites: string[] = [];
+  const stderrWrites: string[] = [];
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  try {
+    await slingCommand({
+      agentName: "Agent Run Warning",
+      task: TEST_TASK,
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 7070,
+          command: {
+            command: "codex",
+            args: []
+          },
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      stdoutWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    await stopCommand({
+      selector: "agent-run-warning",
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 7070,
+      stopRuntime: async () => true,
+      updateLatestRun: async () => {
+        throw new Error("runs unavailable");
+      }
+    });
+
+    const sessions = await listSessions(repoDir);
+    const latestRun = await getLatestRunForSession(repoDir, sessions[0]?.id ?? "");
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+
+    assert.equal(sessions[0]?.state, "stopped");
+    assert.equal(sessions[0]?.runtimePid, null);
+    assert.equal(events.at(-1)?.eventType, "stop.completed");
+    assert.equal(latestRun?.state, "active");
+    assert.equal(latestRun?.outcome, null);
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(stdoutWrites.join(""), /Stopped agent-run-warning/);
+  assert.match(stderrWrites.join(""), /WARN: failed to persist run state for session '.+': runs unavailable/);
+});
+
 test("stopCommand rejects selectors that match multiple sessions by agent name", async () => {
   const repoDir = await createInitializedRepo();
 

@@ -428,6 +428,69 @@ test("slingCommand keeps a started session when event persistence fails", async 
   }
 });
 
+test("slingCommand keeps a live session when the post-launch run update fails", async () => {
+  const repoDir = await createInitializedRepo();
+  const stdoutWrites: string[] = [];
+  const stderrWrites: string[] = [];
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  try {
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      stdoutWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    await slingCommand({
+      agentName: "Agent Run Warning",
+      task: "Launch even if the final run update fails.",
+      startDir: repoDir,
+      spawnRuntime: async ({ onSpawned }) => {
+        const runtime = {
+          pid: 6060,
+          command: {
+            command: "codex",
+            args: []
+          }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
+          readyAfterMs: 500
+        };
+      },
+      updateRunRecord: async () => {
+        throw new Error("runs unavailable");
+      }
+    });
+
+    const sessions = await listSessions(repoDir);
+    const latestRun = await getLatestRunForSession(repoDir, sessions[0]?.id ?? "");
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0]?.state, "starting");
+    assert.equal(sessions[0]?.runtimePid, 6060);
+    assert.equal(events.length, 2);
+    assert.equal(events[1]?.eventType, "sling.completed");
+    assert.equal(latestRun?.state, "starting");
+    assert.equal(latestRun?.outcome, null);
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(stdoutWrites.join(""), /Spawned agent-run-warning/);
+  assert.match(stderrWrites.join(""), /WARN: failed to persist run state for session '.+': runs unavailable/);
+});
+
 test("slingCommand records an early readiness failure after launch", async () => {
   const repoDir = await createInitializedRepo();
 
