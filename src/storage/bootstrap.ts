@@ -35,6 +35,7 @@ export async function bootstrapSwitchyardLayout(projectRoot: string): Promise<vo
   await writeFile(join(switchyardDir, "README.md"), SWITCHYARD_README, "utf8");
 
   await ensureFile(join(switchyardDir, "sessions.db"));
+  await ensureFile(join(switchyardDir, "runs.db"));
   await ensureFile(join(switchyardDir, "mail.db"));
   await ensureFile(join(switchyardDir, "events.db"));
 }

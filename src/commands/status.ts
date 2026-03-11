@@ -7,6 +7,8 @@ import type { EventPayloadValue, EventRecord } from "../events/types.js";
 import { StatusError } from "../errors.js";
 import { listUnreadMailCountsBySession } from "../mail/store.js";
 import { inspectProcessLiveness, isProcessAlive, type ProcessLiveness } from "../runtimes/process.js";
+import { listLatestRunsBySession, updateLatestRunForSession } from "../runs/store.js";
+import type { RunRecord, UpdateRunInput } from "../runs/types.js";
 import { getCleanupReadinessLabel } from "../sessions/cleanup.js";
 import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
 import { getSessionById, listSessions, updateSessionState } from "../sessions/store.js";
@@ -20,6 +22,8 @@ interface StatusOptions {
   isRuntimeAlive?: (pid: number) => boolean;
   inspectRuntimeLiveness?: (pid: number) => ProcessLiveness;
   listUnreadMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
+  listLatestRuns?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, RunRecord>>;
+  updateLatestRun?: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>;
   recordEvent?: EventRecorder;
   getCleanupReadiness?: (options: {
     projectRoot: string;
@@ -70,6 +74,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     config.project.root,
     initialSessions,
     options.inspectRuntimeLiveness ?? createRuntimeLivenessInspector(options.isRuntimeAlive ?? isProcessAlive),
+    options.updateLatestRun ?? updateLatestRunForSession,
     options.recordEvent ?? recordEventBestEffort,
     options.now ?? (() => new Date().toISOString())
   );
@@ -79,6 +84,11 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 
   const sessionIds = sessions.map((session) => session.id);
   const latestEventsBySession = await listLatestEventsBySession(config.project.root, sessionIds);
+  const latestRuns = await loadLatestRunsBestEffort(
+    config.project.root,
+    sessionIds,
+    options.listLatestRuns ?? listLatestRunsBySession
+  );
   const unreadMailCounts = await loadUnreadMailCountsBestEffort(
     config.project.root,
     sessionIds,
@@ -120,6 +130,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       process.stdout.write(`Spec: ${selectedSessionDetails?.taskHandoff?.taskSpecPath ?? "-"}\n`);
       process.stdout.write(`Unread: ${unreadCount}\n`);
       process.stdout.write(`Cleanup: ${cleanup}\n`);
+      process.stdout.write(`Run: ${formatRunSummary(latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined, latestRuns.available)}\n`);
       process.stdout.write(`Recent: ${formatRecentEventSummary(recentEvent, { truncate: false })}\n`);
 
       if (options.showTask) {
@@ -133,7 +144,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     process.stdout.write("\n");
   }
 
-  process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tRECENT\n");
+  process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tRUN\tRECENT\n");
 
   for (const session of sessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
@@ -141,6 +152,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
       : "?";
     const cleanup = cleanupReadiness.get(session.id) ?? "?";
+    const run = formatRunSummary(latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined, latestRuns.available);
     const recentEvent = formatRecentEventSummary(
       selectRecentEventForStatus({
         latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
@@ -149,7 +161,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       })
     );
     process.stdout.write(
-      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${cleanup}\t${recentEvent}\n`
+      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${cleanup}\t${run}\t${recentEvent}\n`
     );
   }
 }
@@ -168,6 +180,25 @@ async function loadUnreadMailCountsBestEffort(
     process.stderr.write(`WARN: failed to load unread mail counts: ${formatErrorMessage(error)}\n`);
     return {
       countsBySession: new Map(),
+      available: false
+    };
+  }
+}
+
+async function loadLatestRunsBestEffort(
+  projectRoot: string,
+  sessionIds: string[],
+  listLatestRuns: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, RunRecord>>
+): Promise<{ runsBySession: Map<string, RunRecord>; available: boolean }> {
+  try {
+    return {
+      runsBySession: await listLatestRuns(projectRoot, sessionIds),
+      available: true
+    };
+  } catch (error) {
+    process.stderr.write(`WARN: failed to load latest runs: ${formatErrorMessage(error)}\n`);
+    return {
+      runsBySession: new Map(),
       available: false
     };
   }
@@ -207,6 +238,7 @@ async function reconcileSessionLifecycles(
   projectRoot: string,
   sessions: SessionRecord[],
   inspectRuntimeLiveness: (pid: number) => ProcessLiveness,
+  updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>,
   recordEvent: EventRecorder,
   now: () => string
 ): Promise<Map<string, EventRecord>> {
@@ -233,6 +265,7 @@ async function reconcileSessionLifecycles(
 
     const reconciledEvent = buildReconciledEvent(nextSession, nextState.eventType, nextState.payload, createdAt);
     reconciledEventsBySession.set(nextSession.id, reconciledEvent);
+    await syncRunStateAfterReconcile(projectRoot, nextSession.id, nextState.state, createdAt, updateLatestRun);
 
     await recordEventBestEffortForStatus(recordEvent, projectRoot, {
       sessionId: nextSession.id,
@@ -281,6 +314,22 @@ function formatOptionalField(value: number | string | null | undefined): string 
 function formatWorktreePath(projectRoot: string, worktreePath: string): string {
   const relativePath = relative(projectRoot, worktreePath);
   return relativePath.length > 0 ? relativePath : ".";
+}
+
+function formatRunSummary(run: RunRecord | undefined, available = true): string {
+  if (!available) {
+    return "?";
+  }
+
+  if (!run) {
+    return "-";
+  }
+
+  if (run.state === "finished") {
+    return `finished:${run.outcome ?? "unknown"}`;
+  }
+
+  return run.state;
 }
 
 function formatRecentEventSummary(
@@ -516,6 +565,36 @@ async function loadLatestLaunchTaskHandoff(
 
 async function loadLatestLaunchTaskInstruction(projectRoot: string, session: SessionRecord): Promise<string | undefined> {
   return await readTaskInstruction(projectRoot, session.agentName, session.id);
+}
+
+async function syncRunStateAfterReconcile(
+  projectRoot: string,
+  sessionId: string,
+  nextState: SessionState,
+  updatedAt: string,
+  updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>
+): Promise<void> {
+  try {
+    if (nextState === "running") {
+      await updateLatestRun(projectRoot, sessionId, {
+        state: "active",
+        updatedAt,
+        finishedAt: null
+      });
+      return;
+    }
+
+    if (nextState === "failed") {
+      await updateLatestRun(projectRoot, sessionId, {
+        state: "finished",
+        outcome: "failed",
+        updatedAt,
+        finishedAt: updatedAt
+      });
+    }
+  } catch (error) {
+    process.stderr.write(`WARN: failed to persist run state for session '${sessionId}': ${formatErrorMessage(error)}\n`);
+  }
 }
 
 async function loadSelectedSessionDetails(
