@@ -207,15 +207,15 @@ These are the current project decisions and should be treated as the default unt
 ## Open Decisions
 
 The current loop does have one active product decision now:
-- the next named slice is the smallest useful multi-agent workflow on top of the new run-tracking model
+- the next named slice should be one small operator-visible blind spot exposed by the now-proved two-session workflow
 
-No broader runtime or UI decision is open yet beyond that slice.
+No broader runtime or UI decision is open yet beyond that blind-spot slice.
 
 ## Suggested Order For Our Next Sessions
 
-1. Expand from the single-agent loop to the smallest useful multi-agent workflow now that run tracking makes outcomes intelligible.
-2. Improve diagnostics only where they directly support that multi-agent proving slice.
-3. Keep run tracking accurate as the workflow expands to multiple concurrent sessions.
+1. Name one small operator-visible blind spot inside the proved two-session workflow.
+2. Improve diagnostics only where they directly support that named blind spot.
+3. Keep run tracking accurate as the current concurrent workflow stays under use.
 4. Add tests and docs updates that reduce risk in the current operator loop.
 5. Revisit broader scope only after the current loop stops being the main constraint.
 
