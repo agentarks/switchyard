@@ -536,6 +536,62 @@ test("slingCommand records an early readiness failure after launch", async () =>
   }
 });
 
+test("slingCommand preserves the launch failure when the failure-path run update also fails", async () => {
+  const repoDir = await createInitializedRepo();
+  const stderrWrites: string[] = [];
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  try {
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    await assert.rejects(
+      async () => {
+        await slingCommand({
+          agentName: "Agent Failure Warning",
+          task: "Preserve the real launch failure.",
+          startDir: repoDir,
+          spawnRuntime: async ({ onSpawned }) => {
+            const runtime = {
+              pid: 9191,
+              command: {
+                command: "codex",
+                args: []
+              }
+            };
+
+            await onSpawned?.(runtime);
+            throw new Error("Codex crashed during readiness.");
+          },
+          updateRunRecord: async () => {
+            throw new Error("runs unavailable");
+          }
+        });
+      },
+      /Codex crashed during readiness\./
+    );
+
+    const sessions = await listSessions(repoDir);
+    const latestRun = await getLatestRunForSession(repoDir, sessions[0]?.id ?? "");
+    const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(events.length, 2);
+    assert.equal(events[1]?.eventType, "sling.failed");
+    assert.equal(events[1]?.payload.errorMessage, "Codex crashed during readiness.");
+    assert.equal(latestRun?.state, "starting");
+    assert.equal(latestRun?.outcome, null);
+  } finally {
+    process.stderr.write = originalStderrWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(stderrWrites.join(""), /WARN: failed to persist run state for session '.+': runs unavailable/);
+});
+
 test("slingCommand stops the launched runtime and cleans up when session persistence fails after spawn", async () => {
   const repoDir = await createInitializedRepo();
   const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-persist-fail");

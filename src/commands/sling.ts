@@ -156,13 +156,13 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       }
     });
     if (runRecord) {
-      await updateRun(config.project.root, {
+      await persistRunUpdateBestEffort(config.project.root, sessionId, {
         id: runRecord.id,
         state: "finished",
         outcome: "launch_failed",
         updatedAt: failedAt,
         finishedAt: failedAt
-      });
+      }, updateRunRecord);
     }
 
     if (cleanupError) {
@@ -215,13 +215,13 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       }
     });
     if (runRecord) {
-      await updateRun(config.project.root, {
+      await persistRunUpdateBestEffort(config.project.root, sessionId, {
         id: runRecord.id,
         state: "finished",
         outcome: "launch_failed",
         updatedAt: failedAt,
         finishedAt: failedAt
-      });
+      }, updateRunRecord);
     }
 
     throw buildPostSpawnPersistenceError(error, teardown);
