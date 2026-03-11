@@ -22,6 +22,7 @@ test("bootstrapSwitchyardLayout creates state files without emitting warnings", 
 
     assert.match(readme, /Database schema is created lazily/);
     await readFile(join(switchyardDir, "sessions.db"));
+    await readFile(join(switchyardDir, "runs.db"));
     await readFile(join(switchyardDir, "mail.db"));
     await readFile(join(switchyardDir, "events.db"));
     assert.equal(warnings.length, 0);

@@ -8,6 +8,7 @@ import { loadConfig } from "../config.js";
 import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { MergeError } from "../errors.js";
 import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
+import { updateLatestRunForSession } from "../runs/store.js";
 import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
 
 const execFileAsync = promisify(execFile);
@@ -156,6 +157,7 @@ async function mergeResolvedSession(
         reason: "already_up_to_date"
       }
     });
+    await markRunMerged(projectRoot, session.id);
 
     process.stdout.write(`Session ${session.agentName} is already merged into ${canonicalBranch}\n`);
     process.stdout.write(`Session: ${session.id}\n`);
@@ -196,6 +198,7 @@ async function mergeResolvedSession(
       canonicalBranch
     }
   });
+  await markRunMerged(projectRoot, session.id);
 
   process.stdout.write(`Merged ${session.agentName} into ${canonicalBranch}\n`);
   process.stdout.write(`Session: ${session.id}\n`);
@@ -529,6 +532,17 @@ function unquoteGitPath(path: string): string {
 function formatRelativePath(projectRoot: string, path: string): string {
   const relativePath = relative(projectRoot, path);
   return relativePath.length > 0 ? relativePath : ".";
+}
+
+async function markRunMerged(projectRoot: string, sessionId: string): Promise<void> {
+  const finishedAt = new Date().toISOString();
+
+  await updateLatestRunForSession(projectRoot, sessionId, {
+    state: "finished",
+    outcome: "merged",
+    updatedAt: finishedAt,
+    finishedAt
+  });
 }
 
 async function pathExists(path: string): Promise<boolean> {

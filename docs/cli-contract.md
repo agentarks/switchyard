@@ -51,9 +51,12 @@ Current contract:
 - command starts one detached Codex process from that worktree
 - on supported Unix platforms, detached launch uses the system `script` utility so Codex startup still gets a pseudo-terminal
 - command persists one `starting` session record in `sessions.db`, including the original canonical branch as session `baseBranch`
+- command creates one durable run record in `runs.db` for that launched task
 - command records `sling.spawned` when the runtime pid exists, including `taskSummary` and `taskSpecPath`
 - command records `sling.completed` after the initial launch window succeeds, including the same task handoff metadata plus `readyAfterMs`
+- command moves that run record to `active` after the launch window succeeds
 - if Codex exits during the launch window, command records `sling.failed` with the launch error and preserves task handoff metadata when available
+- if launch fails after the run record exists, command marks that run as `finished:launch_failed`
 - command prints the durable session id, launch state, created branch, base branch, task summary, task spec path, worktree path, runtime command line, and initial readiness delay
 - if the `script` wrapper is unavailable on a supported platform, command fails explicitly instead of pretending the launch succeeded
 - on unsupported platforms, detached launch falls back to direct Codex spawn
@@ -84,6 +87,8 @@ Current contract:
 - command includes one best-effort unread-mail count per session from `mail.db`
 - if unread mail counts cannot be loaded, command still renders status and prints `?` in the unread column instead of failing
 - command includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`
+- command includes one best-effort latest-run summary per session from `runs.db`
+- if run summaries cannot be loaded, command still renders status and prints `?` in the run column instead of failing
 - active sessions show the post-stop cleanup result with a `stop-then:` prefix instead of hiding whether cleanup would be merged-safe or abandon-only
 - command surfaces partial preserved-artifact loss in that cleanup-readiness label when the branch still exists but the preserved worktree is already missing
 - command keeps that missing-worktree case distinct in recent stop-event history instead of collapsing it into the harmless already-absent case
@@ -92,12 +97,12 @@ Current contract:
 - command keeps operator-relevant `stop.failed` context in the recent-event summary, including shutdown failure reason, runtime pid, and error text when those details exist
 - command keeps operator-relevant `stop.completed` cleanup mode in the recent-event summary so later status inspection still shows whether cleanup happened after a confirmed merge or an explicit abandon
 - when the same `sy status` run also records an automatic runtime reconciliation event, command still keeps a latest pre-existing `stop.failed` visible in the current recent summary instead of immediately replacing it with that synthetic runtime event
-- with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, latest launch spec path, unread-mail count, cleanup-readiness label, and the full recent-event summary
+- with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, latest launch spec path, unread-mail count, cleanup-readiness label, latest run summary, and the full recent-event summary
 - with `--task` plus a selector, command also prints the full stored launch instruction from `.switchyard/specs/`
 - command rejects `--task` without an exact selector
 - command fails explicitly when `--task` is requested but the stored task text cannot be read
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
-- when sessions exist, print a concise tab-separated table ordered by most recent update
+- when sessions exist, print a concise tab-separated table ordered by most recent update, including a `RUN` column
 
 Future target:
 - show concise operator-friendly status for active and recent sessions
@@ -145,6 +150,7 @@ Current contract:
 - command refuses plain cleanup when the preserved branch still exists but the preserved worktree path is already missing, and tells the operator to restore it manually or use explicit abandon
 - command records that missing-worktree refusal distinctly from the fully-absent branch-plus-worktree case in durable `stop.completed` history
 - command records a durable `stop.completed` event with cleanup failure details when cleanup is blocked or artifact removal fails after the stop state is already known
+- when the latest run record exists, command updates it to a terminal outcome such as `stopped`, `failed`, `merged`, or `abandoned` when the task outcome becomes clear
 
 Future target:
 - revisit alternate runtime control only if the pid-based path proves too narrow in real operator workflows
@@ -170,6 +176,7 @@ Current contract:
 - command runs `git merge --no-ff <agent-branch>` from the repo root
 - command prints the resolved durable session id in operator-facing handled output, including merge-conflict and other session-scoped failure paths, so later follow-up commands can reuse the exact preserved session
 - command records durable merge events for success, already-integrated no-op merges, session-scoped preflight refusals, and git-stopped conflict states
+- on success and already-integrated no-op merges, command updates the latest run outcome to `merged` when that run exists
 - command leaves conflict resolution, validation, and cleanup explicit for the operator
 
 Future target:

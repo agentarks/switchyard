@@ -28,6 +28,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `.switchyard/` bootstrap for directories and placeholder database files
 - end-to-end CLI regression coverage around `sy init`, `sy status --task`, `sy events --limit`, `sy stop --cleanup --abandon`, `sy merge`, `sy mail send --body-file`, and `sy mail list --unread`
 - session store with schema ownership for `sessions.db`
+- run store with schema ownership for `runs.db`
 - mail store with schema ownership for `mail.db`
 - event store with schema ownership for `events.db`
 - session records that now retain the spawned runtime pid
@@ -45,6 +46,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - mail-body framing in `sy mail check` and `sy mail list` so multi-line mailbox output stays explicit in terminal inspection
 - first-class task handoff in `sy sling` via exactly one explicit `--task <instruction>` or `--task-file <path>`
 - durable task-spec files under `.switchyard/specs/` that are keyed by agent name and session id
+- durable run records under `runs.db` that now track the latest task summary, run state, and terminal outcome per launched session
 - initial readiness waiting that requires the spawned Codex process to survive a short launch window before the session is marked usable
 - narrow process liveness and stop helpers for detached Codex sessions
 - Unix zombie-process detection in runtime liveness checks so stale sessions fail closed instead of staying `running`
@@ -59,7 +61,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - explicit selector disambiguation across session-targeting commands when one normalized agent name matches multiple preserved sessions
 - operator-controlled recent-event window selection in `sy events --limit`
 - exact per-session inspection in `sy status`, including explicit selector disambiguation between session-id and agent-name matches
-- exact per-session inspection in `sy status` now also surfaces stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, launch spec path, and the full recent-event summary before the one-row table
+- exact per-session inspection in `sy status` now also surfaces stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, launch spec path, latest run summary, and the full recent-event summary before the one-row table
 - exact per-session inspection in `sy status` now also supports `--task` to print the full stored launch instruction from the durable spec file
 - launch-event inspection in `sy events` now also carries `taskSummary` and `taskSpecPath` for `sling.spawned`, `sling.completed`, and `sling.failed`
 - explicit selector disambiguation in `sy stop` and `sy merge` when one raw selector could name different sessions by session-id and agent-name
@@ -70,6 +72,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - merge and merged-cleanup guards that now refuse to silently retarget preserved work when the configured canonical branch changes after launch
 - first operator-facing cleanup guard that only removes preserved merge artifacts automatically when the branch is confirmed merged, and otherwise requires explicit `--abandon`
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
+- status output that now also joins each session to its latest durable run summary so operators can see `starting`, `active`, or `finished:<outcome>` at a glance
 - status output that now also surfaces durable `stop.failed` context such as shutdown-failure reason, runtime pid, and error text in recent-event summaries, including on the same render that records a follow-up runtime reconciliation event
 - status output that now also surfaces each session id in the main overview so later commands can target an exact preserved session without guesswork
 - status output that now also surfaces unread mail counts so operators can spot pending mailbox work without checking each session individually
@@ -83,6 +86,9 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - durable merge preflight failure events for session-scoped refusals such as dirty repo-root or preserved-worktree state
 - durable stop cleanup failure events when cleanup is blocked or artifact removal fails after the stop state is already known
 - first-readiness reconciliation in `sy status` that promotes launched sessions to `running` or marks them failed with a durable reason
+- `sy sling` now creates one durable run record per launched task, moves it from `starting` to `active` after launch success, and marks launch failures as `finished:launch_failed`
+- `sy stop` now updates the latest run outcome to `stopped`, `failed`, `merged`, or `abandoned` when the task outcome becomes clear
+- `sy merge` now updates the latest run outcome to `merged` on success and already-integrated no-op merges
 - explicit v0 decision to keep runtime control pid-backed and defer tmux unless operator workflows require attach or transcript handling
 - documented first merge and reintegration workflow that keeps the initial contract manual-first and git-native
 - regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
@@ -221,6 +227,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 - `src/config.ts` is carrying both config logic and git root-resolution behavior; that should eventually split once lifecycle code grows further.
 - `node:sqlite` is still experimental in Node 25, so the SQLite choice may need revision if core API churn becomes painful.
+- the current run model is intentionally narrow: it captures one compact latest run story per launched session, but it is not yet a richer run history, replay, or multi-session coordination layer
 - older session rows created before `baseBranch` was added now fail closed for `sy merge` and plain merged-cleanup, so operators must use manual git review/merge or explicit `--abandon`
 - the current readiness model is intentionally narrow: `sy sling` only proves the process survived a short launch window, and `sy status` promotes the session to `running` on the first later successful pid liveness check.
 - the current runtime-control model intentionally omits live attach and transcript capture, so debugging still relies on durable events and external process inspection.
@@ -231,13 +238,10 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## Recommended Next Task
 
-No new default slice is named right now:
-- treat the exact launch-task inspection slice as complete unless a new reproduced workflow proves it is still insufficient
-- treat the exact mail-body preservation and inspection-formatting slice as complete unless a new reproduced workflow proves it is still insufficient
-- treat the empty selected `sy events` session-id visibility slice as complete unless a new reproduced workflow proves it is still insufficient
-- do not start another lifecycle or inspection pass until a concrete operator-visible gap is reproduced and named first
-- only pick a new slice if it changes operator behavior or fixes a reproduced operator problem
-- keep generic lifecycle hardening deferred unless a real workflow now proves it necessary
+The next named slice is the smallest useful multi-agent workflow:
+- prove that two delegated sessions can be launched, tracked, and followed through explicit reintegration without losing exact selector clarity
+- use the new run model to keep concurrent task state readable in `sy status`
+- treat the run-tracking slice as complete unless the first concurrent workflow proves it is still insufficient
 
 ## How To Use This File
 

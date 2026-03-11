@@ -6,6 +6,8 @@ import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } fr
 import { StopError } from "../errors.js";
 import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 import { stopProcess, isProcessAlive } from "../runtimes/process.js";
+import { updateLatestRunForSession } from "../runs/store.js";
+import type { RunOutcome } from "../runs/types.js";
 import {
   determineCleanupDecision,
   formatCleanupMessage,
@@ -126,6 +128,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
           ...(cleanup.cleanupDetails ?? {})
         }
       });
+      await updateRunAfterStop(config.project.root, session.id, session.state, cleanup.cleanupMode);
       writeStopResult(
         `Session ${session.agentName} is already ${session.state}.`,
         session.id,
@@ -188,6 +191,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
         ...(cleanup.cleanupDetails ?? {})
       }
     });
+    await updateRunAfterStop(config.project.root, nextSession.id, nextSession.state, cleanup.cleanupMode);
     writeStopResult(
       `Session ${session.agentName} has no recorded runtime pid. Marked failed.`,
       nextSession.id,
@@ -262,6 +266,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       cleanupPerformed: false,
       ...buildCleanupFailurePayload(error)
     });
+    await updateRunAfterStop(config.project.root, nextSession.id, nextSession.state);
     writeStopResult(
       formatStopHeading(session.agentName, nextState),
       nextSession.id,
@@ -280,6 +285,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {}),
     ...(cleanup.cleanupDetails ?? {})
   });
+  await updateRunAfterStop(config.project.root, nextSession.id, nextSession.state, cleanup.cleanupMode);
 
   writeStopResult(
     formatStopHeading(session.agentName, nextState),
@@ -457,4 +463,40 @@ function buildCleanupFailurePayload(error: unknown): {
 
 function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function updateRunAfterStop(
+  projectRoot: string,
+  sessionId: string,
+  sessionState: SessionRecord["state"],
+  cleanupMode?: CleanupMode
+): Promise<void> {
+  const outcome = determineRunOutcomeAfterStop(sessionState, cleanupMode);
+  const finishedAt = new Date().toISOString();
+
+  await updateLatestRunForSession(projectRoot, sessionId, {
+    state: "finished",
+    outcome,
+    updatedAt: finishedAt,
+    finishedAt
+  });
+}
+
+function determineRunOutcomeAfterStop(
+  sessionState: SessionRecord["state"],
+  cleanupMode?: CleanupMode
+): RunOutcome {
+  if (cleanupMode === "abandoned") {
+    return "abandoned";
+  }
+
+  if (cleanupMode === "merged") {
+    return "merged";
+  }
+
+  if (sessionState === "failed") {
+    return "failed";
+  }
+
+  return "stopped";
 }

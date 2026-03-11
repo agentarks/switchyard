@@ -6,6 +6,8 @@ This file records how Switchyard should use Overstory as a reference without tur
 
 Use Overstory as a source of proven mechanics and failure cases. Do not inherit its scope by default.
 
+Switchyard should aim to surpass Overstory over time, but it should do that by choosing better sequencing and stronger mechanics, not by copying Overstory feature-for-feature as fast as possible.
+
 ## Inherit
 
 These ideas are worth reusing unless Switchyard has a strong reason not to:
@@ -26,6 +28,8 @@ These may become relevant later, but they are not early-stage priorities:
 - merge queue workflows
 - ecosystem bootstrapping of sibling tools
 
+Deferred here means "not yet," not "never."
+
 ## Reject By Default
 
 These should not enter Switchyard unless the need becomes concrete:
@@ -41,6 +45,11 @@ Overstory suggests a few concrete rules for this repo:
 - prefer tests around git behavior before adding more orchestration features
 - keep `init` lightweight and move database schema ownership into store modules
 - build the first usable loop before expanding command breadth
+
+The intended translation is:
+- first beat Overstory on clarity and reliability in the narrow loop
+- then widen scope deliberately
+- only adopt broader orchestration features when Switchyard can carry them with less operator overhead than the Overstory-inspired baseline
 
 ## When To Update This File
 

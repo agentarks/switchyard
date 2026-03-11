@@ -7,6 +7,8 @@ import { loadConfig } from "../config.js";
 import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { SlingError } from "../errors.js";
 import { stopProcess } from "../runtimes/process.js";
+import { createRun, updateRun } from "../runs/store.js";
+import type { RunRecord } from "../runs/types.js";
 import { createSession } from "../sessions/store.js";
 import type { CreateSessionInput } from "../sessions/types.js";
 import { summarizeTask, writeTaskSpec, type TaskSpecRecord } from "../specs/task.js";
@@ -73,6 +75,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   const taskSummary = summarizeTask(task);
   let runtimeSession: SpawnedRuntimeSession;
   let taskSpec: TaskSpecRecord | undefined;
+  let runRecord: RunRecord | undefined;
 
   try {
     taskSpec = await writeTaskSpec({
@@ -84,6 +87,15 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       branch: managedWorktree.branch,
       baseBranch: managedWorktree.baseBranch,
       worktreePath: managedWorktree.path
+    });
+    runRecord = await createRun(config.project.root, {
+      sessionId,
+      agentName: managedWorktree.agentName,
+      taskSummary,
+      taskSpecPath: taskSpec.relativePath,
+      state: "starting",
+      createdAt,
+      updatedAt: createdAt
     });
     const taskSpecPath = taskSpec.relativePath;
 
@@ -141,6 +153,15 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
         cleanupSucceeded: cleanupError ? false : true
       }
     });
+    if (runRecord) {
+      await updateRun(config.project.root, {
+        id: runRecord.id,
+        state: "finished",
+        outcome: "launch_failed",
+        updatedAt: failedAt,
+        finishedAt: failedAt
+      });
+    }
 
     if (cleanupError) {
       throw new SlingError(`${formatErrorMessage(error)} Cleanup also failed: ${cleanupError.message}`);
@@ -191,6 +212,15 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
         cleanupSucceeded: teardown.cleanupError ? false : true
       }
     });
+    if (runRecord) {
+      await updateRun(config.project.root, {
+        id: runRecord.id,
+        state: "finished",
+        outcome: "launch_failed",
+        updatedAt: failedAt,
+        finishedAt: failedAt
+      });
+    }
 
     throw buildPostSpawnPersistenceError(error, teardown);
   }
@@ -211,6 +241,14 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       readyAfterMs: runtimeSession.readyAfterMs
     }
   });
+  if (runRecord) {
+    await updateRun(config.project.root, {
+      id: runRecord.id,
+      state: "active",
+      updatedAt: completedAt,
+      finishedAt: null
+    });
+  }
 
   process.stdout.write(`Spawned ${managedWorktree.agentName}\n`);
   process.stdout.write(`Session: ${sessionId}\n`);

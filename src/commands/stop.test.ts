@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
 import { StopError } from "../errors.js";
+import { getLatestRunForSession } from "../runs/store.js";
 import { createSession, listSessions, updateSessionState } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
@@ -56,8 +57,11 @@ test("stopCommand stops an active session and preserves the worktree by default"
     await git(repoDir, ["rev-parse", "--verify", "agents/agent-one"]);
 
     const sessions = await listSessions(repoDir);
+    const latestRun = await getLatestRunForSession(repoDir, sessions[0]?.id ?? "");
     assert.equal(sessions[0]?.state, "stopped");
     assert.equal(sessions[0]?.runtimePid, null);
+    assert.equal(latestRun?.state, "finished");
+    assert.equal(latestRun?.outcome, "stopped");
     const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
     assert.equal(events.length, 2);
     assert.equal(events[1]?.eventType, "stop.completed");

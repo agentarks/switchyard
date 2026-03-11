@@ -4,15 +4,15 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Hold the current loop steady until a reproduced operator-visible gap justifies a new named slice
+1. Make the smallest useful multi-agent workflow real on top of the new run-tracking model
 
 ## Next
 
-2. If a real operator gap appears, name one small operator-visible slice before coding
+2. If that concurrent workflow exposes a remaining blind spot, name one small operator-visible follow-up slice before coding
 
 ## After That
 
-3. Improve diagnostics only where a reproduced workflow proves the current task handoff or inspection paths are still insufficient
+3. Improve diagnostics only where the concurrent workflow proves current task handoff or inspection paths are still insufficient
 
 ## Then
 

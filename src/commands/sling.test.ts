@@ -4,6 +4,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
+import { getLatestRunForSession } from "../runs/store.js";
 import { listSessions } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
@@ -67,6 +68,7 @@ test("slingCommand creates a worktree and persists a started session", async () 
   const specDocument = await readFile(specPath, "utf8");
 
   const events = await listEvents(repoDir, { sessionId: sessions[0]?.id });
+  const latestRun = await getLatestRunForSession(repoDir, sessions[0]?.id ?? "");
   assert.equal(events.length, 2);
   const spawnedEvent = events.find((event) => event.eventType === "sling.spawned");
   const completedEvent = events.find((event) => event.eventType === "sling.completed");
@@ -85,6 +87,10 @@ test("slingCommand creates a worktree and persists a started session", async () 
   assert.equal(completedEvent?.payload.taskSpecPath, `.switchyard/specs/agent-one-${sessions[0]?.id}.md`);
   assert.equal(completedEvent?.payload.runtimeCommand, "codex --model gpt-5");
   assert.equal(completedEvent?.payload.readyAfterMs, 500);
+  assert.equal(latestRun?.taskSummary, task);
+  assert.equal(latestRun?.taskSpecPath, `.switchyard/specs/agent-one-${sessions[0]?.id}.md`);
+  assert.equal(latestRun?.state, "active");
+  assert.equal(latestRun?.outcome, null);
   assert.ok(
     typeof spawnedEvent?.createdAt === "string"
     && typeof completedEvent?.createdAt === "string"
@@ -270,7 +276,7 @@ test("statusCommand promotes a started session to running after the first succes
     assert.equal(readyEvent?.payload.signal, "pid_alive");
     assert.match(
       output,
-      /running\t[0-9a-f-]+\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-09T09:10:00.000Z\t0\tstop-then:merged\t2026-03-09T09:10:00.000Z runtime\.ready signal=pid_alive, runtimePid=31337/
+      /running\t[0-9a-f-]+\tagent-two\tagents\/agent-two\t\.switchyard\/worktrees\/agent-two\t2026-03-09T09:10:00.000Z\t0\tstop-then:merged\tactive\t2026-03-09T09:10:00.000Z runtime\.ready signal=pid_alive, runtimePid=31337/
     );
   } finally {
     await removeTempDir(repoDir);

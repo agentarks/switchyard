@@ -10,6 +10,29 @@ Switchyard is a CLI-first system for running a small team of coding agents again
 
 The goal is not "maximum swarm size." The goal is controlled delegation with clear operator visibility.
 
+Switchyard is inspired by Overstory, but the product ambition is not to remain a smaller fork forever.
+The ambition is to become a better orchestration tool by eventually exceeding Overstory where it matters:
+- clearer operator control
+- lower workflow overhead
+- stronger mechanical reliability
+- more understandable recovery and reintegration paths
+
+## North Star
+
+The north star is:
+- one operator can delegate work to several coding agents in one repository without losing track of task ownership, current state, communication, or reintegration status
+
+The long-term strategic goal is:
+- exceed Overstory by delivering that outcome with less operator confusion, fewer hidden moving parts, and stronger end-to-end reliability
+
+That is a product direction, not a license to broaden scope immediately.
+
+The current proving path is still narrower:
+- make the single-repo, single-agent operator loop reliable first
+- add only the smallest next capability that removes a real operator blind spot
+- prefer durable CLI-visible workflow steps over hidden automation
+- earn broader scope instead of copying broader scope prematurely
+
 ## Working Assumptions
 
 These are the current working defaults:
@@ -29,6 +52,7 @@ If any of those change, the plan should change with them.
 3. Operator visibility before background automation.
 4. Narrow v1 before multi-runtime breadth.
 5. Explicit workflow over "magic orchestration."
+6. Surpass Overstory by compounding reliability and clarity, not by matching its surface area as fast as possible.
 
 ## MVP Definition
 
@@ -122,6 +146,16 @@ Exit criteria:
 Exit criteria:
 - the system can surface failure and drift early without becoming opaque
 
+### Phase 5: Broader Orchestration
+- multi-agent coordination that still stays operator-readable
+- richer run history and replay
+- stronger messaging and escalation semantics
+- merge queue or equivalent reintegration workflow if the current explicit path proves insufficient
+- broader runtime support only where it does not weaken the core model
+
+Exit criteria:
+- Switchyard is measurably better than the Overstory-inspired baseline at operator control, recovery, and day-to-day workflow clarity
+
 ## Initial Repo Shape
 
 Planned structure:
@@ -168,19 +202,22 @@ These are the current project decisions and should be treated as the default unt
 - session records retain the original canonical branch as `baseBranch` so merge and merged-cleanup decisions do not silently retarget when config drifts later
 - the first merge workflow is manual-first: stop without cleanup, review the preserved branch, use the narrow `sy merge` path or explicit git to merge into the canonical branch, then clean up
 - broader runtime abstraction is deferred until the core lifecycle is real
+- the long-term aim is still to surpass Overstory, but only by stacking proven slices on top of a reliable core loop
 
 ## Open Decisions
 
-No blocking product decision is open right now for the current loop.
+The current loop does have one active product decision now:
+- the next named slice is the smallest useful multi-agent workflow on top of the new run-tracking model
 
-Any new operator inspection or lifecycle slice should be justified by a reproduced workflow gap before it is named.
+No broader runtime or UI decision is open yet beyond that slice.
 
 ## Suggested Order For Our Next Sessions
 
-1. Preserve the current single-repo, single-agent loop unless a reproduced operator-visible gap justifies a new named slice.
-2. Improve diagnostics or lifecycle behavior only when a reproduced workflow proves the current loop is insufficient.
-3. Add tests and docs updates that reduce risk in the current operator loop.
-4. Revisit broader scope only after the current loop stops being the right constraint.
+1. Expand from the single-agent loop to the smallest useful multi-agent workflow now that run tracking makes outcomes intelligible.
+2. Improve diagnostics only where they directly support that multi-agent proving slice.
+3. Keep run tracking accurate as the workflow expands to multiple concurrent sessions.
+4. Add tests and docs updates that reduce risk in the current operator loop.
+5. Revisit broader scope only after the current loop stops being the main constraint.
 
 ## Success Criteria
 
@@ -189,3 +226,4 @@ Switchyard is on the right track if, after the MVP:
 - each agent has isolated filesystem scope
 - failures are visible and recoverable
 - the system remains understandable from the command line alone
+- it becomes easier to operate confidently than the Overstory-inspired baseline, not merely smaller than it

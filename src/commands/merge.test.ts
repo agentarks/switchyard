@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
 import { MergeError } from "../errors.js";
+import { createRun, getLatestRunForSession } from "../runs/store.js";
 import { createSession } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
@@ -38,6 +39,18 @@ test("mergeCommand merges a stopped session branch into the canonical branch", a
       createdAt: "2026-03-08T09:00:00.000Z",
       updatedAt: "2026-03-08T09:05:00.000Z"
     });
+    await createRun(repoDir, {
+      id: "run-agent-one",
+      sessionId: "session-agent-one",
+      agentName: "agent-one",
+      taskSummary: "Merge the preserved branch",
+      taskSpecPath: ".switchyard/specs/agent-one-session-agent-one.md",
+      state: "finished",
+      outcome: "stopped",
+      createdAt: "2026-03-08T09:00:00.000Z",
+      updatedAt: "2026-03-08T09:05:00.000Z",
+      finishedAt: "2026-03-08T09:05:00.000Z"
+    });
 
     const output = await captureStdout(async () => {
       await mergeCommand({
@@ -57,10 +70,13 @@ test("mergeCommand merges a stopped session branch into the canonical branch", a
     assert.equal(mergeParents.trim().split(/\s+/).length, 3);
 
     const events = await listEvents(repoDir, { sessionId: "session-agent-one" });
+    const latestRun = await getLatestRunForSession(repoDir, "session-agent-one");
     assert.equal(events.length, 1);
     assert.equal(events[0]?.eventType, "merge.completed");
     assert.equal(events[0]?.payload.branch, "agents/agent-one");
     assert.equal(events[0]?.payload.canonicalBranch, "main");
+    assert.equal(latestRun?.state, "finished");
+    assert.equal(latestRun?.outcome, "merged");
   } finally {
     await removeTempDir(repoDir);
   }
