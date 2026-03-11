@@ -36,6 +36,17 @@ interface StatusOptions {
   now?: () => string;
 }
 
+interface StatusRowContext {
+  session: SessionRecord;
+  unreadCount: string;
+  cleanup: string;
+  latestRun?: RunRecord;
+  followUp: string;
+  recentEvent?: EventRecord;
+  unreadOperatorMailSummary?: UnreadMailSummary;
+  activityAt: string;
+}
+
 export function createStatusCommand(): Command {
   return new Command("status")
     .description("Show active and recent agent sessions")
@@ -130,39 +141,40 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     selectedSession ? sessions[0] : undefined,
     options.showTask === true
   );
+  const rowContexts = buildStatusRowContexts({
+    sessions,
+    unreadMailCounts: unreadMailCounts.available ? unreadMailCounts.countsBySession : undefined,
+    cleanupReadiness,
+    latestRuns: latestRuns.available ? latestRuns.runsBySession : undefined,
+    unreadOperatorMailCounts: unreadMailCounts.available && unreadOperatorMailCounts.available
+      ? unreadOperatorMailCounts.countsBySession
+      : undefined,
+    latestEventsBeforeReconcile,
+    latestEventsBySession,
+    reconciledEventsBySession,
+    unreadOperatorMailSummaries: effectiveUnreadOperatorMailSummaries
+  });
 
   process.stdout.write(`${formatStatusHeading(config.project.name, sessions.length === 1 ? sessions[0] : undefined, selectedSession !== undefined)}\n`);
 
   if (selectedSession) {
     const session = sessions[0];
+    const rowContext = session ? rowContexts.get(session.id) : undefined;
 
-    if (session) {
-      const unreadCount = unreadMailCounts.available
-        ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
-        : "?";
-      const cleanup = cleanupReadiness.get(session.id) ?? "?";
-      const latestRun = latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined;
-      const unreadOperatorCount = unreadMailCounts.available && unreadOperatorMailCounts.available
-        ? unreadOperatorMailCounts.countsBySession.get(session.id) ?? 0
-        : undefined;
-      const recentEvent = selectRecentEventForStatus({
-        latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
-        latestStoredEvent: latestEventsBySession.get(session.id),
-        reconciledEvent: reconciledEventsBySession.get(session.id)
-      });
-      const unreadOperatorMailSummary = effectiveUnreadOperatorMailSummaries.get(session.id);
-
+    if (session && rowContext) {
       process.stdout.write(`Base: ${formatOptionalField(session.baseBranch)}\n`);
       process.stdout.write(`Runtime pid: ${formatOptionalField(session.runtimePid)}\n`);
       process.stdout.write(`Runtime: ${selectedSessionDetails?.taskHandoff?.runtimeCommand ?? "-"}\n`);
       process.stdout.write(`Created: ${session.createdAt}\n`);
       process.stdout.write(`Task: ${selectedSessionDetails?.taskHandoff?.taskSummary ?? "-"}\n`);
       process.stdout.write(`Spec: ${selectedSessionDetails?.taskHandoff?.taskSpecPath ?? "-"}\n`);
-      process.stdout.write(`Unread: ${unreadCount}\n`);
-      process.stdout.write(`Cleanup: ${cleanup}\n`);
-      process.stdout.write(`Run: ${formatRunSummary(latestRun, latestRuns.available)}\n`);
-      process.stdout.write(`Next: ${formatFollowUpAction(session, latestRun, cleanup, unreadOperatorCount)}\n`);
-      process.stdout.write(`Recent: ${formatRelevantRecentSummary(recentEvent, unreadOperatorMailSummary, { truncate: false })}\n`);
+      process.stdout.write(`Unread: ${rowContext.unreadCount}\n`);
+      process.stdout.write(`Cleanup: ${rowContext.cleanup}\n`);
+      process.stdout.write(`Run: ${formatRunSummary(rowContext.latestRun, latestRuns.available)}\n`);
+      process.stdout.write(`Next: ${rowContext.followUp}\n`);
+      process.stdout.write(
+        `Recent: ${formatRelevantRecentSummary(rowContext.recentEvent, rowContext.unreadOperatorMailSummary, { truncate: false })}\n`
+      );
 
       if (options.showTask) {
         process.stdout.write("\nInstruction:\n");
@@ -175,49 +187,58 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     process.stdout.write("\n");
   }
 
-  const followUpBySession = new Map<string, string>();
-  for (const session of sessions) {
-    const unreadOperatorCountForFollowUp = unreadMailCounts.available && unreadOperatorMailCounts.available
-      ? unreadOperatorMailCounts.countsBySession.get(session.id) ?? 0
-      : undefined;
-    followUpBySession.set(
-      session.id,
-      formatFollowUpAction(
-        session,
-        latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined,
-        cleanupReadiness.get(session.id) ?? "?",
-        unreadOperatorCountForFollowUp
-      )
-    );
-  }
-  const orderedSessions = [...sessions].sort((left, right) => {
-    return compareStatusSessions(left, right, followUpBySession, effectiveUnreadOperatorMailSummaries);
-  });
+  const orderedRowContexts = [...rowContexts.values()].sort(compareStatusRowContexts);
 
   process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tNEXT\tRECENT\n");
 
-  for (const session of orderedSessions) {
+  for (const rowContext of orderedRowContexts) {
+    const session = rowContext.session;
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
-    const unreadCount = unreadMailCounts.available
-      ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
-      : "?";
-    const cleanup = cleanupReadiness.get(session.id) ?? "?";
-    const latestRun = latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined;
-    const task = formatTaskSummary(latestRun, latestRuns.available);
-    const run = formatRunSummary(latestRun, latestRuns.available);
-    const followUp = followUpBySession.get(session.id) ?? "-";
-    const recentEvent = formatRelevantRecentSummary(
-      selectRecentEventForStatus({
-        latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
-        latestStoredEvent: latestEventsBySession.get(session.id),
-        reconciledEvent: reconciledEventsBySession.get(session.id)
-      }),
-      effectiveUnreadOperatorMailSummaries.get(session.id)
-    );
     process.stdout.write(
-      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${cleanup}\t${task}\t${run}\t${followUp}\t${recentEvent}\n`
+      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${rowContext.activityAt}\t${rowContext.unreadCount}\t${rowContext.cleanup}\t${formatTaskSummary(rowContext.latestRun, latestRuns.available)}\t${formatRunSummary(rowContext.latestRun, latestRuns.available)}\t${rowContext.followUp}\t${formatRelevantRecentSummary(rowContext.recentEvent, rowContext.unreadOperatorMailSummary)}\n`
     );
   }
+}
+
+function buildStatusRowContexts(options: {
+  sessions: SessionRecord[];
+  unreadMailCounts?: Map<string, number>;
+  cleanupReadiness: Map<string, string>;
+  latestRuns?: Map<string, RunRecord>;
+  unreadOperatorMailCounts?: Map<string, number>;
+  latestEventsBeforeReconcile: Map<string, EventRecord>;
+  latestEventsBySession: Map<string, EventRecord>;
+  reconciledEventsBySession: Map<string, EventRecord>;
+  unreadOperatorMailSummaries: Map<string, UnreadMailSummary>;
+}): Map<string, StatusRowContext> {
+  const rowContexts = new Map<string, StatusRowContext>();
+
+  for (const session of options.sessions) {
+    const latestRun = options.latestRuns?.get(session.id);
+    const unreadOperatorCount = options.unreadOperatorMailCounts?.get(session.id);
+    const recentEvent = selectRecentEventForStatus({
+      latestEventBeforeReconcile: options.latestEventsBeforeReconcile.get(session.id),
+      latestStoredEvent: options.latestEventsBySession.get(session.id),
+      reconciledEvent: options.reconciledEventsBySession.get(session.id)
+    });
+    const unreadOperatorMailSummary = options.unreadOperatorMailSummaries.get(session.id);
+    const cleanup = options.cleanupReadiness.get(session.id) ?? "?";
+
+    rowContexts.set(session.id, {
+      session,
+      unreadCount: typeof options.unreadMailCounts === "undefined"
+        ? "?"
+        : String(options.unreadMailCounts.get(session.id) ?? 0),
+      cleanup,
+      latestRun,
+      followUp: formatFollowUpAction(session, latestRun, cleanup, unreadOperatorCount),
+      recentEvent,
+      unreadOperatorMailSummary,
+      activityAt: deriveStatusActivityTimestamp(session, recentEvent, unreadOperatorMailSummary)
+    });
+  }
+
+  return rowContexts;
 }
 
 async function loadUnreadMailCountsBestEffort(
@@ -466,14 +487,12 @@ function formatFollowUpAction(
   return "-";
 }
 
-function compareStatusSessions(
-  left: SessionRecord,
-  right: SessionRecord,
-  followUpBySession: Map<string, string>,
-  unreadMailSummariesBySession: Map<string, UnreadMailSummary>
+function compareStatusRowContexts(
+  left: StatusRowContext,
+  right: StatusRowContext
 ): number {
-  const leftPriority = getFollowUpPriority(followUpBySession.get(left.id));
-  const rightPriority = getFollowUpPriority(followUpBySession.get(right.id));
+  const leftPriority = getFollowUpPriority(left.followUp);
+  const rightPriority = getFollowUpPriority(right.followUp);
 
   if (leftPriority !== rightPriority) {
     return leftPriority - rightPriority;
@@ -481,8 +500,8 @@ function compareStatusSessions(
 
   if (leftPriority === FOLLOW_UP_PRIORITY.mail) {
     const unreadMailComparison = compareUnreadMailFreshness(
-      unreadMailSummariesBySession.get(left.id),
-      unreadMailSummariesBySession.get(right.id)
+      left.unreadOperatorMailSummary,
+      right.unreadOperatorMailSummary
     );
 
     if (unreadMailComparison !== 0) {
@@ -490,15 +509,19 @@ function compareStatusSessions(
     }
   }
 
-  if (left.updatedAt !== right.updatedAt) {
-    return right.updatedAt.localeCompare(left.updatedAt);
+  if (left.activityAt !== right.activityAt) {
+    return right.activityAt.localeCompare(left.activityAt);
   }
 
-  if (left.createdAt !== right.createdAt) {
-    return right.createdAt.localeCompare(left.createdAt);
+  if (left.session.updatedAt !== right.session.updatedAt) {
+    return right.session.updatedAt.localeCompare(left.session.updatedAt);
   }
 
-  return left.id.localeCompare(right.id);
+  if (left.session.createdAt !== right.session.createdAt) {
+    return right.session.createdAt.localeCompare(left.session.createdAt);
+  }
+
+  return left.session.id.localeCompare(right.session.id);
 }
 
 function getFollowUpPriority(followUp: string | undefined): number {
@@ -619,6 +642,24 @@ function formatStatusSummaryText(
   }
 
   return `${summary.slice(0, 117)}...`;
+}
+
+function deriveStatusActivityTimestamp(
+  session: SessionRecord,
+  event: EventRecord | undefined,
+  unreadMailSummary: UnreadMailSummary | undefined
+): string {
+  let activityAt = session.updatedAt;
+
+  if (event && event.createdAt > activityAt) {
+    activityAt = event.createdAt;
+  }
+
+  if (unreadMailSummary && unreadMailSummary.message.createdAt > activityAt) {
+    activityAt = unreadMailSummary.message.createdAt;
+  }
+
+  return activityAt;
 }
 
 function formatRecentEventDetails(event: EventRecord): string {

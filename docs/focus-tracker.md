@@ -82,6 +82,7 @@ Completed enough to count as minimally real:
 - derived next-step visibility in `sy status` so concurrent sessions stay operator-actionable
 - synthesized unread-mail recency summaries in `sy status` so concurrent mailbox follow-up stays visible
 - mail-bucket ordering in `sy status` by newest unread inbound mail
+- freshest-activity timestamps and same-bucket freshness ordering in `sy status` so recent merge, mail, and runtime changes stay visible in the control-plane view
 - terminal run outcomes from `sy stop` and `sy merge`
 - end-to-end coverage around `sy init`
 
