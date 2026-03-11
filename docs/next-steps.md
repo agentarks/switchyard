@@ -61,6 +61,7 @@ Completed slice:
 - exact session-id visibility in empty selected `sy events` output
 - synthesized unread-mail recency summaries in `sy status`
 - mail-bucket ordering in `sy status` by newest unread inbound mail instead of stale session timestamps
+- freshest-activity `UPDATED` timestamps and same-bucket ordering in `sy status` so recent merge, mail, and runtime changes are not hidden behind stale session-row timestamps
 - end-to-end proof that two concurrent delegated sessions can be followed through status, mail review, merge, and cleanup without losing the untouched session's run or reintegration state
 
 Decision rule:
