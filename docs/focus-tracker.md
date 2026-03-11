@@ -33,6 +33,7 @@ Completed enough to count as minimally real:
 - handled stop output now remains visible even when post-stop cleanup removal fails
 - session-id visibility in `sy mail check` and `sy mail list`
 - exact mail-body preservation in `sy mail send`
+- file-backed mail-body input in `sy mail send`
 - explicit body-block framing in `sy mail check` and `sy mail list`
 - M5 lifecycle control
 - M6 messaging
@@ -71,7 +72,7 @@ Completed enough to count as minimally real:
 - end-to-end coverage around `sy init`
 
 Current planning state:
-- no new named slice is justified right now beyond the recent file-backed `sy sling --task-file` handoff, exact launch-command inspection in `sy status`, exact mail-body handling, session-id visibility cleanup across handled `merge` failures, `stop`, mail inspection, empty selected `sy events` output, handled stop output for post-stop cleanup removal failures, and truthful already-absent reporting for explicit-abandon cleanup
+- no new named slice is justified right now beyond the recent file-backed `sy sling --task-file` handoff, file-backed `sy mail send --body-file` follow-up mail, exact launch-command inspection in `sy status`, exact mail-body handling, session-id visibility cleanup across handled `merge` failures, `stop`, mail inspection, empty selected `sy events` output, handled stop output for post-stop cleanup removal failures, and truthful already-absent reporting for explicit-abandon cleanup
 - new lifecycle or inspection work should start only after a reproduced operator-visible gap is named
 
 ## Current In-Scope Work

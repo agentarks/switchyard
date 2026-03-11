@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
@@ -9,11 +11,13 @@ import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from
 
 interface MailSendCliOptions {
   from?: string;
+  bodyFile?: string;
 }
 
 interface MailSendOptions {
   selector: string;
-  body: string;
+  body?: string;
+  bodyFile?: string;
   sender?: string;
   startDir?: string;
   recordEvent?: EventRecorder;
@@ -40,12 +44,14 @@ export function createMailCommand(): Command {
       new Command("send")
         .description("Send one durable message to a tracked session")
         .argument("<session>", "Session id or agent name")
-        .argument("<body>", "Message body")
+        .argument("[body]", "Message body")
+        .option("--body-file <path>", "Read the message body from a file")
         .option("--from <sender>", "Sender label", "operator")
-        .action(async (selector: string, body: string, options: MailSendCliOptions) => {
+        .action(async (selector: string, body: string | undefined, options: MailSendCliOptions) => {
           await mailSendCommand({
             selector,
             body,
+            bodyFile: options.bodyFile,
             sender: options.from
           });
         })
@@ -76,10 +82,10 @@ export function createMailCommand(): Command {
 
 export async function mailSendCommand(options: MailSendOptions): Promise<void> {
   const config = await loadConfig(options.startDir);
+  const body = await loadBody(options);
   const session = await resolveSession(config.project.root, options.selector);
   const recordEvent = options.recordEvent ?? recordEventBestEffort;
   const sender = options.sender?.trim() || "operator";
-  const body = options.body;
 
   if (!session) {
     throw new MailError(`No session found for '${options.selector}'.`);
@@ -111,6 +117,32 @@ export async function mailSendCommand(options: MailSendOptions): Promise<void> {
   process.stdout.write(`Queued mail for ${session.agentName}\n`);
   process.stdout.write(`Session: ${session.id}\n`);
   process.stdout.write(`Mail id: ${message.id}\n`);
+}
+
+async function loadBody(options: Pick<MailSendOptions, "body" | "bodyFile" | "startDir">): Promise<string> {
+  if (typeof options.body === "string" && typeof options.bodyFile === "string") {
+    throw new MailError("Choose exactly one mail body source: use either '<body>' or '--body-file <path>'.");
+  }
+
+  if (typeof options.bodyFile === "string") {
+    return await readBodyFile(options.bodyFile, options.startDir);
+  }
+
+  if (typeof options.body === "string") {
+    return options.body;
+  }
+
+  throw new MailError("Mail send requires a body. Use '<body>' or '--body-file <path>'.");
+}
+
+async function readBodyFile(bodyFile: string, startDir?: string): Promise<string> {
+  const resolvedPath = resolve(startDir ?? process.cwd(), bodyFile);
+
+  try {
+    return await readFile(resolvedPath, "utf8");
+  } catch (error) {
+    throw new MailError(`Failed to read body file '${bodyFile}': ${formatErrorMessage(error)}`);
+  }
 }
 
 export async function mailCheckCommand(options: MailCheckOptions): Promise<void> {
@@ -215,4 +247,8 @@ async function resolveSession(projectRoot: string, selector: string): Promise<Se
 function formatMailBody(body: string): string {
   const bodyLines = body.split("\n");
   return `Body:\n${bodyLines.map((line) => `  ${line}`).join("\n")}\n\n`;
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
 import { MailError } from "../errors.js";
@@ -89,6 +91,90 @@ test("mailSendCommand preserves the exact body text when storing durable mail", 
     assert.equal(events.length, 1);
     assert.equal(events[0]?.eventType, "mail.sent");
     assert.equal(events[0]?.payload.bodyLength, body.length);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("mailSendCommand reads the exact body text from a file relative to the invocation directory", async () => {
+  const repoDir = await createInitializedRepo();
+  const nestedDir = join(repoDir, "notes");
+  const bodyPath = join(nestedDir, "mail-body.txt");
+  const body = "  Leading detail from file.\nSecond line stays intact.  ";
+
+  try {
+    await createSession(repoDir, {
+      id: "session-agent-body-file",
+      agentName: "agent-body-file",
+      branch: "agents/agent-body-file",
+      worktreePath: `${repoDir}/.switchyard/worktrees/agent-body-file`,
+      state: "running",
+      runtimePid: 1313,
+      createdAt: "2026-03-06T09:20:00.000Z",
+      updatedAt: "2026-03-06T09:20:00.000Z"
+    });
+
+    await mkdir(nestedDir, { recursive: true });
+    await writeFile(bodyPath, body, "utf8");
+
+    await mailSendCommand({
+      selector: "session-agent-body-file",
+      bodyFile: "mail-body.txt",
+      startDir: nestedDir
+    });
+
+    const mail = await listMailForSession(repoDir, "session-agent-body-file");
+    assert.equal(mail.length, 1);
+    assert.equal(mail[0]?.body, body);
+
+    const events = await listEvents(repoDir, { sessionId: "session-agent-body-file" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "mail.sent");
+    assert.equal(events[0]?.payload.bodyLength, body.length);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("mailSendCommand rejects conflicting inline and file-based body inputs", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(
+      () =>
+        mailSendCommand({
+          selector: "agent-conflict",
+          body: "inline",
+          bodyFile: "mail-body.txt",
+          startDir: repoDir
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof MailError);
+        assert.equal(error.message, "Choose exactly one mail body source: use either '<body>' or '--body-file <path>'.");
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("mailSendCommand rejects missing body input", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await assert.rejects(
+      () =>
+        mailSendCommand({
+          selector: "agent-missing-body",
+          startDir: repoDir
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof MailError);
+        assert.equal(error.message, "Mail send requires a body. Use '<body>' or '--body-file <path>'.");
+        return true;
+      }
+    );
   } finally {
     await removeTempDir(repoDir);
   }
