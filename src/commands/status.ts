@@ -159,9 +159,23 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     process.stdout.write("\n");
   }
 
+  const followUpBySession = new Map<string, string>();
+  for (const session of sessions) {
+    followUpBySession.set(
+      session.id,
+      formatFollowUpAction(
+        session,
+        latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined,
+        cleanupReadiness.get(session.id) ?? "?",
+        unreadOperatorMailCounts.available ? unreadOperatorMailCounts.countsBySession.get(session.id) ?? 0 : undefined
+      )
+    );
+  }
+  const orderedSessions = [...sessions].sort((left, right) => compareStatusSessions(left, right, followUpBySession));
+
   process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tNEXT\tRECENT\n");
 
-  for (const session of sessions) {
+  for (const session of orderedSessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
     const unreadCount = unreadMailCounts.available
       ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
@@ -170,12 +184,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     const latestRun = latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined;
     const task = formatTaskSummary(latestRun, latestRuns.available);
     const run = formatRunSummary(latestRun, latestRuns.available);
-    const followUp = formatFollowUpAction(
-      session,
-      latestRun,
-      cleanup,
-      unreadOperatorMailCounts.available ? unreadOperatorMailCounts.countsBySession.get(session.id) ?? 0 : undefined
-    );
+    const followUp = followUpBySession.get(session.id) ?? "-";
     const recentEvent = formatRecentEventSummary(
       selectRecentEventForStatus({
         latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
@@ -368,6 +377,16 @@ function formatTaskSummary(run: RunRecord | undefined, available = true): string
   return run.taskSummary;
 }
 
+const FOLLOW_UP_PRIORITY = {
+  mail: 0,
+  inspect: 1,
+  "review-merge": 2,
+  cleanup: 3,
+  wait: 4,
+  done: 5,
+  "-": 6
+} as const;
+
 function formatFollowUpAction(
   session: SessionRecord,
   run: RunRecord | undefined,
@@ -403,6 +422,43 @@ function formatFollowUpAction(
   }
 
   return "-";
+}
+
+function compareStatusSessions(
+  left: SessionRecord,
+  right: SessionRecord,
+  followUpBySession: Map<string, string>
+): number {
+  const leftPriority = getFollowUpPriority(followUpBySession.get(left.id));
+  const rightPriority = getFollowUpPriority(followUpBySession.get(right.id));
+
+  if (leftPriority !== rightPriority) {
+    return leftPriority - rightPriority;
+  }
+
+  if (left.updatedAt !== right.updatedAt) {
+    return right.updatedAt.localeCompare(left.updatedAt);
+  }
+
+  if (left.createdAt !== right.createdAt) {
+    return right.createdAt.localeCompare(left.createdAt);
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function getFollowUpPriority(followUp: string | undefined): number {
+  switch (followUp) {
+    case "mail":
+    case "inspect":
+    case "review-merge":
+    case "cleanup":
+    case "wait":
+    case "done":
+      return FOLLOW_UP_PRIORITY[followUp];
+    default:
+      return FOLLOW_UP_PRIORITY["-"];
+  }
 }
 
 function formatRecentEventSummary(
