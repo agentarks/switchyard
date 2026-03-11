@@ -4,15 +4,15 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Name one small operator-visible blind spot exposed by the proved two-session workflow
+1. Implement passive stalled-session visibility in `sy status`
 
 ## Next
 
-2. Fix that blind spot in one focused slice
+2. Improve diagnostics only where the concurrent workflow proves current task handoff or inspection paths are still insufficient
 
 ## After That
 
-3. Improve diagnostics only where the concurrent workflow proves current task handoff or inspection paths are still insufficient
+3. Pick the next operator-visible blind spot only after the stalled-session slice proves insufficient
 
 ## Then
 
