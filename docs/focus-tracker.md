@@ -78,6 +78,7 @@ Completed enough to count as minimally real:
 - opt-in full launch-task inspection in exact-session `sy status --task`
 - durable run records under `runs.db` for launched tasks
 - latest run summaries in `sy status`
+- latest run task ownership in the all-session `sy status` view
 - terminal run outcomes from `sy stop` and `sy merge`
 - end-to-end coverage around `sy init`
 
@@ -91,6 +92,7 @@ Current planning state:
 
 These are the right kinds of tasks right now:
 - make the first concurrent delegated workflow real without losing exact session targeting or run visibility
+- keep task ownership visible in the all-session view so concurrent sessions do not require immediate drilldown
 - keep latest run state and terminal outcome trustworthy as concurrent sessions overlap
 - improve operator inspection only when it directly supports the concurrent-workflow slice
 - harden lifecycle behavior only when a reproduced failure blocks the current loop

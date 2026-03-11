@@ -10,6 +10,7 @@ Current outcome:
 - stop treating run tracking itself as the open gap
 - make the smallest useful multi-agent workflow real on top of the new run model
 - make sure the operator can follow two concurrent delegated sessions without losing task, run, or reintegration state
+- use the all-session `sy status` view to surface task ownership directly from the latest run instead of forcing exact-session drilldowns
 
 ## Why This Is Next
 
@@ -41,6 +42,7 @@ Without naming this slice:
 Completed slice:
 - basic run tracking with durable run records under `runs.db`
 - latest run summaries in `sy status`
+- latest run task ownership in the all-session `sy status` view
 - run creation in `sy sling`
 - run terminal outcomes in `sy stop` and `sy merge`
 - file-backed mail-body input in `sy mail send` via `--body-file <path>`

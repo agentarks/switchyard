@@ -144,7 +144,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     process.stdout.write("\n");
   }
 
-  process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tRUN\tRECENT\n");
+  process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tRECENT\n");
 
   for (const session of sessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
@@ -152,7 +152,9 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
       : "?";
     const cleanup = cleanupReadiness.get(session.id) ?? "?";
-    const run = formatRunSummary(latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined, latestRuns.available);
+    const latestRun = latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined;
+    const task = formatTaskSummary(latestRun, latestRuns.available);
+    const run = formatRunSummary(latestRun, latestRuns.available);
     const recentEvent = formatRecentEventSummary(
       selectRecentEventForStatus({
         latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
@@ -161,7 +163,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       })
     );
     process.stdout.write(
-      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${cleanup}\t${run}\t${recentEvent}\n`
+      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${cleanup}\t${task}\t${run}\t${recentEvent}\n`
     );
   }
 }
@@ -330,6 +332,18 @@ function formatRunSummary(run: RunRecord | undefined, available = true): string 
   }
 
   return run.state;
+}
+
+function formatTaskSummary(run: RunRecord | undefined, available = true): string {
+  if (!available) {
+    return "?";
+  }
+
+  if (!run) {
+    return "-";
+  }
+
+  return run.taskSummary;
 }
 
 function formatRecentEventSummary(

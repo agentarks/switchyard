@@ -87,8 +87,9 @@ Current contract:
 - command includes one best-effort unread-mail count per session from `mail.db`
 - if unread mail counts cannot be loaded, command still renders status and prints `?` in the unread column instead of failing
 - command includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`
-- command includes one best-effort latest-run summary per session from `runs.db`
-- if run summaries cannot be loaded, command still renders status and prints `?` in the run column instead of failing
+- command includes one best-effort latest-run task summary per session from `runs.db`
+- command includes one best-effort latest-run state summary per session from `runs.db`
+- if run summaries cannot be loaded, command still renders status and prints `?` in both the task and run columns instead of failing
 - active sessions show the post-stop cleanup result with a `stop-then:` prefix instead of hiding whether cleanup would be merged-safe or abandon-only
 - command surfaces partial preserved-artifact loss in that cleanup-readiness label when the branch still exists but the preserved worktree is already missing
 - command keeps that missing-worktree case distinct in recent stop-event history instead of collapsing it into the harmless already-absent case
@@ -102,7 +103,7 @@ Current contract:
 - command rejects `--task` without an exact selector
 - command fails explicitly when `--task` is requested but the stored task text cannot be read
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
-- when sessions exist, print a concise tab-separated table ordered by most recent update, including a `RUN` column
+- when sessions exist, print a concise tab-separated table ordered by most recent update, including `TASK` and `RUN` columns
 
 Future target:
 - show concise operator-friendly status for active and recent sessions
