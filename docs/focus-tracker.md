@@ -79,6 +79,7 @@ Completed enough to count as minimally real:
 - durable run records under `runs.db` for launched tasks
 - latest run summaries in `sy status`
 - latest run task ownership in the all-session `sy status` view
+- derived next-step visibility in `sy status` so concurrent sessions stay operator-actionable
 - terminal run outcomes from `sy stop` and `sy merge`
 - end-to-end coverage around `sy init`
 

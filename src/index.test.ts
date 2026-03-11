@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { buildDefaultConfig, writeConfig } from "./config.js";
 import { listEvents } from "./events/store.js";
 import { createMail, listMailForSession, readUnreadMailForSession } from "./mail/store.js";
+import { createRun } from "./runs/store.js";
 import { createSession, getSessionById } from "./sessions/store.js";
 import { bootstrapSwitchyardLayout } from "./storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "./test-helpers/git.js";
@@ -267,6 +268,85 @@ test("sy merge reports the resolved session id when a preserved merge stops with
     assert.equal(events.at(-1)?.eventType, "merge.failed");
     assert.equal(events.at(-1)?.payload.reason, "merge_conflict");
   } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy status shows next follow-up actions for concurrent sessions through the real CLI entrypoint", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-status-next-test-");
+  const activeWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-active");
+  const reviewWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-review");
+  const runtime = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    detached: true,
+    stdio: "ignore"
+  });
+  runtime.unref();
+
+  try {
+    assert.ok(runtime.pid);
+    await git(repoDir, ["branch", "agents/agent-cli-active"]);
+    await git(repoDir, ["switch", "-c", "agents/agent-cli-review"]);
+    await git(repoDir, ["commit", "--allow-empty", "-m", "Review branch work"]);
+    await git(repoDir, ["switch", "main"]);
+    await mkdir(activeWorktreePath, { recursive: true });
+    await mkdir(reviewWorktreePath, { recursive: true });
+
+    await createSession(repoDir, {
+      id: "session-cli-active",
+      agentName: "agent-cli-active",
+      branch: "agents/agent-cli-active",
+      baseBranch: "main",
+      worktreePath: activeWorktreePath,
+      state: "running",
+      runtimePid: runtime.pid,
+      createdAt: "2026-03-10T10:20:00.000Z",
+      updatedAt: "2026-03-10T10:20:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-cli-review",
+      agentName: "agent-cli-review",
+      branch: "agents/agent-cli-review",
+      baseBranch: "main",
+      worktreePath: reviewWorktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-10T10:25:00.000Z",
+      updatedAt: "2026-03-10T10:25:00.000Z"
+    });
+
+    await createRun(repoDir, {
+      id: "run-cli-active",
+      sessionId: "session-cli-active",
+      agentName: "agent-cli-active",
+      taskSummary: "Keep working on the live branch.",
+      state: "active",
+      createdAt: "2026-03-10T10:20:00.000Z",
+      updatedAt: "2026-03-10T10:20:00.000Z"
+    });
+    await createRun(repoDir, {
+      id: "run-cli-review",
+      sessionId: "session-cli-review",
+      agentName: "agent-cli-review",
+      taskSummary: "Review the preserved branch before merge.",
+      state: "finished",
+      outcome: "stopped",
+      createdAt: "2026-03-10T10:25:00.000Z",
+      updatedAt: "2026-03-10T10:25:00.000Z",
+      finishedAt: "2026-03-10T10:25:00.000Z"
+    });
+
+    const { stdout, stderr } = await execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "status"], {
+      cwd: repoDir
+    });
+
+    assert.equal(stderr, "");
+    assert.match(stdout, /STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tNEXT\tRECENT/);
+    assert.match(stdout, /running\tsession-cli-active\tagent-cli-active[^\n]*\tactive\twait\t-/);
+    assert.match(stdout, /stopped\tsession-cli-review\tagent-cli-review[^\n]*\tfinished:stopped\treview-merge\t-/);
+  } finally {
+    if (runtime.pid) {
+      stopChildIfAlive(runtime.pid);
+    }
     await removeTempDir(repoDir);
   }
 });

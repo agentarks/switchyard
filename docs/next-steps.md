@@ -43,6 +43,7 @@ Completed slice:
 - basic run tracking with durable run records under `runs.db`
 - latest run summaries in `sy status`
 - latest run task ownership in the all-session `sy status` view
+- derived next-step visibility in the all-session and exact-session `sy status` views
 - run creation in `sy sling`
 - run terminal outcomes in `sy stop` and `sy merge`
 - file-backed mail-body input in `sy mail send` via `--body-file <path>`
