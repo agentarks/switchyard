@@ -59,6 +59,8 @@ Completed slice:
 - exact mail-body preservation in `sy mail send`
 - explicit `Body:` framing for multi-line mail inspection output in `sy mail check` and `sy mail list`
 - exact session-id visibility in empty selected `sy events` output
+- synthesized unread-mail recency summaries in `sy status`
+- mail-bucket ordering in `sy status` by newest unread inbound mail instead of stale session timestamps
 
 Decision rule:
 - if current launch output, `sy events`, exact-session `sy status`, and `sy status <session> --task` already give enough task-handoff visibility, do not invent another slice just to stay busy

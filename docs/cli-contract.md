@@ -91,6 +91,7 @@ Current contract:
 - command includes one best-effort latest-run state summary per session from `runs.db`
 - command includes one derived best-effort follow-up signal per session so concurrent sessions stay readable as `mail`, `wait`, `review-merge`, `cleanup`, `inspect`, or `done`
 - when unread mailbox items addressed to `operator` exist for a session, command prioritizes `mail` over the more generic lifecycle follow-up hint
+- when unread mailbox items addressed to `operator` exist for a session, command also surfaces a synthesized `mail.unread` recent summary from the newest unread inbound message instead of leaving `RECENT` focused on a less actionable lifecycle event
 - if run summaries cannot be loaded, command still renders status and prints `?` in both the task and run columns instead of failing
 - active sessions show the post-stop cleanup result with a `stop-then:` prefix instead of hiding whether cleanup would be merged-safe or abandon-only
 - command surfaces partial preserved-artifact loss in that cleanup-readiness label when the branch still exists but the preserved worktree is already missing
@@ -106,6 +107,7 @@ Current contract:
 - command fails explicitly when `--task` is requested but the stored task text cannot be read
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
 - when sessions exist, print a concise tab-separated table with the most actionable follow-up rows first and the most recent update first within the same follow-up bucket, including `TASK`, `RUN`, and `NEXT` columns
+- within the `mail` follow-up bucket, order rows by the newest unread inbound mail before falling back to session recency
 - the current follow-up ordering is operator-first: `mail`, `inspect`, `review-merge`, `cleanup`, `wait`, `done`, then `-`
 
 Future target:
