@@ -15,3 +15,8 @@ export interface CreateMailInput {
   body: string;
   createdAt?: string;
 }
+
+export interface UnreadMailSummary {
+  message: MailRecord;
+  unreadCount: number;
+}

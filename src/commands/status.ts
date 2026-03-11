@@ -5,7 +5,8 @@ import { loadConfig } from "../config.js";
 import { listEvents, listLatestEventsBySession, recordEventBestEffort, type EventRecorder } from "../events/store.js";
 import type { EventPayloadValue, EventRecord } from "../events/types.js";
 import { StatusError } from "../errors.js";
-import { listUnreadMailCountsBySession } from "../mail/store.js";
+import { listLatestUnreadMailBySession, listUnreadMailCountsBySession } from "../mail/store.js";
+import type { UnreadMailSummary } from "../mail/types.js";
 import { inspectProcessLiveness, isProcessAlive, type ProcessLiveness } from "../runtimes/process.js";
 import { listLatestRunsBySession, updateLatestRunForSession } from "../runs/store.js";
 import type { RunRecord, UpdateRunInput } from "../runs/types.js";
@@ -23,6 +24,7 @@ interface StatusOptions {
   inspectRuntimeLiveness?: (pid: number) => ProcessLiveness;
   listUnreadMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
   listUnreadOperatorMailCounts?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, number>>;
+  listLatestUnreadOperatorMail?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, UnreadMailSummary>>;
   listLatestRuns?: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, RunRecord>>;
   updateLatestRun?: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>;
   recordEvent?: EventRecorder;
@@ -98,6 +100,14 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     }),
     "operator unread mail counts"
   );
+  const unreadOperatorMailSummaries = await loadUnreadMailSummariesBestEffort(
+    config.project.root,
+    sessionIds,
+    options.listLatestUnreadOperatorMail ?? ((projectRoot, mailSessionIds) => {
+      return listLatestUnreadMailBySession(projectRoot, mailSessionIds, { recipient: "operator" });
+    }),
+    "operator unread mail summaries"
+  );
   const unreadMailCounts = await loadUnreadMailCountsBestEffort(
     config.project.root,
     sessionIds,
@@ -135,6 +145,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
         latestStoredEvent: latestEventsBySession.get(session.id),
         reconciledEvent: reconciledEventsBySession.get(session.id)
       });
+      const unreadOperatorMailSummary = unreadOperatorMailSummaries.summariesBySession.get(session.id);
 
       process.stdout.write(`Base: ${formatOptionalField(session.baseBranch)}\n`);
       process.stdout.write(`Runtime pid: ${formatOptionalField(session.runtimePid)}\n`);
@@ -146,7 +157,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       process.stdout.write(`Cleanup: ${cleanup}\n`);
       process.stdout.write(`Run: ${formatRunSummary(latestRun, latestRuns.available)}\n`);
       process.stdout.write(`Next: ${formatFollowUpAction(session, latestRun, cleanup, unreadOperatorCount)}\n`);
-      process.stdout.write(`Recent: ${formatRecentEventSummary(recentEvent, { truncate: false })}\n`);
+      process.stdout.write(`Recent: ${formatRelevantRecentSummary(recentEvent, unreadOperatorMailSummary, { truncate: false })}\n`);
 
       if (options.showTask) {
         process.stdout.write("\nInstruction:\n");
@@ -171,7 +182,9 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       )
     );
   }
-  const orderedSessions = [...sessions].sort((left, right) => compareStatusSessions(left, right, followUpBySession));
+  const orderedSessions = [...sessions].sort((left, right) => {
+    return compareStatusSessions(left, right, followUpBySession, unreadOperatorMailSummaries.summariesBySession);
+  });
 
   process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tNEXT\tRECENT\n");
 
@@ -185,12 +198,13 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     const task = formatTaskSummary(latestRun, latestRuns.available);
     const run = formatRunSummary(latestRun, latestRuns.available);
     const followUp = followUpBySession.get(session.id) ?? "-";
-    const recentEvent = formatRecentEventSummary(
+    const recentEvent = formatRelevantRecentSummary(
       selectRecentEventForStatus({
         latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
         latestStoredEvent: latestEventsBySession.get(session.id),
         reconciledEvent: reconciledEventsBySession.get(session.id)
-      })
+      }),
+      unreadOperatorMailSummaries.summariesBySession.get(session.id)
     );
     process.stdout.write(
       `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${cleanup}\t${task}\t${run}\t${followUp}\t${recentEvent}\n`
@@ -232,6 +246,26 @@ async function loadLatestRunsBestEffort(
     process.stderr.write(`WARN: failed to load latest runs: ${formatErrorMessage(error)}\n`);
     return {
       runsBySession: new Map(),
+      available: false
+    };
+  }
+}
+
+async function loadUnreadMailSummariesBestEffort(
+  projectRoot: string,
+  sessionIds: string[],
+  listLatestUnreadMail: (projectRoot: string, sessionIds: string[]) => Promise<Map<string, UnreadMailSummary>>,
+  label = "unread mail summaries"
+): Promise<{ summariesBySession: Map<string, UnreadMailSummary>; available: boolean }> {
+  try {
+    return {
+      summariesBySession: await listLatestUnreadMail(projectRoot, sessionIds),
+      available: true
+    };
+  } catch (error) {
+    process.stderr.write(`WARN: failed to load ${label}: ${formatErrorMessage(error)}\n`);
+    return {
+      summariesBySession: new Map(),
       available: false
     };
   }
@@ -427,13 +461,25 @@ function formatFollowUpAction(
 function compareStatusSessions(
   left: SessionRecord,
   right: SessionRecord,
-  followUpBySession: Map<string, string>
+  followUpBySession: Map<string, string>,
+  unreadMailSummariesBySession: Map<string, UnreadMailSummary>
 ): number {
   const leftPriority = getFollowUpPriority(followUpBySession.get(left.id));
   const rightPriority = getFollowUpPriority(followUpBySession.get(right.id));
 
   if (leftPriority !== rightPriority) {
     return leftPriority - rightPriority;
+  }
+
+  if (leftPriority === FOLLOW_UP_PRIORITY.mail) {
+    const unreadMailComparison = compareUnreadMailFreshness(
+      unreadMailSummariesBySession.get(left.id),
+      unreadMailSummariesBySession.get(right.id)
+    );
+
+    if (unreadMailComparison !== 0) {
+      return unreadMailComparison;
+    }
   }
 
   if (left.updatedAt !== right.updatedAt) {
@@ -461,6 +507,33 @@ function getFollowUpPriority(followUp: string | undefined): number {
   }
 }
 
+function compareUnreadMailFreshness(
+  left: UnreadMailSummary | undefined,
+  right: UnreadMailSummary | undefined
+): number {
+  if (!left && !right) {
+    return 0;
+  }
+
+  if (!left) {
+    return 1;
+  }
+
+  if (!right) {
+    return -1;
+  }
+
+  if (left.message.createdAt !== right.message.createdAt) {
+    return right.message.createdAt.localeCompare(left.message.createdAt);
+  }
+
+  if (left.unreadCount !== right.unreadCount) {
+    return right.unreadCount - left.unreadCount;
+  }
+
+  return right.message.id.localeCompare(left.message.id);
+}
+
 function formatRecentEventSummary(
   event?: EventRecord,
   options: {
@@ -476,6 +549,52 @@ function formatRecentEventSummary(
     ? `${event.createdAt} ${event.eventType} ${detailSummary}`
     : `${event.createdAt} ${event.eventType}`;
 
+  if (options.truncate === false || summary.length <= 120) {
+    return summary;
+  }
+
+  return `${summary.slice(0, 117)}...`;
+}
+
+function formatRelevantRecentSummary(
+  event: EventRecord | undefined,
+  unreadMailSummary: UnreadMailSummary | undefined,
+  options: {
+    truncate?: boolean;
+  } = {}
+): string {
+  if (unreadMailSummary) {
+    return formatUnreadMailSummary(unreadMailSummary, options);
+  }
+
+  return formatRecentEventSummary(event, options);
+}
+
+function formatUnreadMailSummary(
+  summary: UnreadMailSummary,
+  options: {
+    truncate?: boolean;
+  } = {}
+): string {
+  const details = [
+    `unreadCount=${summary.unreadCount}`,
+    `sender=${formatPayloadValue(summary.message.sender)}`
+  ];
+  const bodyPreview = summarizeMailBody(summary.message.body);
+
+  if (bodyPreview.length > 0) {
+    details.push(`bodyPreview=${formatPayloadValue(bodyPreview)}`);
+  }
+
+  return formatStatusSummaryText(`${summary.message.createdAt} mail.unread ${details.join(", ")}`, options);
+}
+
+function formatStatusSummaryText(
+  summary: string,
+  options: {
+    truncate?: boolean;
+  } = {}
+): string {
   if (options.truncate === false || summary.length <= 120) {
     return summary;
   }
@@ -502,6 +621,16 @@ function formatPayloadValue(value: EventPayloadValue | undefined): string {
   }
 
   return String(value);
+}
+
+function summarizeMailBody(body: string): string {
+  const normalized = body.replace(/\s+/g, " ").trim();
+
+  if (normalized.length <= 60) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 57)}...`;
 }
 
 function determineNextLifecycleState(

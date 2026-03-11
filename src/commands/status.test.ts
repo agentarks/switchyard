@@ -239,9 +239,79 @@ test("statusCommand orders concurrent sessions by follow-up priority before rece
   }
 
   const output = writes.join("");
-  assert.match(output, /stopped\tsession-older-mail\tagent-older-mail[^\n]*\tmail\t-/);
+  assert.match(
+    output,
+    /stopped\tsession-older-mail\tagent-older-mail[^\n]*\tmail\t2026-03-06T14:05:00.000Z mail\.unread unreadCount=1, sender=agent-older-mail, bodyPreview="Need a decision before merge\."/
+  );
   assert.match(output, /running\tsession-recent-wait\tagent-recent-wait[^\n]*\twait\t-/);
   assert.ok(output.indexOf("session-older-mail") < output.indexOf("session-recent-wait"));
+});
+
+test("statusCommand orders mail follow-up rows by latest unread inbound mail before session recency", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-newer-mail",
+    agentName: "agent-newer-mail",
+    branch: "agents/agent-newer-mail",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-newer-mail"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-06T09:00:00.000Z",
+    updatedAt: "2026-03-06T09:00:00.000Z"
+  });
+  await createSession(repoDir, {
+    id: "session-older-update",
+    agentName: "agent-older-update",
+    branch: "agents/agent-older-update",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-older-update"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-06T08:00:00.000Z",
+    updatedAt: "2026-03-06T11:00:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-newer-mail",
+    sender: "agent-newer-mail",
+    recipient: "operator",
+    body: "Latest unread inbound mail.",
+    createdAt: "2026-03-06T12:00:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-older-update",
+    sender: "agent-older-update",
+    recipient: "operator",
+    body: "Older unread inbound mail.",
+    createdAt: "2026-03-06T10:00:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(
+    output,
+    /stopped\tsession-newer-mail\tagent-newer-mail[^\n]*\tmail\t2026-03-06T12:00:00.000Z mail\.unread unreadCount=1, sender=agent-newer-mail, bodyPreview="Latest unread inbound mail\."/
+  );
+  assert.match(
+    output,
+    /stopped\tsession-older-update\tagent-older-update[^\n]*\tmail\t2026-03-06T10:00:00.000Z mail\.unread unreadCount=1, sender=agent-older-update, bodyPreview="Older unread inbound mail\."/
+  );
+  assert.ok(output.indexOf("session-newer-mail") < output.indexOf("session-older-update"));
 });
 
 test("statusCommand does not let a stopped run override current cleanup blockers", async () => {
@@ -651,7 +721,11 @@ test("statusCommand prioritizes unread mail in the selected session follow-up si
   assert.match(output, /Next: mail/);
   assert.match(
     output,
-    /running\tsession-selected-mail\tagent-selected-mail\tagents\/agent-selected-mail\t\.switchyard\/worktrees\/agent-selected-mail\t2026-03-09T12:10:00.000Z\t1\t[^\t]+\t-\t-\tmail\t2026-03-09T12:12:00.000Z runtime\.ready signal=pid_alive, runtimePid=7272/
+    /Recent: 2026-03-09T12:11:00.000Z mail\.unread unreadCount=1, sender=agent-selected-mail, bodyPreview="Ready for review\."/
+  );
+  assert.match(
+    output,
+    /running\tsession-selected-mail\tagent-selected-mail\tagents\/agent-selected-mail\t\.switchyard\/worktrees\/agent-selected-mail\t2026-03-09T12:10:00.000Z\t1\t[^\t]+\t-\t-\tmail\t2026-03-09T12:11:00.000Z mail\.unread unreadCount=1, sender=agent-selected-mail, bodyPreview="Ready for review\."/
   );
 });
 
@@ -1924,7 +1998,7 @@ test("statusCommand prioritizes unread mail over wait in the all-session follow-
 
   assert.match(
     writes.join(""),
-    /running\tsession-unread\tagent-unread\tagents\/agent-unread\t\.switchyard\/worktrees\/agent-unread\t2026-03-08T11:10:00.000Z\t2\t[^\t]+\t-\t-\tmail\t2026-03-08T11:13:00.000Z runtime\.ready signal=pid_alive, runtimePid=2323/
+    /running\tsession-unread\tagent-unread\tagents\/agent-unread\t\.switchyard\/worktrees\/agent-unread\t2026-03-08T11:10:00.000Z\t2\t[^\t]+\t-\t-\tmail\t2026-03-08T11:12:00.000Z mail\.unread unreadCount=2, sender=agent-unread, bodyPreview="Unread two"/
   );
   assert.match(
     writes.join(""),

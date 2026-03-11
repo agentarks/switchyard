@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { importSqlite } from "../storage/sqlite.js";
-import type { CreateMailInput, MailRecord } from "./types.js";
+import type { CreateMailInput, MailRecord, UnreadMailSummary } from "./types.js";
 
 const CREATE_MAIL_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS mail_messages (
@@ -138,6 +138,54 @@ export async function listUnreadMailCountsBySession(
     `).all(...params) as unknown as UnreadMailCountRow[];
 
     return new Map(rows.map((row) => [row.session_id, Number(row.unread_count)]));
+  });
+}
+
+export async function listLatestUnreadMailBySession(
+  projectRoot: string,
+  sessionIds: string[],
+  options: {
+    recipient?: string;
+  } = {}
+): Promise<Map<string, UnreadMailSummary>> {
+  if (sessionIds.length === 0) {
+    return new Map();
+  }
+
+  return await withMailDatabase(projectRoot, (db) => {
+    const placeholders = sessionIds.map(() => "?").join(", ");
+    const filters = ["read_at IS NULL", `session_id IN (${placeholders})`];
+    const params: Array<string> = [...sessionIds];
+
+    if (typeof options.recipient === "string") {
+      filters.push("recipient = ?");
+      params.push(options.recipient);
+    }
+
+    const rows = db.prepare(`
+      SELECT id, session_id, sender, recipient, body, created_at, read_at
+      FROM mail_messages
+      WHERE ${filters.join(" AND ")}
+      ORDER BY session_id ASC, created_at DESC, id DESC
+    `).all(...params) as unknown as MailRow[];
+
+    const summaries = new Map<string, UnreadMailSummary>();
+
+    for (const row of rows) {
+      const existing = summaries.get(row.session_id);
+
+      if (!existing) {
+        summaries.set(row.session_id, {
+          message: mapMailRow(row),
+          unreadCount: 1
+        });
+        continue;
+      }
+
+      existing.unreadCount += 1;
+    }
+
+    return summaries;
   });
 }
 

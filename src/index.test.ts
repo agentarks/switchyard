@@ -424,13 +424,84 @@ test("sy status orders actionable concurrent sessions ahead of newer wait-only r
     });
 
     assert.equal(stderr, "");
-    assert.match(stdout, /stopped\tsession-cli-order-mail\tagent-cli-order-mail[^\n]*\tmail\t-/);
+    assert.match(
+      stdout,
+      /stopped\tsession-cli-order-mail\tagent-cli-order-mail[^\n]*\tmail\t2026-03-10T10:05:00.000Z mail\.unread unreadCount=1, sender=agent-cli-order-mail, bodyPreview="Need your merge decision\."/
+    );
     assert.match(stdout, /running\tsession-cli-order-wait\tagent-cli-order-wait[^\n]*\twait\t-/);
     assert.ok(stdout.indexOf("session-cli-order-mail") < stdout.indexOf("session-cli-order-wait"));
   } finally {
     if (runtime.pid) {
       stopChildIfAlive(runtime.pid);
     }
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy status orders mail rows by latest unread inbound mail through the real CLI entrypoint", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-status-mail-order-test-");
+  const firstWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-first-mail");
+  const secondWorktreePath = join(repoDir, ".switchyard", "worktrees", "agent-cli-second-mail");
+
+  try {
+    await git(repoDir, ["branch", "agents/agent-cli-first-mail"]);
+    await git(repoDir, ["branch", "agents/agent-cli-second-mail"]);
+    await mkdir(firstWorktreePath, { recursive: true });
+    await mkdir(secondWorktreePath, { recursive: true });
+
+    await createSession(repoDir, {
+      id: "session-cli-first-mail",
+      agentName: "agent-cli-first-mail",
+      branch: "agents/agent-cli-first-mail",
+      baseBranch: "main",
+      worktreePath: firstWorktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-10T11:00:00.000Z",
+      updatedAt: "2026-03-10T11:00:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-cli-second-mail",
+      agentName: "agent-cli-second-mail",
+      branch: "agents/agent-cli-second-mail",
+      baseBranch: "main",
+      worktreePath: secondWorktreePath,
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-10T10:00:00.000Z",
+      updatedAt: "2026-03-10T12:00:00.000Z"
+    });
+
+    await createMail(repoDir, {
+      sessionId: "session-cli-first-mail",
+      sender: "agent-cli-first-mail",
+      recipient: "operator",
+      body: "Newest unread mail.",
+      createdAt: "2026-03-10T12:30:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-cli-second-mail",
+      sender: "agent-cli-second-mail",
+      recipient: "operator",
+      body: "Older unread mail.",
+      createdAt: "2026-03-10T12:15:00.000Z"
+    });
+
+    const { stdout, stderr } = await execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "status"], {
+      cwd: repoDir
+    });
+
+    assert.equal(stderr, "");
+    assert.match(
+      stdout,
+      /stopped\tsession-cli-first-mail\tagent-cli-first-mail[^\n]*\tmail\t2026-03-10T12:30:00.000Z mail\.unread unreadCount=1, sender=agent-cli-first-mail, bodyPreview="Newest unread mail\."/
+    );
+    assert.match(
+      stdout,
+      /stopped\tsession-cli-second-mail\tagent-cli-second-mail[^\n]*\tmail\t2026-03-10T12:15:00.000Z mail\.unread unreadCount=1, sender=agent-cli-second-mail, bodyPreview="Older unread mail\."/
+    );
+    assert.ok(stdout.indexOf("session-cli-first-mail") < stdout.indexOf("session-cli-second-mail"));
+  } finally {
     await removeTempDir(repoDir);
   }
 });

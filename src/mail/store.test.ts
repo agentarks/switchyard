@@ -5,6 +5,7 @@ import { createTempGitRepo, removeTempDir } from "../test-helpers/git.js";
 import {
   createMail,
   initializeMailStore,
+  listLatestUnreadMailBySession,
   listMailForSession,
   listUnreadMailCountsBySession,
   readUnreadMailForSession
@@ -209,6 +210,88 @@ test("listUnreadMailCountsBySession can filter unread counts by recipient", asyn
 
     assert.equal(operatorUnreadCounts.get("session-1"), 1);
     assert.equal(agentUnreadCounts.get("session-1"), 1);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("listLatestUnreadMailBySession returns the latest unread message and count per requested session", async () => {
+  const repoDir = await createTempGitRepo("switchyard-mail-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "agent-one",
+      recipient: "operator",
+      body: "Older unread",
+      createdAt: "2026-03-06T09:00:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "agent-one",
+      recipient: "operator",
+      body: "Latest unread",
+      createdAt: "2026-03-06T09:05:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-2",
+      sender: "agent-two",
+      recipient: "operator",
+      body: "Other session unread",
+      createdAt: "2026-03-06T09:10:00.000Z"
+    });
+    await readUnreadMailForSession(repoDir, "session-2");
+
+    const summaries = await listLatestUnreadMailBySession(repoDir, ["session-1", "session-2", "session-3"]);
+
+    assert.equal(summaries.get("session-1")?.unreadCount, 2);
+    assert.equal(summaries.get("session-1")?.message.body, "Latest unread");
+    assert.equal(summaries.get("session-1")?.message.createdAt, "2026-03-06T09:05:00.000Z");
+    assert.equal(summaries.get("session-2"), undefined);
+    assert.equal(summaries.get("session-3"), undefined);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("listLatestUnreadMailBySession can filter unread summaries by recipient", async () => {
+  const repoDir = await createTempGitRepo("switchyard-mail-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "operator",
+      recipient: "agent-one",
+      body: "Outbound unread",
+      createdAt: "2026-03-06T09:00:00.000Z"
+    });
+    await createMail(repoDir, {
+      sessionId: "session-1",
+      sender: "agent-one",
+      recipient: "operator",
+      body: "Inbound unread",
+      createdAt: "2026-03-06T09:05:00.000Z"
+    });
+
+    const operatorSummaries = await listLatestUnreadMailBySession(
+      repoDir,
+      ["session-1"],
+      { recipient: "operator" }
+    );
+    const agentSummaries = await listLatestUnreadMailBySession(
+      repoDir,
+      ["session-1"],
+      { recipient: "agent-one" }
+    );
+
+    assert.equal(operatorSummaries.get("session-1")?.unreadCount, 1);
+    assert.equal(operatorSummaries.get("session-1")?.message.body, "Inbound unread");
+    assert.equal(agentSummaries.get("session-1")?.unreadCount, 1);
+    assert.equal(agentSummaries.get("session-1")?.message.body, "Outbound unread");
   } finally {
     await removeTempDir(repoDir);
   }

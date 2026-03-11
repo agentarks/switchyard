@@ -76,6 +76,8 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - status output that now also surfaces the latest run task summary per session so concurrent delegated work stays attributable in the all-session view
 - status output that now also surfaces one derived next follow-up signal per session so concurrent delegated work stays actionable without decoding unread-mail, run, and cleanup columns by hand
 - status output that now also orders all-session rows by current follow-up priority before recency so concurrent mail, inspection, and reintegration work surfaces ahead of passive wait states
+- status output now also surfaces a synthesized `mail.unread` recent summary from the newest unread inbound operator mail so concurrent mailbox follow-up stays visible without drilling into `sy mail`
+- status output now also orders rows within the `mail` follow-up bucket by newest unread inbound mail before falling back to session recency
 - status output that now also surfaces durable `stop.failed` context such as shutdown-failure reason, runtime pid, and error text in recent-event summaries, including on the same render that records a follow-up runtime reconciliation event
 - status output that now also surfaces each session id in the main overview so later commands can target an exact preserved session without guesswork
 - status output that now also surfaces unread mail counts so operators can spot pending mailbox work without checking each session individually
@@ -154,6 +156,8 @@ This repository now has a minimal but real operator loop for one repo-local Code
   - includes the latest durable run task summary per session in that table so overlapping delegated work stays attributable without drilling into exact-session views
   - includes one derived next follow-up signal per session so the all-session view stays readable when concurrent sessions need different operator actions such as mailbox review, waiting, review/merge, cleanup, or inspection
   - prioritizes `mail` in that follow-up signal when unread mailbox items addressed to `operator` exist for a session, instead of leaving the operator to infer it only from the unread-count column
+  - synthesizes a `mail.unread` recent summary from the newest unread inbound operator mail when mailbox follow-up is pending, so the all-session and exact-session views stay communication-aware without requiring an immediate `sy mail` drilldown
+  - orders rows within the `mail` follow-up bucket by newest unread inbound mail before falling back to session update timestamps
   - distinguishes partial preserved-artifact loss in that cleanup-readiness label when the branch still exists but the preserved worktree path is already missing
   - includes one concise recent-event summary per session when event history exists, including `readyAfterMs` for fresh `sling.completed` events, shutdown-failure details from `stop.failed`, cleanup mode and missing-worktree details from `stop.completed`, and higher-value merge-failure details such as drift targets, preserved-worktree paths, and git errors when those fields exist
   - when that same status run also records a runtime reconciliation event, keeps a latest pre-existing `stop.failed` visible in the current recent summary instead of immediately replacing it with the synthetic runtime event

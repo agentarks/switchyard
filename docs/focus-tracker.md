@@ -80,6 +80,8 @@ Completed enough to count as minimally real:
 - latest run summaries in `sy status`
 - latest run task ownership in the all-session `sy status` view
 - derived next-step visibility in `sy status` so concurrent sessions stay operator-actionable
+- synthesized unread-mail recency summaries in `sy status` so concurrent mailbox follow-up stays visible
+- mail-bucket ordering in `sy status` by newest unread inbound mail
 - terminal run outcomes from `sy stop` and `sy merge`
 - end-to-end coverage around `sy init`
 
