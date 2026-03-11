@@ -313,6 +313,87 @@ test("sy mail send preserves the exact body and reports the resolved session id 
   }
 });
 
+test("sy mail send can read the exact body from a file through the real CLI entrypoint", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-mail-send-file-test-");
+  const nestedDir = join(repoDir, "notes");
+  const body = "  Review the preserved branch diff from file.\nSecond line stays intact.  ";
+
+  try {
+    await mkdir(nestedDir, { recursive: true });
+    await writeFile(join(nestedDir, "mail-body.txt"), body, "utf8");
+
+    await createSession(repoDir, {
+      id: "session-cli-mail-file",
+      agentName: "agent-cli-mail-file",
+      branch: "agents/agent-cli-mail-file",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-cli-mail-file"),
+      state: "running",
+      runtimePid: 52525,
+      createdAt: "2026-03-10T10:50:00.000Z",
+      updatedAt: "2026-03-10T10:50:00.000Z"
+    });
+
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [tsxCliPath, cliEntryPath, "mail", "send", "session-cli-mail-file", "--body-file", "mail-body.txt"],
+      { cwd: nestedDir }
+    );
+
+    assert.equal(stderr, "");
+    assert.match(stdout, /Queued mail for agent-cli-mail-file/);
+    assert.match(stdout, /Session: session-cli-mail-file/);
+    assert.match(stdout, /Mail id: [0-9a-f-]{36}/);
+
+    const mailbox = await listMailForSession(repoDir, "session-cli-mail-file");
+    assert.equal(mailbox.length, 1);
+    assert.equal(mailbox[0]?.body, body);
+
+    const events = await listEvents(repoDir, { sessionId: "session-cli-mail-file" });
+    assert.equal(events.at(-1)?.eventType, "mail.sent");
+    assert.equal(events.at(-1)?.payload.bodyLength, body.length);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy mail send reports body-file read failures through the Switchyard error contract", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-mail-send-missing-file-test-");
+
+  try {
+    await createSession(repoDir, {
+      id: "session-cli-mail-missing-file",
+      agentName: "agent-cli-mail-missing-file",
+      branch: "agents/agent-cli-mail-missing-file",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-cli-mail-missing-file"),
+      state: "running",
+      runtimePid: 53535,
+      createdAt: "2026-03-10T10:55:00.000Z",
+      updatedAt: "2026-03-10T10:55:00.000Z"
+    });
+
+    await assert.rejects(
+      () => execFileAsync(
+        process.execPath,
+        [tsxCliPath, cliEntryPath, "mail", "send", "session-cli-mail-missing-file", "--body-file", "missing-body.txt"],
+        { cwd: repoDir }
+      ),
+      (error: unknown) => {
+        assert.ok(error && typeof error === "object" && "stdout" in error && "stderr" in error);
+        const cliError = error as { stdout: string; stderr: string; code: number };
+        assert.equal(cliError.code, 1);
+        assert.equal(cliError.stdout, "");
+        assert.match(
+          cliError.stderr,
+          /MAIL_ERROR: Failed to read body file 'missing-body\.txt': ENOENT: no such file or directory/
+        );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("sy mail list --unread preserves unread state through the real CLI entrypoint", async () => {
   const repoDir = await createInitializedRepo("switchyard-cli-mail-test-");
 

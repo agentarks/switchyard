@@ -37,6 +37,7 @@ Without that discipline:
 ## Latest Completed Slice
 
 Completed slice:
+- file-backed mail-body input in `sy mail send` via `--body-file <path>`
 - truthful already-absent cleanup reporting for `sy stop <session> --cleanup --abandon`
 - file-backed launch-task input in `sy sling` via `--task-file <path>`
 - exact launch-task inspection in `sy status <session> --task`

@@ -194,11 +194,14 @@ Future target:
 
 Current contract:
 - command has `send`, `check`, and `list` subcommands
-- `sy mail send <session> <body>` resolves one session by id or normalized agent name
+- `sy mail send <session> [body]` resolves one session by id or normalized agent name
+- `sy mail send <session> --body-file <path>` reads the exact message body from a file relative to the invocation directory
+- `sy mail send` requires exactly one body source: positional `<body>` or `--body-file <path>`
 - mail commands accept an exact session id even when that selector would not be a valid normalized agent name
 - mail commands reject selectors that match multiple sessions by normalized agent name and require an exact session id instead
 - `sy mail send` writes one durable record into `mail.db`
 - `sy mail send` preserves the exact provided body text while still rejecting whitespace-only input
+- `sy mail send` fails explicitly when the requested body file cannot be read
 - `sy mail send` prints the resolved session id and generated mail id in operator-facing output
 - `sy mail check <session>` reads unread mail for one resolved session
 - `sy mail check` prints the resolved session id in operator-facing output, including the empty-unread case
