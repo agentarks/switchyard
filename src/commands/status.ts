@@ -116,6 +116,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
         ? String(unreadMailCounts.countsBySession.get(session.id) ?? 0)
         : "?";
       const cleanup = cleanupReadiness.get(session.id) ?? "?";
+      const latestRun = latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined;
       const recentEvent = selectRecentEventForStatus({
         latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
         latestStoredEvent: latestEventsBySession.get(session.id),
@@ -130,7 +131,8 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       process.stdout.write(`Spec: ${selectedSessionDetails?.taskHandoff?.taskSpecPath ?? "-"}\n`);
       process.stdout.write(`Unread: ${unreadCount}\n`);
       process.stdout.write(`Cleanup: ${cleanup}\n`);
-      process.stdout.write(`Run: ${formatRunSummary(latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined, latestRuns.available)}\n`);
+      process.stdout.write(`Run: ${formatRunSummary(latestRun, latestRuns.available)}\n`);
+      process.stdout.write(`Next: ${formatFollowUpAction(session, latestRun, cleanup)}\n`);
       process.stdout.write(`Recent: ${formatRecentEventSummary(recentEvent, { truncate: false })}\n`);
 
       if (options.showTask) {
@@ -144,7 +146,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     process.stdout.write("\n");
   }
 
-  process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tRECENT\n");
+  process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tNEXT\tRECENT\n");
 
   for (const session of sessions) {
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
@@ -155,6 +157,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     const latestRun = latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined;
     const task = formatTaskSummary(latestRun, latestRuns.available);
     const run = formatRunSummary(latestRun, latestRuns.available);
+    const followUp = formatFollowUpAction(session, latestRun, cleanup);
     const recentEvent = formatRecentEventSummary(
       selectRecentEventForStatus({
         latestEventBeforeReconcile: latestEventsBeforeReconcile.get(session.id),
@@ -163,7 +166,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       })
     );
     process.stdout.write(
-      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${cleanup}\t${task}\t${run}\t${recentEvent}\n`
+      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${cleanup}\t${task}\t${run}\t${followUp}\t${recentEvent}\n`
     );
   }
 }
@@ -344,6 +347,38 @@ function formatTaskSummary(run: RunRecord | undefined, available = true): string
   }
 
   return run.taskSummary;
+}
+
+function formatFollowUpAction(
+  session: SessionRecord,
+  run: RunRecord | undefined,
+  cleanup: string
+): string {
+  if (isActiveSessionState(session.state)) {
+    return "wait";
+  }
+
+  if (cleanup === "ready:absent") {
+    return "done";
+  }
+
+  if (cleanup === "ready:merged" || run?.outcome === "merged") {
+    return "cleanup";
+  }
+
+  if (cleanup === "abandon-only:not-merged" || run?.outcome === "stopped") {
+    return "review-merge";
+  }
+
+  if (run?.outcome === "launch_failed" || run?.outcome === "failed") {
+    return "inspect";
+  }
+
+  if (cleanup.startsWith("abandon-only:")) {
+    return "inspect";
+  }
+
+  return "-";
 }
 
 function formatRecentEventSummary(
