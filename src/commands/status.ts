@@ -114,6 +114,11 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     options.listUnreadMailCounts ?? listUnreadMailCountsBySession,
     "unread mail counts"
   );
+  const effectiveUnreadOperatorMailSummaries = unreadMailCounts.available
+    && unreadOperatorMailCounts.available
+    && unreadOperatorMailSummaries.available
+    ? unreadOperatorMailSummaries.summariesBySession
+    : new Map<string, UnreadMailSummary>();
   const cleanupReadiness = await loadCleanupReadinessBestEffort(
     config.project.root,
     config.project.canonicalBranch,
@@ -145,7 +150,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
         latestStoredEvent: latestEventsBySession.get(session.id),
         reconciledEvent: reconciledEventsBySession.get(session.id)
       });
-      const unreadOperatorMailSummary = unreadOperatorMailSummaries.summariesBySession.get(session.id);
+      const unreadOperatorMailSummary = effectiveUnreadOperatorMailSummaries.get(session.id);
 
       process.stdout.write(`Base: ${formatOptionalField(session.baseBranch)}\n`);
       process.stdout.write(`Runtime pid: ${formatOptionalField(session.runtimePid)}\n`);
@@ -172,18 +177,21 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 
   const followUpBySession = new Map<string, string>();
   for (const session of sessions) {
+    const unreadOperatorCountForFollowUp = unreadMailCounts.available && unreadOperatorMailCounts.available
+      ? unreadOperatorMailCounts.countsBySession.get(session.id) ?? 0
+      : undefined;
     followUpBySession.set(
       session.id,
       formatFollowUpAction(
         session,
         latestRuns.available ? latestRuns.runsBySession.get(session.id) : undefined,
         cleanupReadiness.get(session.id) ?? "?",
-        unreadOperatorMailCounts.available ? unreadOperatorMailCounts.countsBySession.get(session.id) ?? 0 : undefined
+        unreadOperatorCountForFollowUp
       )
     );
   }
   const orderedSessions = [...sessions].sort((left, right) => {
-    return compareStatusSessions(left, right, followUpBySession, unreadOperatorMailSummaries.summariesBySession);
+    return compareStatusSessions(left, right, followUpBySession, effectiveUnreadOperatorMailSummaries);
   });
 
   process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tNEXT\tRECENT\n");
@@ -204,7 +212,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
         latestStoredEvent: latestEventsBySession.get(session.id),
         reconciledEvent: reconciledEventsBySession.get(session.id)
       }),
-      unreadOperatorMailSummaries.summariesBySession.get(session.id)
+      effectiveUnreadOperatorMailSummaries.get(session.id)
     );
     process.stdout.write(
       `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${session.updatedAt}\t${unreadCount}\t${cleanup}\t${task}\t${run}\t${followUp}\t${recentEvent}\n`
@@ -563,11 +571,22 @@ function formatRelevantRecentSummary(
     truncate?: boolean;
   } = {}
 ): string {
-  if (unreadMailSummary) {
+  if (unreadMailSummary && shouldPreferUnreadMailSummary(event, unreadMailSummary)) {
     return formatUnreadMailSummary(unreadMailSummary, options);
   }
 
   return formatRecentEventSummary(event, options);
+}
+
+function shouldPreferUnreadMailSummary(
+  event: EventRecord | undefined,
+  unreadMailSummary: UnreadMailSummary
+): boolean {
+  if (!event) {
+    return true;
+  }
+
+  return unreadMailSummary.message.createdAt > event.createdAt;
 }
 
 function formatUnreadMailSummary(

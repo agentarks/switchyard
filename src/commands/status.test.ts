@@ -696,7 +696,7 @@ test("statusCommand prioritizes unread mail in the selected session follow-up si
       signal: "pid_alive",
       runtimePid: 7272
     },
-    createdAt: "2026-03-09T12:12:00.000Z"
+    createdAt: "2026-03-09T12:10:30.000Z"
   });
 
   process.stdout.write = ((chunk: string | Uint8Array) => {
@@ -726,6 +726,71 @@ test("statusCommand prioritizes unread mail in the selected session follow-up si
   assert.match(
     output,
     /running\tsession-selected-mail\tagent-selected-mail\tagents\/agent-selected-mail\t\.switchyard\/worktrees\/agent-selected-mail\t2026-03-09T12:10:00.000Z\t1\t[^\t]+\t-\t-\tmail\t2026-03-09T12:11:00.000Z mail\.unread unreadCount=1, sender=agent-selected-mail, bodyPreview="Ready for review\."/
+  );
+});
+
+test("statusCommand keeps a newer blocking event in RECENT even when unread mail still drives NEXT", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-selected-mail-blocked",
+    agentName: "agent-selected-mail-blocked",
+    branch: "agents/agent-selected-mail-blocked",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-selected-mail-blocked"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-09T12:10:00.000Z",
+    updatedAt: "2026-03-09T12:10:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-selected-mail-blocked",
+    sender: "agent-selected-mail-blocked",
+    recipient: "operator",
+    body: "Need your decision.",
+    createdAt: "2026-03-09T12:11:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-selected-mail-blocked",
+    agentName: "agent-selected-mail-blocked",
+    eventType: "merge.failed",
+    payload: {
+      branch: "agents/agent-selected-mail-blocked",
+      reason: "merge_conflict",
+      canonicalBranch: "main",
+      conflictCount: 1,
+      firstConflictPath: "src/conflict.ts"
+    },
+    createdAt: "2026-03-09T12:12:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-selected-mail-blocked",
+      isRuntimeAlive: () => false
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Unread: 1/);
+  assert.match(output, /Next: mail/);
+  assert.match(
+    output,
+    /Recent: 2026-03-09T12:12:00.000Z merge\.failed reason=merge_conflict, conflictCount=1, firstConflictPath=src\/conflict\.ts, branch=agents\/agent-selected-mail-blocked, canonicalBranch=main/
+  );
+  assert.match(
+    output,
+    /stopped\tsession-selected-mail-blocked\tagent-selected-mail-blocked[^\n]*\tmail\t2026-03-09T12:12:00.000Z merge\.failed reason=merge_conflict, conflictCount=1, firstConflictPath=src\/conflict\.ts, bran\.\.\./
   );
 });
 
@@ -1968,7 +2033,7 @@ test("statusCommand prioritizes unread mail over wait in the all-session follow-
       signal: "pid_alive",
       runtimePid: 2323
     },
-    createdAt: "2026-03-08T11:13:00.000Z"
+    createdAt: "2026-03-08T11:11:30.000Z"
   });
   await createEvent(repoDir, {
     sessionId: "session-wait",
@@ -2293,6 +2358,13 @@ test("statusCommand keeps rendering when unread mail counts cannot be loaded", a
     },
     createdAt: "2026-03-06T09:30:00.000Z"
   });
+  await createMail(repoDir, {
+    sessionId: "agent-mail-broken",
+    sender: "agent-mail-broken",
+    recipient: "operator",
+    body: "Unread mail should not leak into degraded output.",
+    createdAt: "2026-03-06T09:45:00.000Z"
+  });
 
   process.stdout.write = ((chunk: string | Uint8Array) => {
     stdoutWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
@@ -2310,6 +2382,26 @@ test("statusCommand keeps rendering when unread mail counts cannot be loaded", a
       now: () => "2026-03-08T10:05:00.000Z",
       listUnreadMailCounts: async () => {
         throw new Error("mail unavailable");
+      },
+      listUnreadOperatorMailCounts: async () => {
+        return new Map([["agent-mail-broken", 1]]);
+      },
+      listLatestUnreadOperatorMail: async () => {
+        return new Map([[
+          "agent-mail-broken",
+          {
+            unreadCount: 1,
+            message: {
+              id: "mail-broken-1",
+              sessionId: "agent-mail-broken",
+              sender: "agent-mail-broken",
+              recipient: "operator",
+              body: "Unread mail should not leak into degraded output.",
+              createdAt: "2026-03-06T09:45:00.000Z",
+              readAt: null
+            }
+          }
+        ]]);
       }
     });
 
@@ -2331,6 +2423,7 @@ test("statusCommand keeps rendering when unread mail counts cannot be loaded", a
     stdoutWrites.join(""),
     /failed\tagent-mail-broken\tagent-mail-broken\tagents\/agent-mail-broken\t\.switchyard\/worktrees\/agent-mail-broken\t2026-03-08T10:05:00.000Z\t\?\t[^\t]+\t-\t-\tinspect\t2026-03-08T10:05:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=9191/
   );
+  assert.doesNotMatch(stdoutWrites.join(""), /mail\.unread/);
   assert.match(stderrWrites.join(""), /WARN: failed to load unread mail counts: mail unavailable/);
 });
 
