@@ -2,6 +2,7 @@ import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { Command } from "commander";
 import {
+  branchPointsToCommit,
   buildDefaultConfig,
   detectCanonicalBranch,
   detectProjectRoot,
@@ -51,8 +52,16 @@ export async function initCommand(options: InitOptions): Promise<void> {
 
   await bootstrapSwitchyardLayout(projectRoot);
   await writeConfig(config);
+  const canonicalBranchReady = await branchPointsToCommit(projectRoot, canonicalBranch);
 
   process.stdout.write(`Initialized Switchyard in ${projectRoot}\n`);
   process.stdout.write(`Config: ${configPath}\n`);
   process.stdout.write("Next step: use sy sling, sy status, and sy stop to exercise the lifecycle.\n");
+
+  if (!canonicalBranchReady) {
+    process.stderr.write(
+      `WARN: Canonical branch '${canonicalBranch}' does not point to a commit yet. `
+      + "Create an initial commit on that branch before running 'sy sling'.\n"
+    );
+  }
 }
