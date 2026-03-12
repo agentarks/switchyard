@@ -145,6 +145,72 @@ test("logsCommand rejects selectors that match multiple sessions by agent name",
   }
 });
 
+test("logsCommand strips the leading BSD script control-character artifact from displayed transcripts", async () => {
+  const repoDir = await createInitializedRepo();
+  const sessionId = "session-logs-bsd-artifact";
+  const logPath = join(repoDir, ".switchyard", "logs", `agent-logs-bsd-${sessionId}.log`);
+
+  try {
+    await createSession(repoDir, {
+      id: sessionId,
+      agentName: "agent-logs-bsd",
+      branch: "agents/agent-logs-bsd",
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-logs-bsd"),
+      state: "running",
+      runtimePid: 1818,
+      createdAt: "2026-03-12T09:17:00.000Z",
+      updatedAt: "2026-03-12T09:17:00.000Z"
+    });
+    await writeFile(logPath, "^D\b\bhello\r\nworld\r\n", "utf8");
+
+    const output = await captureStdout(async () => {
+      await logsCommand({ selector: sessionId, startDir: repoDir, showAll: true });
+    });
+
+    assert.doesNotMatch(output, /\^D\b\b/);
+    assert.match(output, /hello/);
+    assert.match(output, /world/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("logsCommand stops cleanly when stdout closes with EPIPE", async () => {
+  const repoDir = await createInitializedRepo();
+  const sessionId = "session-logs-epipe";
+  const logPath = join(repoDir, ".switchyard", "logs", `agent-logs-epipe-${sessionId}.log`);
+
+  try {
+    await createSession(repoDir, {
+      id: sessionId,
+      agentName: "agent-logs-epipe",
+      branch: "agents/agent-logs-epipe",
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-logs-epipe"),
+      state: "running",
+      runtimePid: 1919,
+      createdAt: "2026-03-12T09:18:00.000Z",
+      updatedAt: "2026-03-12T09:18:00.000Z"
+    });
+    await writeFile(logPath, "line 001\nline 002\n", "utf8");
+
+    await assert.doesNotReject(async () => {
+      await captureStdout(
+        async () => {
+          await logsCommand({ selector: sessionId, startDir: repoDir });
+        },
+        {
+          failAfterWrites: 1,
+          error: Object.assign(new Error("write EPIPE"), { code: "EPIPE" })
+        }
+      );
+    });
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createInitializedRepo(): Promise<string> {
   const repoDir = await createTempGitRepo("switchyard-logs-command-test-");
 
@@ -154,12 +220,26 @@ async function createInitializedRepo(): Promise<string> {
   return repoDir;
 }
 
-async function captureStdout(run: () => Promise<void>): Promise<string> {
+async function captureStdout(
+  run: () => Promise<void>,
+  options?: {
+    failAfterWrites?: number;
+    error?: Error;
+  }
+): Promise<string> {
   const writes: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
+  let writeCount = 0;
 
-  process.stdout.write = ((chunk: string | Uint8Array) => {
+  process.stdout.write = ((chunk: string | Uint8Array, callback?: (error?: Error | null) => void) => {
+    writeCount += 1;
+
+    if (typeof options?.failAfterWrites === "number" && writeCount > options.failAfterWrites) {
+      throw options.error ?? new Error("stdout write failed");
+    }
+
     writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    callback?.(null);
     return true;
   }) as typeof process.stdout.write;
 
