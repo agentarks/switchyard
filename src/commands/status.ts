@@ -1,5 +1,8 @@
+import { execFile } from "node:child_process";
+import { access } from "node:fs/promises";
 import { relative } from "node:path";
 import process from "node:process";
+import { promisify } from "node:util";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import {
@@ -57,9 +60,17 @@ interface StatusOptions {
 }
 
 interface DerivedStalledHint {
+  kind: "stalled";
   idleSince: string;
   idleForMs: number;
 }
+
+interface DerivedNoVisibleProgressHint {
+  kind: "no_visible_progress";
+  sessionAgeMs: number;
+}
+
+type DerivedInspectHint = DerivedNoVisibleProgressHint | DerivedStalledHint;
 
 interface StatusRowContext {
   session: SessionRecord;
@@ -69,10 +80,16 @@ interface StatusRowContext {
   followUp: string;
   recentEvent?: EventRecord;
   unreadOperatorMailSummary?: UnreadMailSummary;
-  stalledHint?: DerivedStalledHint;
+  inspectHint?: DerivedInspectHint;
   activityAt: string;
 }
 
+const execFileAsync = promisify(execFile);
+const NO_VISIBLE_PROGRESS_THRESHOLD_MS = 5 * 60 * 1000;
+const NO_VISIBLE_PROGRESS_READY_EVENT_TYPES = [
+  "sling.completed",
+  "runtime.ready"
+] as const;
 const STALLED_SESSION_THRESHOLD_MS = 30 * 60 * 1000;
 const RUNTIME_PROGRESS_EVENT_TYPES = [
   "sling.spawned",
@@ -148,6 +165,14 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     options.listLatestInboundMail ?? listLatestInboundMailBySession,
     "latest inbound mail"
   );
+  const noVisibleProgressHints = latestInboundMail.available
+    ? await loadNoVisibleProgressHints(
+      config.project.root,
+      sessions,
+      latestInboundMail.mailBySession,
+      (options.now ?? (() => new Date().toISOString()))()
+    )
+    : new Map<string, DerivedNoVisibleProgressHint>();
   const latestRuns = await loadLatestRunsBestEffort(
     config.project.root,
     sessionIds,
@@ -205,6 +230,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     unreadOperatorMailSummaries: effectiveUnreadOperatorMailSummaries,
     latestRuntimeProgressEvents: latestRuntimeProgressEvents.available ? latestRuntimeProgressEvents.eventsBySession : undefined,
     latestInboundMail: latestInboundMail.available ? latestInboundMail.mailBySession : undefined,
+    noVisibleProgressHints,
     now: (options.now ?? (() => new Date().toISOString()))()
   });
 
@@ -229,7 +255,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
         `Recent: ${formatRelevantRecentSummary(
           rowContext.recentEvent,
           rowContext.unreadOperatorMailSummary,
-          rowContext.stalledHint,
+          rowContext.inspectHint,
           { truncate: false }
         )}\n`
       );
@@ -253,10 +279,10 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     const session = rowContext.session;
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
     process.stdout.write(
-      `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${rowContext.activityAt}\t${rowContext.unreadCount}\t${rowContext.cleanup}\t${formatTaskSummary(rowContext.latestRun, latestRuns.available)}\t${formatRunSummary(rowContext.latestRun, latestRuns.available)}\t${rowContext.followUp}\t${formatRelevantRecentSummary(
+        `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${rowContext.activityAt}\t${rowContext.unreadCount}\t${rowContext.cleanup}\t${formatTaskSummary(rowContext.latestRun, latestRuns.available)}\t${formatRunSummary(rowContext.latestRun, latestRuns.available)}\t${rowContext.followUp}\t${formatRelevantRecentSummary(
         rowContext.recentEvent,
         rowContext.unreadOperatorMailSummary,
-        rowContext.stalledHint
+        rowContext.inspectHint
       )}\n`
     );
   }
@@ -274,6 +300,7 @@ function buildStatusRowContexts(options: {
   unreadOperatorMailSummaries: Map<string, UnreadMailSummary>;
   latestRuntimeProgressEvents?: Map<string, EventRecord>;
   latestInboundMail?: Map<string, MailRecord>;
+  noVisibleProgressHints: Map<string, DerivedNoVisibleProgressHint>;
   now: string;
 }): Map<string, StatusRowContext> {
   const rowContexts = new Map<string, StatusRowContext>();
@@ -296,6 +323,7 @@ function buildStatusRowContexts(options: {
       latestInboundMail: options.latestInboundMail?.get(session.id),
       now: options.now
     });
+    const inspectHint = selectInspectHint(options.noVisibleProgressHints.get(session.id), stalledHint);
     const unreadOperatorMailSummary = options.unreadOperatorMailSummaries.get(session.id);
     const cleanup = options.cleanupReadiness.get(session.id) ?? "?";
 
@@ -306,15 +334,39 @@ function buildStatusRowContexts(options: {
         : String(options.unreadMailCounts.get(session.id) ?? 0),
       cleanup,
       latestRun,
-      followUp: formatFollowUpAction(session, latestRun, cleanup, unreadOperatorCount, stalledHint),
+      followUp: formatFollowUpAction(session, latestRun, cleanup, unreadOperatorCount, inspectHint),
       recentEvent,
       unreadOperatorMailSummary,
-      stalledHint,
+      inspectHint,
       activityAt: deriveStatusActivityTimestamp(session, recentEvent, unreadOperatorMailSummary)
     });
   }
 
   return rowContexts;
+}
+
+async function loadNoVisibleProgressHints(
+  projectRoot: string,
+  sessions: SessionRecord[],
+  latestInboundMailBySession: Map<string, MailRecord>,
+  now: string
+): Promise<Map<string, DerivedNoVisibleProgressHint>> {
+  const hints = new Map<string, DerivedNoVisibleProgressHint>();
+
+  for (const session of sessions) {
+    const hint = await deriveNoVisibleProgressHint({
+      projectRoot,
+      session,
+      latestInboundMail: latestInboundMailBySession.get(session.id),
+      now
+    });
+
+    if (hint) {
+      hints.set(session.id, hint);
+    }
+  }
+
+  return hints;
 }
 
 async function loadUnreadMailCountsBestEffort(
@@ -580,13 +632,13 @@ function formatFollowUpAction(
   run: RunRecord | undefined,
   cleanup: string,
   unreadCount?: number,
-  stalledHint?: DerivedStalledHint
+  inspectHint?: DerivedInspectHint
 ): string {
   if ((unreadCount ?? 0) > 0) {
     return "mail";
   }
 
-  if (stalledHint) {
+  if (inspectHint) {
     return "inspect";
   }
 
@@ -720,7 +772,7 @@ function formatRecentEventSummary(
 function formatRelevantRecentSummary(
   event: EventRecord | undefined,
   unreadMailSummary: UnreadMailSummary | undefined,
-  stalledHint: DerivedStalledHint | undefined,
+  inspectHint: DerivedInspectHint | undefined,
   options: {
     truncate?: boolean;
   } = {}
@@ -729,17 +781,17 @@ function formatRelevantRecentSummary(
     ? formatUnreadMailSummary(unreadMailSummary, { truncate: false })
     : formatRecentEventSummary(event, { truncate: false });
 
-  if (!stalledHint) {
+  if (!inspectHint) {
     return formatStatusSummaryText(baseSummary, options);
   }
 
-  const stalledSummary = formatStalledHintSummary(stalledHint);
+  const inspectHintSummary = formatInspectHintSummary(inspectHint);
 
   if (baseSummary === "-") {
-    return formatStatusSummaryText(stalledSummary, options);
+    return formatStatusSummaryText(inspectHintSummary, options);
   }
 
-  return formatStatusSummaryTextWithTrailingSuffix(baseSummary, stalledSummary, options);
+  return formatStatusSummaryTextWithTrailingSuffix(baseSummary, inspectHintSummary, options);
 }
 
 function shouldPreferUnreadMailSummary(
@@ -807,8 +859,12 @@ function formatStatusSummaryTextWithTrailingSuffix(
   return `${truncatedSummary}${separator}${trailingSuffix}`;
 }
 
-function formatStalledHintSummary(stalledHint: DerivedStalledHint): string {
-  return `runtime.stalled idleFor=${formatIdleDuration(stalledHint.idleForMs)}`;
+function formatInspectHintSummary(inspectHint: DerivedInspectHint): string {
+  if (inspectHint.kind === "no_visible_progress") {
+    return `runtime.no_visible_progress age=${formatIdleDuration(inspectHint.sessionAgeMs)}`;
+  }
+
+  return `runtime.stalled idleFor=${formatIdleDuration(inspectHint.idleForMs)}`;
 }
 
 function formatIdleDuration(durationMs: number): string {
@@ -886,9 +942,115 @@ function deriveStalledHint(options: {
   }
 
   return {
+    kind: "stalled",
     idleSince,
     idleForMs
   };
+}
+
+function selectInspectHint(
+  noVisibleProgressHint: DerivedNoVisibleProgressHint | undefined,
+  stalledHint: DerivedStalledHint | undefined
+): DerivedInspectHint | undefined {
+  return noVisibleProgressHint ?? stalledHint;
+}
+
+async function deriveNoVisibleProgressHint(options: {
+  projectRoot: string;
+  session: SessionRecord;
+  latestInboundMail?: MailRecord;
+  now: string;
+}): Promise<DerivedNoVisibleProgressHint | undefined> {
+  if (!isActiveSessionState(options.session.state)) {
+    return undefined;
+  }
+
+  if (options.latestInboundMail) {
+    return undefined;
+  }
+
+  const firstReadyProgressAt = await findFirstReadyProgressAt(options.projectRoot, options.session.id);
+
+  if (!firstReadyProgressAt) {
+    return undefined;
+  }
+
+  const sessionAgeMs = Date.parse(options.now) - Date.parse(firstReadyProgressAt);
+
+  if (!Number.isFinite(sessionAgeMs) || sessionAgeMs <= NO_VISIBLE_PROGRESS_THRESHOLD_MS) {
+    return undefined;
+  }
+
+  const branch = options.session.branch.trim();
+  const baseBranch = options.session.baseBranch?.trim() ?? "";
+
+  if (branch.length === 0 || baseBranch.length === 0) {
+    return undefined;
+  }
+
+  if (!(await pathExists(options.session.worktreePath))) {
+    return undefined;
+  }
+
+  try {
+    if (!await isGitWorktreeClean(options.session.worktreePath)) {
+      return undefined;
+    }
+
+    if (await isBranchAheadOfBase(options.session.worktreePath, baseBranch, branch)) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return {
+    kind: "no_visible_progress",
+    sessionAgeMs
+  };
+}
+
+async function findFirstReadyProgressAt(projectRoot: string, sessionId: string): Promise<string | undefined> {
+  try {
+    const events = await listEvents(projectRoot, { sessionId });
+    return events.find((event) => {
+      return NO_VISIBLE_PROGRESS_READY_EVENT_TYPES.includes(
+        event.eventType as typeof NO_VISIBLE_PROGRESS_READY_EVENT_TYPES[number]
+      );
+    })?.createdAt;
+  } catch {
+    return undefined;
+  }
+}
+
+async function isGitWorktreeClean(worktreePath: string): Promise<boolean> {
+  const statusOutput = await runGit(worktreePath, ["status", "--porcelain", "--untracked-files=all"]);
+  return statusOutput.length === 0;
+}
+
+async function isBranchAheadOfBase(worktreePath: string, baseBranch: string, branch: string): Promise<boolean> {
+  const revListOutput = await runGit(worktreePath, ["rev-list", "--count", `${baseBranch}..${branch}`]);
+  const aheadCount = Number.parseInt(revListOutput, 10);
+
+  if (!Number.isFinite(aheadCount)) {
+    throw new Error(`Invalid ahead count '${revListOutput}'.`);
+  }
+
+  return aheadCount > 0;
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function runGit(cwd: string, args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync("git", args, { cwd });
+  return stdout.trim();
 }
 
 function formatRecentEventDetails(event: EventRecord): string {

@@ -84,13 +84,14 @@ Completed enough to count as minimally real:
 - mail-bucket ordering in `sy status` by newest unread inbound mail
 - freshest-activity timestamps and same-bucket freshness ordering in `sy status` so recent merge, mail, and runtime changes stay visible in the control-plane view
 - passive stalled-session visibility in `sy status`, including a separate idle clock from `UPDATED` plus appended `runtime.stalled idleFor=...` summaries
+- passive no-visible-progress visibility in `sy status`, including `runtime.no_visible_progress age=...` summaries when long-lived active sessions still show no inbound mail or repo-visible work artifact
 - terminal run outcomes from `sy stop` and `sy merge`
 - end-to-end coverage around `sy init`
 
 Current planning state:
 - the run-tracking slice is now materially real in the current operator loop
 - the first concurrent proving workflow on top of that run model is now materially real
-- the passive stalled-session visibility slice in `sy status` is now complete
+- the passive stalled-session visibility and no-visible-progress visibility slices in `sy status` are now complete
 - the next named slice should be chosen from a newly reproduced operator-visible blind spot, not from generic inspection polish
 - treat raw event visibility as supporting detail, not as the primary answer to "what happened to this task?"
 
