@@ -5,7 +5,13 @@ import { join } from "node:path";
 import { buildDefaultConfig, loadConfig, writeConfig } from "../config.js";
 import { WorktreeError } from "../errors.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
-import { createTempGitRepo, createUnbornTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
+import {
+  createRemoteTrackingOnlyCanonicalRepo,
+  createTempGitRepo,
+  createUnbornTempGitRepo,
+  git,
+  removeTempDir
+} from "../test-helpers/git.js";
 import { createWorktree } from "./manager.js";
 
 test("createWorktree creates a deterministic branch and path from the repo root", async () => {
@@ -81,6 +87,20 @@ test("createWorktree fails explicitly when the canonical branch does not point t
   }
 });
 
+test("createWorktree accepts a canonical branch that is only available via origin tracking", async () => {
+  const repoDir = await createRemoteTrackingInitializedRepo("switchyard-worktree-test-");
+
+  try {
+    const config = await loadConfig(repoDir);
+    const worktree = await createWorktree(config, "Writer Remote");
+
+    assert.equal(worktree.branch, "agents/writer-remote");
+    assert.equal(await git(worktree.path, ["branch", "--show-current"]), "agents/writer-remote");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createInitializedRepo(prefix: string): Promise<string> {
   const repoDir = await createTempGitRepo(prefix);
   await bootstrapSwitchyardLayout(repoDir);
@@ -90,6 +110,13 @@ async function createInitializedRepo(prefix: string): Promise<string> {
 
 async function createUnbornInitializedRepo(prefix: string): Promise<string> {
   const repoDir = await createUnbornTempGitRepo(prefix);
+  await bootstrapSwitchyardLayout(repoDir);
+  await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "main"));
+  return repoDir;
+}
+
+async function createRemoteTrackingInitializedRepo(prefix: string): Promise<string> {
+  const repoDir = await createRemoteTrackingOnlyCanonicalRepo(prefix);
   await bootstrapSwitchyardLayout(repoDir);
   await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "main"));
   return repoDir;

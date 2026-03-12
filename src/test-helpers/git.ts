@@ -30,6 +30,20 @@ export async function createUnbornTempGitRepo(prefix = "switchyard-git-test-"): 
   return repoDir;
 }
 
+export async function createRemoteTrackingOnlyCanonicalRepo(prefix = "switchyard-git-test-"): Promise<string> {
+  const repoDir = await createTempGitRepo(prefix);
+  const bareOriginDir = await realpath(await mkdtemp(join(tmpdir(), `${prefix}origin-`)));
+
+  await git(bareOriginDir, ["init", "--bare", "-b", "main"]);
+  await git(repoDir, ["remote", "add", "origin", bareOriginDir]);
+  await git(repoDir, ["push", "-u", "origin", "main"]);
+  await git(repoDir, ["switch", "-c", "feature/test"]);
+  await git(repoDir, ["branch", "-D", "main"]);
+  await git(repoDir, ["fetch", "origin"]);
+
+  return repoDir;
+}
+
 export async function removeTempDir(path: string): Promise<void> {
   await rm(path, { recursive: true, force: true });
 }

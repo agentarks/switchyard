@@ -51,12 +51,23 @@ export async function detectCanonicalBranch(projectRoot: string): Promise<string
 }
 
 export async function branchPointsToCommit(projectRoot: string, branch: string): Promise<boolean> {
-  try {
-    await runGit(projectRoot, ["rev-parse", "--verify", `${branch}^{commit}`]);
-    return true;
-  } catch {
-    return false;
+  return (await resolveBranchStartPoint(projectRoot, branch)) !== undefined;
+}
+
+export async function resolveBranchStartPoint(projectRoot: string, branch: string): Promise<string | undefined> {
+  for (const [startPoint, candidate] of [
+    [branch, `refs/heads/${branch}`],
+    [`origin/${branch}`, `refs/remotes/origin/${branch}`]
+  ] as const) {
+    try {
+      await runGit(projectRoot, ["rev-parse", "--verify", `${candidate}^{commit}`]);
+      return startPoint;
+    } catch {
+      // Try the next ref candidate.
+    }
   }
+
+  return undefined;
 }
 
 export async function detectProjectRoot(startDir = process.cwd()): Promise<string> {

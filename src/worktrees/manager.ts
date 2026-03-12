@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { access, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { promisify } from "node:util";
+import { resolveBranchStartPoint } from "../config.js";
 import type { SwitchyardConfig } from "../types.js";
 import { WorktreeError } from "../errors.js";
 import { buildWorktreeBranchName, normalizeAgentName, resolveWorktreePath } from "./naming.js";
@@ -19,13 +20,13 @@ export async function createWorktree(config: SwitchyardConfig, requestedAgentNam
   const agentName = normalizeAgentName(requestedAgentName);
   const branch = buildWorktreeBranchName(agentName);
   const path = resolveWorktreePath(config, agentName);
+  const startPoint = await resolveCanonicalStartPoint(config.project.root, config.project.canonicalBranch);
 
   await ensureWorktreeTargetAvailable(config.project.root, branch, path);
-  await ensureCanonicalBranchIsReady(config.project.root, config.project.canonicalBranch);
   await mkdir(dirname(path), { recursive: true });
 
   try {
-    await runGit(config.project.root, ["worktree", "add", "-b", branch, path, config.project.canonicalBranch]);
+    await runGit(config.project.root, ["worktree", "add", "-b", branch, path, startPoint]);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new WorktreeError(`Failed to create worktree for ${agentName}: ${message}`);
@@ -64,15 +65,17 @@ async function ensureWorktreeTargetAvailable(projectRoot: string, branch: string
   }
 }
 
-async function ensureCanonicalBranchIsReady(projectRoot: string, canonicalBranch: string): Promise<void> {
-  try {
-    await runGit(projectRoot, ["rev-parse", "--verify", `${canonicalBranch}^{commit}`]);
-  } catch {
+async function resolveCanonicalStartPoint(projectRoot: string, canonicalBranch: string): Promise<string> {
+  const startPoint = await resolveBranchStartPoint(projectRoot, canonicalBranch);
+
+  if (!startPoint) {
     throw new WorktreeError(
       `Configured canonical branch '${canonicalBranch}' does not point to a commit yet. `
       + "Make an initial commit on that branch before running 'sy sling'."
     );
   }
+
+  return startPoint;
 }
 
 async function localBranchExists(projectRoot: string, branch: string): Promise<boolean> {

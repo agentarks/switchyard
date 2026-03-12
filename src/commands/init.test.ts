@@ -6,7 +6,12 @@ import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
-import { createTempGitRepo, createUnbornTempGitRepo, removeTempDir } from "../test-helpers/git.js";
+import {
+  createRemoteTrackingOnlyCanonicalRepo,
+  createTempGitRepo,
+  createUnbornTempGitRepo,
+  removeTempDir
+} from "../test-helpers/git.js";
 
 const execFileAsync = promisify(execFile);
 const tsxCliPath = fileURLToPath(new URL("../../node_modules/tsx/dist/cli.mjs", import.meta.url));
@@ -97,6 +102,21 @@ test("sy init warns when the chosen canonical branch does not point to a commit 
         baseDir: ".switchyard/worktrees"
       }
     });
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy init does not warn when the canonical branch resolves via origin tracking", async () => {
+  const repoDir = await createRemoteTrackingOnlyCanonicalRepo();
+
+  try {
+    const { stdout, stderr } = await execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "init"], {
+      cwd: repoDir
+    });
+
+    assert.match(stdout, new RegExp(`Initialized Switchyard in ${escapeRegExp(repoDir)}`));
+    assert.equal(stderr, "");
   } finally {
     await removeTempDir(repoDir);
   }
