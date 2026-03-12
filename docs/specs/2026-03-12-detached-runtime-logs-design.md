@@ -114,6 +114,19 @@ Add one field:
 
 This is intentionally exact-session only in this slice. The all-session table should stay compact and should not gain a new log-path column.
 
+## Cleanup Lifecycle
+
+The transcript file is a preserved session artifact in this slice.
+
+Apply these rules:
+- plain `sy stop <session>` preserves the transcript file by default, alongside the preserved worktree and branch, so operators can inspect it during post-stop diagnosis or merge review
+- `sy stop <session> --cleanup` removes the transcript file when merged cleanup is confirmed, alongside the preserved worktree and branch
+- `sy stop <session> --cleanup --abandon` removes the transcript file when the operator explicitly discards the preserved session
+- an already-missing transcript file should not block an otherwise safe cleanup path; it should be treated like another already-absent cleanup artifact
+- if transcript removal fails after the stop state is already known, the command should surface that failure through the same handled cleanup-failure path used for other preserved artifact removal failures
+
+This means the slice does extend the cleanup artifact set, but it should not change the existing merge-versus-abandon cleanup decision rules.
+
 ## Events
 
 No new command surface beyond `sy logs` is needed, but launch events should carry the transcript path when available so exact-session and event inspection can stay aligned.
@@ -131,7 +144,7 @@ Apply these rules:
 1. `sy logs` is read-only and does not change runtime state
 2. transcript presence does not suppress existing status hints such as `runtime.no_visible_progress`
 3. transcript absence for legacy sessions should fail closed to an explicit message, not a guessed fallback
-4. this slice should not change `sy stop`, `sy merge`, or mail semantics
+4. this slice should not change `sy stop` decision rules, `sy merge`, or mail semantics beyond treating the transcript as another preserved cleanup artifact
 5. transcript capture should not be required for reading old preserved sessions that predate this slice; it should simply report that no transcript exists
 
 ## Implementation Notes
@@ -166,6 +179,9 @@ Add focused tests for:
 - `sy logs` rejects ambiguous selectors with the same rules as other session-targeting commands
 - exact-session `sy status <session>` surfaces the transcript path
 - launch events preserve `logPath` metadata where applicable
+- plain `sy stop` preserves the transcript file for later inspection
+- `sy stop --cleanup` and `sy stop --cleanup --abandon` remove the transcript file as part of preserved artifact cleanup
+- already-missing transcript files do not block otherwise safe cleanup
 
 ## Risks
 

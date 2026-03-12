@@ -10,12 +10,13 @@ Current outcome:
 - stop treating the first two-session proof as the open gap
 - use that proved workflow to choose one small operator-visible blind spot instead of expanding surface area blindly
 - the passive stalled-session visibility and no-visible-progress visibility slices in `sy status` are now complete
+- the next named blind spot is detached runtime observability: durable transcript capture plus a first-class `sy logs <session>` inspection path
 - keep the all-session `sy status` view as the default control plane for concurrent task ownership and follow-up state
-- choose the next blind spot only after the proved workflow exposes a real operator risk
+- keep that transcript slice narrow and operator-first instead of broadening into live attach or tmux
 
 ## Why This Is Next
 
-The repo now proves the first two-session path end to end, including passive stalled-session visibility and no-visible-progress visibility. The next product gap is no longer "can concurrent work be followed safely at all?" but "what is the next concrete blind spot that still makes that workflow harder than it should be?"
+The repo now proves the first two-session path end to end, including passive stalled-session visibility and no-visible-progress visibility. The next product gap is no longer "can concurrent work be followed safely at all?" but "how does the operator inspect a detached live session when pid, mail, events, and repo-visible work still do not explain it?"
 
 Without naming this slice:
 - effort drifts back into generic hardening instead of a named operator problem
@@ -24,16 +25,17 @@ Without naming this slice:
 
 ## Exact Order
 
-1. Fix the named blind spot: no visible progress visibility in `sy status`
+1. Fix the named blind spot: detached runtime observability for live but opaque Codex sessions
+   - transcript capture under `.switchyard/logs/`
+   - first-class `sy logs <session>` inspection
+   - no live attach or tmux in this slice
+   - chosen on 2026-03-12
+
+2. Fix the prior blind spot: no visible progress visibility in `sy status`
    - completed on 2026-03-11
 
-2. Choose the next concrete operator-visible blind spot from the proved concurrent workflow
-   - keep `sy status` sufficient for understanding concurrent state at a glance
-   - keep follow-up commands exact-session-safe
-   - do not make operators reconstruct state from raw events unless the blind spot specifically requires it
-
 3. Keep the slice narrow
-   - do not broaden into dashboards, automation, transcript capture, or generic workflow engines
+   - do not broaden into dashboards, automation, interactive attach, transcript parsing, or generic workflow engines
    - do not invent another broad multi-agent milestone until a concrete gap earns it
    - update docs only where the named blind spot changes project meaningfully
 
@@ -74,7 +76,8 @@ Decision rule:
 Current status:
 - the first concurrent proving workflow is now materially real
 - passive stalled-session visibility and no-visible-progress visibility in `sy status` are complete
-- the next slice should be another concrete operator-visible blind spot, not another generic hardening pass
+- the next slice is detached runtime observability through transcript capture plus `sy logs <session>`
+- the work should remain narrower than live attach or tmux-backed runtime control
 
 ## What To Keep Small
 
@@ -84,7 +87,7 @@ Do not build these inside this slice unless a concrete operator workflow now req
 - background daemons or watchdogs
 - broad analytics or reporting
 - speculative merge automation beyond the current explicit path
-- transcript capture or interactive attach
+- interactive attach, tmux, or transcript parsing beyond raw log capture
 
 ## Definition Of Done
 

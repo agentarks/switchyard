@@ -4,11 +4,11 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Pick the next operator-visible blind spot from the proved concurrent workflow now that the no-visible-progress status slice is complete
+1. Implement detached runtime transcript capture plus a first-class `sy logs <session>` command
 
 ## Next
 
-2. Improve diagnostics only where that newly named blind spot proves current task handoff or inspection paths are still insufficient
+2. Improve diagnostics only where that detached-runtime slice proves current inspection still insufficient
 
 ## After That
 
