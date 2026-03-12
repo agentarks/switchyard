@@ -12,12 +12,13 @@ Current outcome:
 - the passive stalled-session visibility and no-visible-progress visibility slices in `sy status` are now complete
 - detached runtime observability is now materially real through durable transcript capture plus a first-class `sy logs <session>` inspection path
 - keep the all-session `sy status` view as the default control plane for concurrent task ownership and follow-up state
-- keep the transcript slice narrow and operator-first instead of broadening into live attach or tmux
-- the next task is not another broad feature by default; only improve diagnostics where the raw transcript still leaves a concrete operator blind spot
+- keep the runtime slice narrow and operator-first instead of broadening into live attach or tmux
+- real end-to-end testing now shows the detached interactive raw-transcript path is insufficient on macOS/BSD
+- the next task is to replace that runtime path with a bounded `codex exec --json` launch plus readable structured `sy logs`
 
 ## Why This Is Next
 
-The repo now proves the first two-session path end to end, including passive stalled-session visibility, no-visible-progress visibility, and detached runtime transcript inspection. The next product gap is no longer "how do we inspect a detached live session at all?" but "what concrete follow-up diagnostic is still missing after the operator can read the raw transcript?"
+The repo now proves the first two-session path end to end, including passive stalled-session visibility, no-visible-progress visibility, and detached runtime inspection. Real end-to-end testing also showed that the current detached interactive Codex launch path does not produce reliable live observability on macOS/BSD, so the next product gap is no longer "how do we inspect a detached live session at all?" but "what is the smallest truthful runtime model that gives live readable task output and natural completion?"
 
 Without naming this slice:
 - effort drifts back into generic hardening instead of a named operator problem
@@ -26,17 +27,18 @@ Without naming this slice:
 
 ## Exact Order
 
-1. Improve diagnostics only where the detached-runtime transcript slice still leaves a concrete operator blind spot
-   - keep raw transcript capture under `.switchyard/logs/`
-   - keep `sy logs <session>` as the read-only inspection path
-   - no live attach or tmux unless the raw transcript slice proves insufficient
-   - chosen after the detached transcript slice completed on 2026-03-12
+1. Replace the detached interactive Codex launch path with a bounded `codex exec --json` runtime
+   - keep `.switchyard/logs/` as the durable operator log path
+   - keep `sy logs <session>` as the read-only inspection path, but render readable structured output from Codex JSONL
+   - keep natural task completion truthful in `sy status`, `sy events`, and run outcomes
+   - no live attach or tmux unless the bounded headless runtime proves insufficient
+   - chosen after real end-to-end testing on 2026-03-12 showed the raw detached interactive transcript path was not trustworthy enough
 
 2. Fix the prior blind spot: no visible progress visibility in `sy status`
    - completed on 2026-03-11
 
 3. Keep the slice narrow
-   - do not broaden into dashboards, automation, interactive attach, transcript parsing, or generic workflow engines
+   - do not broaden into dashboards, automation, interactive attach, tmux-backed control, broad transcript parsing, or generic workflow engines
    - do not invent another broad multi-agent milestone until a concrete gap earns it
    - update docs only where the named blind spot changes project meaningfully
 
@@ -83,7 +85,8 @@ Current status:
 - the first concurrent proving workflow is now materially real
 - passive stalled-session visibility and no-visible-progress visibility in `sy status` are complete
 - detached runtime observability through transcript capture plus `sy logs <session>` is now complete
-- the next slice should stay narrower than live attach or tmux-backed runtime control and should only exist if the raw transcript still leaves a named gap
+- the raw detached interactive transcript path is no longer considered sufficient after real end-to-end testing
+- the next slice should stay narrower than live attach or tmux-backed runtime control and should focus on bounded `codex exec --json` task runs plus readable structured logs
 
 ## What To Keep Small
 
@@ -93,7 +96,7 @@ Do not build these inside this slice unless a concrete operator workflow now req
 - background daemons or watchdogs
 - broad analytics or reporting
 - speculative merge automation beyond the current explicit path
-- interactive attach, tmux, or transcript parsing beyond raw log capture
+- interactive attach, tmux, or transcript parsing beyond narrow readable Codex JSONL rendering
 
 ## Definition Of Done
 
