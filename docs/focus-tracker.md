@@ -93,13 +93,15 @@ Current planning state:
 - the first concurrent proving workflow on top of that run model is now materially real
 - the passive stalled-session visibility and no-visible-progress visibility slices in `sy status` are now complete
 - detached runtime observability through raw transcript capture and a first-class `sy logs <session>` path is now complete
-- the next slice should stay narrower than live attach, tmux, or transcript parsing and should only exist if the raw transcript still leaves a named operator blind spot
+- real end-to-end testing showed the detached interactive raw transcript path is not a trustworthy long-term runtime answer on macOS/BSD
+- the next slice should stay narrower than live attach or tmux and should focus on a bounded `codex exec --json` runtime plus readable structured `sy logs`
 - treat raw event visibility as supporting detail, not as the primary answer to "what happened to this task?"
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- improve operator diagnostics only where the new raw transcript inspection path still leaves a concrete gap
+- replace the detached interactive Codex runtime with a bounded headless task model that remains operator-readable
+- improve operator diagnostics through narrow readable Codex JSONL rendering where the raw transcript path proved insufficient
 - keep task ownership visible in the all-session view so concurrent sessions do not require immediate drilldown
 - keep latest run state and terminal outcome trustworthy as concurrent sessions overlap
 - improve operator inspection only when it directly supports the concurrent workflow
@@ -115,8 +117,8 @@ These are derailment risks right now:
 - background daemons or watchdog systems
 - supervisor/coordinator hierarchies
 - merge queue automation before the merge workflow exists
-- tmux-style interactive wrappers unless raw transcript capture proves insufficient
-- transcript parsing or richer runtime protocol handling before the raw transcript slice proves insufficient
+- tmux-style interactive wrappers unless the bounded `codex exec --json` runtime proves insufficient
+- broad transcript parsing or richer runtime protocol handling beyond narrow readable Codex JSONL rendering
 - broad analytics, filtering, or reporting features
 - "nice to have" abstractions without current operator value
 

@@ -111,10 +111,15 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - documented first merge and reintegration workflow that keeps the initial contract manual-first and git-native
 - regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
 
+Current planning note:
+- real end-to-end testing on 2026-03-12 showed the detached interactive raw-transcript path is not a trustworthy long-term runtime answer on macOS/BSD
+- the approved next runtime slice is now a bounded `codex exec --json` launch path plus narrow readable structured `sy logs`
+- natural task completion is planned to remain a foreground reconciliation responsibility of `sy status`, while explicit cancellation stays owned by `sy stop`
+
 ## What Does Not Exist Yet
 
 - interactive runtime attach
-- transcript parsing or semantic runtime interpretation
+- broad transcript parsing or richer runtime protocol handling beyond narrow readable Codex JSONL rendering
 - automatic cleanup after merge
 
 ## Current Command Surface
@@ -275,9 +280,9 @@ The first concurrent proving workflow is now minimally real:
 - treat both the run-tracking slice and the first concurrent proving slice as complete
 
 The recommended next task is:
-- improve diagnostics only where the new raw transcript inspection path still leaves a concrete operator blind spot
-- keep `sy logs <session>` as the read-only baseline instead of broadening immediately into attach, tmux, or transcript parsing
-- update scope only after a named operator workflow proves the raw transcript slice insufficient
+- replace the detached interactive Codex launch path with a bounded `codex exec --json` runtime
+- keep `sy logs <session>` as the read-only operator path, but move it toward narrow readable structured output instead of raw terminal transcripts
+- keep the slice narrower than attach or tmux-backed control, and update scope again only after the bounded headless runtime proves insufficient
 
 ## How To Use This File
 

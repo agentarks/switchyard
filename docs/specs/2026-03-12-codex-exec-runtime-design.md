@@ -78,6 +78,11 @@ This slice should continue to treat the log path as deterministic operator-facin
 
 Session state and run state should adapt to a bounded task model.
 
+Ownership rule:
+- `sy status` remains the foreground reconciler for naturally completed tasks, just as it already owns runtime reconciliation today
+- `sy stop` remains the foreground owner for explicit operator cancellation
+- this slice does not introduce any background daemon, watchdog, or hidden supervisor
+
 ### During Launch
 
 - `sy sling` persists the session as `starting`
@@ -94,7 +99,7 @@ Session state and run state should adapt to a bounded task model.
 
 Natural process exit is no longer inherently a failure.
 
-When a running `codex exec --json` process exits:
+When a running `codex exec --json` process exits, `sy status` should reconcile that observed exit into durable session, run, and event state:
 - exit code `0` should reconcile to a successful finished task outcome
 - nonzero exit should reconcile to a failed finished task outcome
 - the latest run should move to `finished`
@@ -139,7 +144,9 @@ Durable events should distinguish:
 - task completion failure
 - explicit operator stop/cancel
 
-This can be done either with new event types or with richer payloads on existing runtime exit events. The operator requirement matters more than the exact event taxonomy.
+This can be done either with new event types or with richer payloads on existing runtime exit events. The operator requirement matters more than the exact event taxonomy, but the owner stays explicit:
+- `sy status` records natural completion success/failure when it observes a finished pid-backed task
+- `sy stop` records explicit cancellation or post-completion cleanup outcomes when the operator intervenes
 
 ## Stop Semantics
 
