@@ -8,6 +8,7 @@ import { resolveSessionByIdOrAgent, formatSessionSelectorAmbiguousMessage } from
 import type { SessionRecord } from "../sessions/types.js";
 
 const DEFAULT_TAIL_LINES = 200;
+const BSD_SCRIPT_CONTROL_PREFIX = /^(?:\^[A-Z@\[\\\]\^_?]\x08\x08)+/;
 
 interface LogsCommandOptions {
   selector: string;
@@ -34,11 +35,12 @@ export async function logsCommand(options: LogsCommandOptions): Promise<void> {
   }
 
   const sessionLog = getSessionLogPath(config.project.root, session.agentName, session.id);
-
-  process.stdout.write(`Logs for ${session.agentName} (${session.id}):\n`);
-  process.stdout.write(`Agent: ${session.agentName}\n`);
-  process.stdout.write(`Session: ${session.id}\n`);
-  process.stdout.write(`Log: ${sessionLog.relativePath}\n`);
+  const heading = [
+    `Logs for ${session.agentName} (${session.id}):`,
+    `Agent: ${session.agentName}`,
+    `Session: ${session.id}`,
+    `Log: ${sessionLog.relativePath}`
+  ].join("\n");
 
   let transcript: string;
 
@@ -46,7 +48,7 @@ export async function logsCommand(options: LogsCommandOptions): Promise<void> {
     transcript = await readFile(sessionLog.path, "utf8");
   } catch (error) {
     if (isMissingFileError(error)) {
-      process.stdout.write(`No transcript file exists yet for session ${session.id}.\n`);
+      await writeLogsOutput(`${heading}\nNo transcript file exists yet for session ${session.id}.\n`);
       return;
     }
 
@@ -54,11 +56,9 @@ export async function logsCommand(options: LogsCommandOptions): Promise<void> {
   }
 
   const renderedTranscript = options.showAll ? transcript : tailTranscript(transcript, DEFAULT_TAIL_LINES);
-  process.stdout.write(renderedTranscript);
-
-  if (!renderedTranscript.endsWith("\n")) {
-    process.stdout.write("\n");
-  }
+  const normalizedTranscript = normalizeTranscriptForDisplay(renderedTranscript);
+  const output = `${heading}\n${normalizedTranscript}${normalizedTranscript.endsWith("\n") ? "" : "\n"}`;
+  await writeLogsOutput(output);
 }
 
 async function resolveSession(projectRoot: string, selector: string): Promise<SessionRecord | undefined> {
@@ -85,8 +85,80 @@ function tailTranscript(transcript: string, lineCount: number): string {
   return lines.slice(-lineCount).join("\n");
 }
 
+function normalizeTranscriptForDisplay(transcript: string): string {
+  return transcript.replace(BSD_SCRIPT_CONTROL_PREFIX, "");
+}
+
+async function writeLogsOutput(output: string): Promise<void> {
+  const wroteOutput = await writeStdout(output);
+
+  if (!wroteOutput) {
+    return;
+  }
+}
+
 function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+function isBrokenPipeError(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "EPIPE";
+}
+
+async function writeStdout(output: string): Promise<boolean> {
+  return await new Promise<boolean>((resolve, reject) => {
+    let settled = false;
+
+    const finish = (result: boolean, error?: unknown): void => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      process.stdout.off("error", handleError);
+
+      if (error !== undefined) {
+        reject(error);
+        return;
+      }
+
+      resolve(result);
+    };
+
+    const handleError = (error: unknown): void => {
+      if (isBrokenPipeError(error)) {
+        finish(false);
+        return;
+      }
+
+      finish(false, new LogsError(`Failed to write transcript output: ${formatErrorMessage(error)}`));
+    };
+
+    process.stdout.once("error", handleError);
+
+    try {
+      process.stdout.write(output, (error?: Error | null) => {
+        if (error) {
+          if (isBrokenPipeError(error)) {
+            finish(false);
+            return;
+          }
+
+          finish(false, new LogsError(`Failed to write transcript output: ${formatErrorMessage(error)}`));
+          return;
+        }
+
+        finish(true);
+      });
+    } catch (error) {
+      if (isBrokenPipeError(error)) {
+        finish(false);
+        return;
+      }
+
+      finish(false, error);
+    }
+  });
 }
 
 function formatErrorMessage(error: unknown): string {

@@ -80,6 +80,8 @@ Current contract:
 - command prints a short heading with the resolved agent name, session id, and transcript path
 - by default, command prints the last 200 transcript lines
 - with `--all`, command prints the full transcript
+- command strips the leading BSD `script` control-character prefix from displayed transcript output when that wrapper artifact is present
+- command exits cleanly when stdout closes early in a downstream pipe instead of surfacing an unhandled broken-pipe error
 - when the selected session exists but the transcript file does not, command prints an explicit operator-facing message that includes the resolved session id and expected transcript path
 - command fails explicitly when the selector does not resolve or the transcript file cannot be read for a reason other than being absent
 
