@@ -160,6 +160,23 @@ test("spawnCodexSession redirects direct detached fallback output to one session
   }
 });
 
+test("spawnCodexSession reports a runtime error when fallback transcript setup cannot open the log file", async () => {
+  await assert.rejects(
+    () => {
+      return spawnCodexSession({
+        runtimeArgs: ["--json"],
+        logPath: "/tmp/switchyard-missing-log-dir/session.log",
+        worktreePath: "/tmp/switchyard-test",
+        platform: "win32",
+        spawnProcess: (() => {
+          throw new Error("spawn should not run");
+        }) as unknown as typeof spawn
+      });
+    },
+    /Failed to start Codex: unable to open transcript log '\/tmp\/switchyard-missing-log-dir\/session\.log': ENOENT: no such file or directory/
+  );
+});
+
 test("spawnCodexSession reports a clear wrapper error when script is unavailable", async () => {
   const child = new FakeChildProcess();
 

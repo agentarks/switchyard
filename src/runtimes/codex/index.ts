@@ -45,7 +45,13 @@ export async function spawnCodexSession(options: SpawnCodexSessionOptions): Prom
   let logFileDescriptor: number | undefined;
 
   if (launchCommand.command === command.command && typeof options.logPath === "string") {
-    logFileDescriptor = openSync(options.logPath, "a");
+    try {
+      logFileDescriptor = openSync(options.logPath, "a");
+    } catch (error) {
+      throw new RuntimeError(
+        `Failed to start Codex: unable to open transcript log '${options.logPath}': ${formatErrorMessage(error)}`
+      );
+    }
   }
 
   let child: ChildProcess;
@@ -204,4 +210,8 @@ function formatSpawnError(error: Error, launchCommand: RuntimeCommand, command: 
   }
 
   return `Failed to start Codex: ${error.message}`;
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

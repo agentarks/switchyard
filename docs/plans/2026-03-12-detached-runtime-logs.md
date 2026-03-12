@@ -30,7 +30,7 @@ Add coverage for:
 
 Run:
 ```bash
-npm test -- src/runtimes/codex/index.test.ts src/commands/sling.test.ts
+node --import tsx --test src/runtimes/codex/index.test.ts src/commands/sling.test.ts
 ```
 
 Expected:
@@ -44,7 +44,7 @@ Add a narrow helper that builds absolute and relative session log paths from `pr
 
 Run:
 ```bash
-npm test -- src/runtimes/codex/index.test.ts src/commands/sling.test.ts
+node --import tsx --test src/runtimes/codex/index.test.ts src/commands/sling.test.ts
 ```
 
 Expected:
@@ -73,7 +73,7 @@ Add coverage for:
 
 Run:
 ```bash
-npm test -- src/commands/logs.test.ts src/index.test.ts
+node --import tsx --test src/commands/logs.test.ts src/index.test.ts
 ```
 
 Expected:
@@ -87,7 +87,7 @@ Resolve the session via the shared selector logic, derive the log path from sess
 
 Run:
 ```bash
-npm test -- src/commands/logs.test.ts src/index.test.ts
+node --import tsx --test src/commands/logs.test.ts src/index.test.ts
 ```
 
 Expected:
@@ -116,7 +116,7 @@ Add coverage for:
 
 Run:
 ```bash
-npm test -- src/commands/status.test.ts src/commands/stop.test.ts
+node --import tsx --test src/commands/status.test.ts src/commands/stop.test.ts
 ```
 
 Expected:
@@ -130,7 +130,7 @@ Derive the log path in exact-session status output. Extend stop cleanup to remov
 
 Run:
 ```bash
-npm test -- src/commands/status.test.ts src/commands/stop.test.ts
+node --import tsx --test src/commands/status.test.ts src/commands/stop.test.ts
 ```
 
 Expected:
