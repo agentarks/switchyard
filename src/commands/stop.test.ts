@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { access, mkdir } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
@@ -38,6 +38,10 @@ test("stopCommand stops an active session and preserves the worktree by default"
       }
     });
 
+    const launchedSessions = await listSessions(repoDir);
+    const logPath = join(repoDir, ".switchyard", "logs", `agent-one-${launchedSessions[0]?.id}.log`);
+    await writeFile(logPath, "runtime output\n", "utf8");
+
     process.stdout.write = ((chunk: string | Uint8Array) => {
       writes.push(typeof chunk === "string" ? chunk : chunk.toString());
       return true;
@@ -54,6 +58,7 @@ test("stopCommand stops an active session and preserves the worktree by default"
     });
 
     await access(worktreePath);
+    await access(logPath);
     await git(repoDir, ["rev-parse", "--verify", "agents/agent-one"]);
 
     const sessions = await listSessions(repoDir);
@@ -1227,6 +1232,10 @@ test("stopCommand removes the worktree and branch after confirmed merge cleanup"
       }
     });
 
+    const launchedSessions = await listSessions(repoDir);
+    const logPath = join(repoDir, ".switchyard", "logs", `agent-merged-cleanup-${launchedSessions[0]?.id}.log`);
+    await writeFile(logPath, "merged cleanup transcript\n", "utf8");
+
     await git(worktreePath, ["config", "user.name", "Switchyard Test"]);
     await git(worktreePath, ["config", "user.email", "switchyard@example.com"]);
     await git(worktreePath, ["switch", "agents/agent-merged-cleanup"]);
@@ -1254,6 +1263,9 @@ test("stopCommand removes the worktree and branch after confirmed merge cleanup"
 
     await assert.rejects(async () => {
       await access(worktreePath);
+    });
+    await assert.rejects(async () => {
+      await access(logPath);
     });
     await assert.rejects(async () => {
       await git(repoDir, ["rev-parse", "--verify", "agents/agent-merged-cleanup"]);

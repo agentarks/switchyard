@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
+import { closeSync, openSync } from "node:fs";
 import process from "node:process";
 import { RuntimeError } from "../../errors.js";
 
@@ -22,6 +23,7 @@ export interface SpawnedRuntimeSession extends SpawnedRuntimeProcess {
 
 export interface SpawnCodexSessionOptions {
   runtimeArgs?: string[];
+  logPath?: string;
   worktreePath: string;
   readyTimeoutMs?: number;
   onSpawned?: (runtime: SpawnedRuntimeProcess) => void | Promise<void>;
@@ -38,13 +40,41 @@ export function buildCodexCommand(runtimeArgs: string[] = []): RuntimeCommand {
 
 export async function spawnCodexSession(options: SpawnCodexSessionOptions): Promise<SpawnedRuntimeSession> {
   const command = buildCodexCommand(options.runtimeArgs);
-  const launchCommand = buildCodexLaunchCommand(command, options.platform ?? process.platform);
+  const launchCommand = buildCodexLaunchCommand(command, options.platform ?? process.platform, options.logPath);
   const spawnProcess = options.spawnProcess ?? spawn;
-  const child = spawnProcess(launchCommand.command, launchCommand.args, {
-    cwd: options.worktreePath,
-    detached: true,
-    stdio: "ignore"
-  });
+  let logFileDescriptor: number | undefined;
+
+  if (launchCommand.command === command.command && typeof options.logPath === "string") {
+    try {
+      logFileDescriptor = openSync(options.logPath, "a");
+    } catch (error) {
+      throw new RuntimeError(
+        `Failed to start Codex: unable to open transcript log '${options.logPath}': ${formatErrorMessage(error)}`
+      );
+    }
+  }
+
+  let child: ChildProcess;
+
+  try {
+    child = spawnProcess(launchCommand.command, launchCommand.args, {
+      cwd: options.worktreePath,
+      detached: true,
+      stdio: typeof logFileDescriptor === "number"
+        ? ["ignore", logFileDescriptor, logFileDescriptor]
+        : "ignore"
+    });
+  } catch (error) {
+    if (typeof logFileDescriptor === "number") {
+      closeSync(logFileDescriptor);
+    }
+
+    throw error;
+  }
+
+  if (typeof logFileDescriptor === "number") {
+    closeSync(logFileDescriptor);
+  }
 
   return await waitForChildReady(child, {
     command,
@@ -54,7 +84,7 @@ export async function spawnCodexSession(options: SpawnCodexSessionOptions): Prom
   });
 }
 
-function buildCodexLaunchCommand(command: RuntimeCommand, platform: NodeJS.Platform): RuntimeCommand {
+function buildCodexLaunchCommand(command: RuntimeCommand, platform: NodeJS.Platform, logPath?: string): RuntimeCommand {
   switch (platform) {
     case "darwin":
     case "freebsd":
@@ -62,12 +92,12 @@ function buildCodexLaunchCommand(command: RuntimeCommand, platform: NodeJS.Platf
     case "openbsd":
       return {
         command: "script",
-        args: ["-q", "-e", SCRIPT_TYPESCRIPT_PATH, command.command, ...command.args]
+        args: ["-q", "-e", logPath ?? SCRIPT_TYPESCRIPT_PATH, command.command, ...command.args]
       };
     case "linux":
       return {
         command: "script",
-        args: ["-q", "-e", SCRIPT_TYPESCRIPT_PATH, "--", command.command, ...command.args]
+        args: ["-q", "-e", logPath ?? SCRIPT_TYPESCRIPT_PATH, "--", command.command, ...command.args]
       };
     default:
       return command;
@@ -180,4 +210,8 @@ function formatSpawnError(error: Error, launchCommand: RuntimeCommand, command: 
   }
 
   return `Failed to start Codex: ${error.message}`;
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

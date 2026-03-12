@@ -15,6 +15,7 @@ test("slingCommand creates a worktree and persists a started session", async () 
   const repoDir = await createInitializedRepo();
   const nestedDir = join(repoDir, "apps", "api");
   const task = "Implement the next operator-visible slice.";
+  let spawnedLogPath: string | undefined;
   const writes: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
 
@@ -31,8 +32,9 @@ test("slingCommand creates a worktree and persists a started session", async () 
       task,
       runtimeArgs: ["--model", "gpt-5"],
       startDir: nestedDir,
-      spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
+      spawnRuntime: async ({ runtimeArgs, logPath, onSpawned }) => {
         assert.deepEqual(runtimeArgs, ["--model", "gpt-5", task]);
+        spawnedLogPath = logPath;
         const runtime = {
           pid: 4242,
           command: {
@@ -64,6 +66,7 @@ test("slingCommand creates a worktree and persists a started session", async () 
   assert.equal(sessions[0]?.branch, "agents/agent-one");
   assert.equal(sessions[0]?.baseBranch, "main");
   assert.equal(sessions[0]?.worktreePath, join(repoDir, ".switchyard", "worktrees", "agent-one"));
+  assert.equal(spawnedLogPath, join(repoDir, ".switchyard", "logs", `agent-one-${sessions[0]?.id}.log`));
   const specPath = join(repoDir, ".switchyard", "specs", `agent-one-${sessions[0]?.id}.md`);
   const specDocument = await readFile(specPath, "utf8");
 
@@ -78,6 +81,7 @@ test("slingCommand creates a worktree and persists a started session", async () 
   assert.equal(spawnedEvent?.payload.baseBranch, "main");
   assert.equal(spawnedEvent?.payload.taskSummary, task);
   assert.equal(spawnedEvent?.payload.taskSpecPath, `.switchyard/specs/agent-one-${sessions[0]?.id}.md`);
+  assert.equal(spawnedEvent?.payload.logPath, `.switchyard/logs/agent-one-${sessions[0]?.id}.log`);
   assert.equal(spawnedEvent?.payload.runtimeCommand, "codex --model gpt-5");
   assert.equal(completedEvent?.agentName, "agent-one");
   assert.equal(completedEvent?.payload.runtimePid, 4242);
@@ -85,6 +89,7 @@ test("slingCommand creates a worktree and persists a started session", async () 
   assert.equal(completedEvent?.payload.baseBranch, "main");
   assert.equal(completedEvent?.payload.taskSummary, task);
   assert.equal(completedEvent?.payload.taskSpecPath, `.switchyard/specs/agent-one-${sessions[0]?.id}.md`);
+  assert.equal(completedEvent?.payload.logPath, `.switchyard/logs/agent-one-${sessions[0]?.id}.log`);
   assert.equal(completedEvent?.payload.runtimeCommand, "codex --model gpt-5");
   assert.equal(completedEvent?.payload.readyAfterMs, 500);
   assert.equal(latestRun?.taskSummary, task);
@@ -110,6 +115,7 @@ test("slingCommand creates a worktree and persists a started session", async () 
   assert.match(writes.join(""), /Base: main/);
   assert.match(writes.join(""), new RegExp(`Task: ${task}`));
   assert.match(writes.join(""), new RegExp(`Spec: \\.switchyard/specs/agent-one-${sessions[0]?.id}\\.md`));
+  assert.match(writes.join(""), new RegExp(`Log: \\.switchyard/logs/agent-one-${sessions[0]?.id}\\.log`));
   assert.match(writes.join(""), /Runtime: codex --model gpt-5/);
   assert.match(writes.join(""), /Ready: initial launch check passed after 500ms/);
 

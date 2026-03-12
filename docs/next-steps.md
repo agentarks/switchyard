@@ -10,13 +10,14 @@ Current outcome:
 - stop treating the first two-session proof as the open gap
 - use that proved workflow to choose one small operator-visible blind spot instead of expanding surface area blindly
 - the passive stalled-session visibility and no-visible-progress visibility slices in `sy status` are now complete
-- the next named blind spot is detached runtime observability: durable transcript capture plus a first-class `sy logs <session>` inspection path
+- detached runtime observability is now materially real through durable transcript capture plus a first-class `sy logs <session>` inspection path
 - keep the all-session `sy status` view as the default control plane for concurrent task ownership and follow-up state
-- keep that transcript slice narrow and operator-first instead of broadening into live attach or tmux
+- keep the transcript slice narrow and operator-first instead of broadening into live attach or tmux
+- the next task is not another broad feature by default; only improve diagnostics where the raw transcript still leaves a concrete operator blind spot
 
 ## Why This Is Next
 
-The repo now proves the first two-session path end to end, including passive stalled-session visibility and no-visible-progress visibility. The next product gap is no longer "can concurrent work be followed safely at all?" but "how does the operator inspect a detached live session when pid, mail, events, and repo-visible work still do not explain it?"
+The repo now proves the first two-session path end to end, including passive stalled-session visibility, no-visible-progress visibility, and detached runtime transcript inspection. The next product gap is no longer "how do we inspect a detached live session at all?" but "what concrete follow-up diagnostic is still missing after the operator can read the raw transcript?"
 
 Without naming this slice:
 - effort drifts back into generic hardening instead of a named operator problem
@@ -25,11 +26,11 @@ Without naming this slice:
 
 ## Exact Order
 
-1. Fix the named blind spot: detached runtime observability for live but opaque Codex sessions
-   - transcript capture under `.switchyard/logs/`
-   - first-class `sy logs <session>` inspection
-   - no live attach or tmux in this slice
-   - chosen on 2026-03-12
+1. Improve diagnostics only where the detached-runtime transcript slice still leaves a concrete operator blind spot
+   - keep raw transcript capture under `.switchyard/logs/`
+   - keep `sy logs <session>` as the read-only inspection path
+   - no live attach or tmux unless the raw transcript slice proves insufficient
+   - chosen after the detached transcript slice completed on 2026-03-12
 
 2. Fix the prior blind spot: no visible progress visibility in `sy status`
    - completed on 2026-03-11
@@ -42,6 +43,11 @@ Without naming this slice:
 ## Latest Completed Slice
 
 Completed slice:
+- detached runtime transcript capture under `.switchyard/logs/`
+- first-class `sy logs <session>` with default tail and `--all`
+- transcript path visibility in exact-session `sy status`
+- transcript-path metadata in `sy sling` output and launch events
+- transcript preservation on plain `sy stop` plus cleanup removal on `sy stop --cleanup`
 - basic run tracking with durable run records under `runs.db`
 - latest run summaries in `sy status`
 - latest run task ownership in the all-session `sy status` view
@@ -76,8 +82,8 @@ Decision rule:
 Current status:
 - the first concurrent proving workflow is now materially real
 - passive stalled-session visibility and no-visible-progress visibility in `sy status` are complete
-- the next slice is detached runtime observability through transcript capture plus `sy logs <session>`
-- the work should remain narrower than live attach or tmux-backed runtime control
+- detached runtime observability through transcript capture plus `sy logs <session>` is now complete
+- the next slice should stay narrower than live attach or tmux-backed runtime control and should only exist if the raw transcript still leaves a named gap
 
 ## What To Keep Small
 

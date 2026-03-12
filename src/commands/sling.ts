@@ -9,6 +9,7 @@ import { SlingError } from "../errors.js";
 import { stopProcess } from "../runtimes/process.js";
 import { createRun, updateRun } from "../runs/store.js";
 import type { RunRecord, UpdateRunInput } from "../runs/types.js";
+import { getSessionLogPath } from "../logs/path.js";
 import { createSession } from "../sessions/store.js";
 import type { CreateSessionInput } from "../sessions/types.js";
 import { summarizeTask, writeTaskSpec, type TaskSpecRecord } from "../specs/task.js";
@@ -27,6 +28,7 @@ interface SlingOptions {
   startDir?: string;
   spawnRuntime?: (options: {
     agentName: string;
+    logPath: string;
     runtimeArgs: string[];
     worktreePath: string;
     onSpawned?: (runtime: SpawnedRuntimeProcess) => Promise<void>;
@@ -66,14 +68,15 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   }
 
   const managedWorktree = await createWorktree(config, options.agentName);
-  const spawnRuntime = options.spawnRuntime ?? (async ({ runtimeArgs, worktreePath }) => {
-    return await spawnCodexSession({ runtimeArgs, worktreePath });
-  });
   const runtimeArgs = options.runtimeArgs ?? [];
   const runtimeArgsWithTask = [...runtimeArgs, task];
   const createdAt = new Date().toISOString();
   let lastLifecycleTimestamp = createdAt;
   const sessionId = randomUUID();
+  const sessionLog = getSessionLogPath(config.project.root, managedWorktree.agentName, sessionId);
+  const spawnRuntime = options.spawnRuntime ?? (async ({ runtimeArgs, logPath, worktreePath }) => {
+    return await spawnCodexSession({ runtimeArgs, logPath, worktreePath });
+  });
   const taskSummary = summarizeTask(task);
   let runtimeSession: SpawnedRuntimeSession;
   let taskSpec: TaskSpecRecord | undefined;
@@ -103,6 +106,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
 
     runtimeSession = await spawnRuntime({
       agentName: managedWorktree.agentName,
+      logPath: sessionLog.path,
       runtimeArgs: runtimeArgsWithTask,
       worktreePath: managedWorktree.path,
       onSpawned: async (spawnedRuntime) => {
@@ -120,6 +124,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
             worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
             taskSummary,
             taskSpecPath,
+            logPath: sessionLog.relativePath,
             runtimePid: spawnedRuntime.pid,
             runtimeCommand: formatRuntimeCommandForOperator(spawnedRuntime, task)
           }
@@ -152,6 +157,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
         errorMessage: formatErrorMessage(error),
         taskSummary,
         taskSpecPath: taskSpec?.relativePath ?? null,
+        logPath: sessionLog.relativePath,
         cleanupSucceeded: cleanupError ? false : true
       }
     });
@@ -238,6 +244,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
       taskSummary,
       taskSpecPath: taskSpec.relativePath,
+      logPath: sessionLog.relativePath,
       runtimePid: runtimeSession.pid,
       runtimeCommand: formatRuntimeCommandForOperator(runtimeSession, task),
       readyAfterMs: runtimeSession.readyAfterMs
@@ -259,6 +266,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   process.stdout.write(`Base: ${managedWorktree.baseBranch}\n`);
   process.stdout.write(`Task: ${taskSummary}\n`);
   process.stdout.write(`Spec: ${taskSpec.relativePath}\n`);
+  process.stdout.write(`Log: ${sessionLog.relativePath}\n`);
   process.stdout.write(`Worktree: ${formatRelativePath(config.project.root, managedWorktree.path)}\n`);
   process.stdout.write(`Runtime: ${formatRuntimeCommandForOperator(runtimeSession, task)}\n`);
   process.stdout.write(`Ready: initial launch check passed after ${runtimeSession.readyAfterMs}ms\n`);

@@ -92,14 +92,14 @@ Current planning state:
 - the run-tracking slice is now materially real in the current operator loop
 - the first concurrent proving workflow on top of that run model is now materially real
 - the passive stalled-session visibility and no-visible-progress visibility slices in `sy status` are now complete
-- the next named slice is detached runtime observability through raw transcript capture and a first-class `sy logs <session>` path
-- that slice should stay narrower than live attach, tmux, or transcript parsing
+- detached runtime observability through raw transcript capture and a first-class `sy logs <session>` path is now complete
+- the next slice should stay narrower than live attach, tmux, or transcript parsing and should only exist if the raw transcript still leaves a named operator blind spot
 - treat raw event visibility as supporting detail, not as the primary answer to "what happened to this task?"
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- implement detached runtime transcript capture plus `sy logs <session>` as the next operator-visible blind spot
+- improve operator diagnostics only where the new raw transcript inspection path still leaves a concrete gap
 - keep task ownership visible in the all-session view so concurrent sessions do not require immediate drilldown
 - keep latest run state and terminal outcome trustworthy as concurrent sessions overlap
 - improve operator inspection only when it directly supports the concurrent workflow
@@ -116,7 +116,7 @@ These are derailment risks right now:
 - supervisor/coordinator hierarchies
 - merge queue automation before the merge workflow exists
 - tmux-style interactive wrappers unless raw transcript capture proves insufficient
-- transcript parsing or richer runtime protocol handling before the raw transcript slice is real
+- transcript parsing or richer runtime protocol handling before the raw transcript slice proves insufficient
 - broad analytics, filtering, or reporting features
 - "nice to have" abstractions without current operator value
 
@@ -139,7 +139,7 @@ Use this rough project view instead of one flat percentage:
 - Core v0 operator loop: mostly complete
 - run-tracking visibility: now minimally real
 - concurrent multi-session proving workflow: now minimally real
-- next missing product slice: detached runtime observability through transcript capture and `sy logs`
+- detached runtime observability through transcript capture and `sy logs`: now minimally real
 - v0 hardening: exception-only, not the default mode
 - merge/reintegration workflow: minimally real, still intentionally narrow
 - broader long-term vision: intended, but earned in stages rather than copied all at once
