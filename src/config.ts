@@ -56,6 +56,7 @@ export async function branchPointsToCommit(projectRoot: string, branch: string):
 
 export async function resolveBranchStartPoint(projectRoot: string, branch: string): Promise<string | undefined> {
   for (const [startPoint, candidate] of [
+    [branch, branch],
     [branch, `refs/heads/${branch}`],
     [`origin/${branch}`, `refs/remotes/origin/${branch}`]
   ] as const) {

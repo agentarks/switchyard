@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { stringify } from "yaml";
-import { branchPointsToCommit, buildDefaultConfig, detectCanonicalBranch, detectProjectRoot, loadConfig } from "./config.js";
+import {
+  branchPointsToCommit,
+  buildDefaultConfig,
+  detectCanonicalBranch,
+  detectProjectRoot,
+  loadConfig,
+  resolveBranchStartPoint
+} from "./config.js";
 import { createRemoteTrackingOnlyCanonicalRepo, createTempGitRepo, git, removeTempDir } from "./test-helpers/git.js";
 
 test("detectProjectRoot resolves the common repo root from a git worktree", async () => {
@@ -57,6 +64,17 @@ test("branchPointsToCommit accepts a canonical branch that is only available via
 
   try {
     assert.equal(await branchPointsToCommit(repoDir, "main"), true);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("resolveBranchStartPoint accepts an already-qualified remote ref verbatim", async () => {
+  const repoDir = await createRemoteTrackingOnlyCanonicalRepo("switchyard-config-test-");
+
+  try {
+    assert.equal(await resolveBranchStartPoint(repoDir, "origin/main"), "origin/main");
+    assert.equal(await branchPointsToCommit(repoDir, "origin/main"), true);
   } finally {
     await removeTempDir(repoDir);
   }

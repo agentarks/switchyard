@@ -122,6 +122,23 @@ test("sy init does not warn when the canonical branch resolves via origin tracki
   }
 });
 
+test("sy init does not warn when the configured canonical branch is an already-qualified remote ref", async () => {
+  const repoDir = await createRemoteTrackingOnlyCanonicalRepo();
+
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [tsxCliPath, cliEntryPath, "init", "--canonical-branch", "origin/main"],
+      { cwd: repoDir }
+    );
+
+    assert.match(stdout, new RegExp(`Initialized Switchyard in ${escapeRegExp(repoDir)}`));
+    assert.equal(stderr, "");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

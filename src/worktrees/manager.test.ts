@@ -101,6 +101,20 @@ test("createWorktree accepts a canonical branch that is only available via origi
   }
 });
 
+test("createWorktree accepts an already-qualified remote canonical ref", async () => {
+  const repoDir = await createRemoteTrackingInitializedRepo("switchyard-worktree-test-", "origin/main");
+
+  try {
+    const config = await loadConfig(repoDir);
+    const worktree = await createWorktree(config, "Writer Remote Ref");
+
+    assert.equal(worktree.branch, "agents/writer-remote-ref");
+    assert.equal(await git(worktree.path, ["branch", "--show-current"]), "agents/writer-remote-ref");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createInitializedRepo(prefix: string): Promise<string> {
   const repoDir = await createTempGitRepo(prefix);
   await bootstrapSwitchyardLayout(repoDir);
@@ -115,10 +129,10 @@ async function createUnbornInitializedRepo(prefix: string): Promise<string> {
   return repoDir;
 }
 
-async function createRemoteTrackingInitializedRepo(prefix: string): Promise<string> {
+async function createRemoteTrackingInitializedRepo(prefix: string, canonicalBranch = "main"): Promise<string> {
   const repoDir = await createRemoteTrackingOnlyCanonicalRepo(prefix);
   await bootstrapSwitchyardLayout(repoDir);
-  await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "main"));
+  await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", canonicalBranch));
   return repoDir;
 }
 
