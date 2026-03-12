@@ -9,13 +9,13 @@ The first concurrent proving workflow is now complete enough to stop being the d
 Current outcome:
 - stop treating the first two-session proof as the open gap
 - use that proved workflow to choose one small operator-visible blind spot instead of expanding surface area blindly
-- the passive stalled-session visibility slice in `sy status` is now complete
+- the passive stalled-session visibility and no-visible-progress visibility slices in `sy status` are now complete
 - keep the all-session `sy status` view as the default control plane for concurrent task ownership and follow-up state
 - choose the next blind spot only after the proved workflow exposes a real operator risk
 
 ## Why This Is Next
 
-The repo now proves the first two-session path end to end, including passive stalled-session visibility. The next product gap is no longer "can concurrent work be followed safely at all?" but "what is the next concrete blind spot that still makes that workflow harder than it should be?"
+The repo now proves the first two-session path end to end, including passive stalled-session visibility and no-visible-progress visibility. The next product gap is no longer "can concurrent work be followed safely at all?" but "what is the next concrete blind spot that still makes that workflow harder than it should be?"
 
 Without naming this slice:
 - effort drifts back into generic hardening instead of a named operator problem
@@ -24,7 +24,7 @@ Without naming this slice:
 
 ## Exact Order
 
-1. Fix the named blind spot: passive stalled-session visibility in `sy status`
+1. Fix the named blind spot: no visible progress visibility in `sy status`
    - completed on 2026-03-11
 
 2. Choose the next concrete operator-visible blind spot from the proved concurrent workflow
@@ -63,6 +63,7 @@ Completed slice:
 - mail-bucket ordering in `sy status` by newest unread inbound mail instead of stale session timestamps
 - freshest-activity `UPDATED` timestamps and same-bucket ordering in `sy status` so recent merge, mail, and runtime changes are not hidden behind stale session-row timestamps
 - passive stalled-session visibility in `sy status`, including a separate idle clock from `UPDATED` plus appended `runtime.stalled idleFor=...` summaries
+- passive no-visible-progress visibility in `sy status`, including `runtime.no_visible_progress age=...` hints for long-lived active sessions that still show no inbound mail or repo-visible work artifact
 - end-to-end proof that two concurrent delegated sessions can be followed through status, mail review, merge, and cleanup without losing the untouched session's run or reintegration state
 
 Decision rule:
@@ -72,7 +73,7 @@ Decision rule:
 
 Current status:
 - the first concurrent proving workflow is now materially real
-- passive stalled-session visibility in `sy status` is complete
+- passive stalled-session visibility and no-visible-progress visibility in `sy status` are complete
 - the next slice should be another concrete operator-visible blind spot, not another generic hardening pass
 
 ## What To Keep Small

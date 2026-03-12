@@ -783,6 +783,283 @@ test("statusCommand marks a quiet running session as inspect when agent activity
   );
 });
 
+test("statusCommand keeps active sessions under the no-visible-progress threshold on wait", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createTrackedStatusSession(repoDir, {
+    id: "session-no-progress-under-threshold",
+    agentName: "agent-no-progress-under-threshold",
+    runtimePid: 7172,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:04:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-no-progress-under-threshold",
+      isRuntimeAlive: (pid) => pid === 7172,
+      now: () => "2026-03-09T12:04:30.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Next: wait/);
+  assert.match(
+    output,
+    /running\tsession-no-progress-under-threshold\tagent-no-progress-under-threshold[^\n]*\twait\t2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=7172/
+  );
+  assert.doesNotMatch(output, /runtime\.no_visible_progress/);
+});
+
+test("statusCommand marks older active sessions with no visible progress as inspect and prefers that hint over stalled", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createTrackedStatusSession(repoDir, {
+    id: "session-no-progress",
+    agentName: "agent-no-progress",
+    runtimePid: 7173,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:20:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-no-progress",
+      isRuntimeAlive: (pid) => pid === 7173,
+      now: () => "2026-03-09T12:40:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Next: inspect/);
+  assert.match(output, /Recent: 2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=7173; runtime\.no_visible_progress age=40m/);
+  assert.match(
+    output,
+    /running\tsession-no-progress\tagent-no-progress[^\n]*\tinspect\t2026-03-09T12:00:00.000Z runtime\.ready signal=pid_alive, runtimePid=7173; runtime\.no_visible_progress age=40m/
+  );
+  assert.doesNotMatch(output, /runtime\.stalled/);
+});
+
+test("statusCommand suppresses the no-visible-progress hint when the worktree has uncommitted changes", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = await createTrackedStatusSession(repoDir, {
+    id: "session-worktree-dirty",
+    agentName: "agent-worktree-dirty",
+    runtimePid: 7174,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:09:00.000Z"
+  });
+
+  await writeFile(join(worktreePath, "dirty.txt"), "pending work\n", "utf8");
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-worktree-dirty",
+      isRuntimeAlive: (pid) => pid === 7174,
+      now: () => "2026-03-09T12:10:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Next: wait/);
+  assert.doesNotMatch(output, /runtime\.no_visible_progress/);
+});
+
+test("statusCommand suppresses the no-visible-progress hint when the agent branch is ahead of base", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = await createTrackedStatusSession(repoDir, {
+    id: "session-branch-ahead",
+    agentName: "agent-branch-ahead",
+    runtimePid: 7175,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:09:00.000Z"
+  });
+
+  await writeFile(join(worktreePath, "committed.txt"), "visible commit\n", "utf8");
+  await git(worktreePath, ["add", "committed.txt"]);
+  await git(worktreePath, ["commit", "-m", "Record visible progress"]);
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-branch-ahead",
+      isRuntimeAlive: (pid) => pid === 7175,
+      now: () => "2026-03-09T12:10:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Next: wait/);
+  assert.doesNotMatch(output, /runtime\.no_visible_progress/);
+});
+
+test("statusCommand suppresses the no-visible-progress hint when inbound mail already exists even after it is read", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createTrackedStatusSession(repoDir, {
+    id: "session-read-inbound-mail",
+    agentName: "agent-read-inbound-mail",
+    runtimePid: 7176,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:09:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-read-inbound-mail",
+    sender: "agent-read-inbound-mail",
+    recipient: "operator",
+    body: "I already have something to show.",
+    createdAt: "2026-03-09T12:06:00.000Z"
+  });
+  await readUnreadMailForSession(repoDir, "session-read-inbound-mail");
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-read-inbound-mail",
+      isRuntimeAlive: (pid) => pid === 7176,
+      now: () => "2026-03-09T12:10:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Next: wait/);
+  assert.doesNotMatch(output, /runtime\.no_visible_progress/);
+});
+
+test("statusCommand keeps unread inbound mail as the higher-priority next action over no visible progress", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createTrackedStatusSession(repoDir, {
+    id: "session-unread-inbound-mail",
+    agentName: "agent-unread-inbound-mail",
+    runtimePid: 7177,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:09:00.000Z"
+  });
+  await createMail(repoDir, {
+    sessionId: "session-unread-inbound-mail",
+    sender: "agent-unread-inbound-mail",
+    recipient: "operator",
+    body: "Visible progress is in this message.",
+    createdAt: "2026-03-09T12:06:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-unread-inbound-mail",
+      isRuntimeAlive: (pid) => pid === 7177,
+      now: () => "2026-03-09T12:10:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Next: mail/);
+  assert.doesNotMatch(output, /runtime\.no_visible_progress/);
+});
+
+test("statusCommand still reconciles dead runtimes to failed instead of no visible progress", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createTrackedStatusSession(repoDir, {
+    id: "session-dead-runtime",
+    agentName: "agent-dead-runtime",
+    runtimePid: 7178,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    updatedAt: "2026-03-09T12:09:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-dead-runtime",
+      isRuntimeAlive: () => false,
+      now: () => "2026-03-09T12:10:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Recent: 2026-03-09T12:10:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=7178/);
+  assert.match(
+    output,
+    /failed\tsession-dead-runtime\tagent-dead-runtime[^\n]*\t2026-03-09T12:10:00.000Z runtime\.exited reason=pid_not_alive, runtimePid=7178/
+  );
+  assert.doesNotMatch(output, /runtime\.no_visible_progress/);
+});
+
 test("statusCommand shows the stalled hint in the selected-session view for a quiet running session", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
@@ -3203,6 +3480,45 @@ async function createInitializedRepo(): Promise<string> {
   await bootstrapSwitchyardLayout(repoDir);
   await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "main"));
   return repoDir;
+}
+
+async function createTrackedStatusSession(
+  repoDir: string,
+  options: {
+    id: string;
+    agentName: string;
+    runtimePid: number;
+    createdAt: string;
+    updatedAt: string;
+  }
+): Promise<string> {
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", options.agentName);
+  const branch = `agents/${options.agentName}`;
+
+  await git(repoDir, ["worktree", "add", "-b", branch, worktreePath, "main"]);
+  await createSession(repoDir, {
+    id: options.id,
+    agentName: options.agentName,
+    branch,
+    baseBranch: "main",
+    worktreePath,
+    state: "running",
+    runtimePid: options.runtimePid,
+    createdAt: options.createdAt,
+    updatedAt: options.updatedAt
+  });
+  await createEvent(repoDir, {
+    sessionId: options.id,
+    agentName: options.agentName,
+    eventType: "runtime.ready",
+    payload: {
+      signal: "pid_alive",
+      runtimePid: options.runtimePid
+    },
+    createdAt: options.createdAt
+  });
+
+  return worktreePath;
 }
 
 function escapeRegExp(value: string): string {

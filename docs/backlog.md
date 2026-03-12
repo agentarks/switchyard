@@ -4,11 +4,11 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Improve diagnostics only where the concurrent workflow proves current task handoff or inspection paths are still insufficient
+1. Pick the next operator-visible blind spot from the proved concurrent workflow now that the no-visible-progress status slice is complete
 
 ## Next
 
-2. Pick the next operator-visible blind spot only after the stalled-session slice proves insufficient
+2. Improve diagnostics only where that newly named blind spot proves current task handoff or inspection paths are still insufficient
 
 ## After That
 
