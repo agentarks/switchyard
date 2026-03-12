@@ -94,7 +94,7 @@ Current contract:
 - command includes one best-effort latest-run state summary per session from `runs.db`
 - command uses the newest durable event or unread inbound operator mail timestamp for the `UPDATED` column when that activity is newer than the stored `sessions.db` row timestamp
 - command also derives a passive stalled-session hint for active sessions when the latest agent/runtime-side activity is older than the stalled threshold, without mutating durable session state
-- command also derives a more specific passive `runtime.no_visible_progress` hint for active sessions older than five minutes when there is still no inbound non-operator mail, no uncommitted worktree change, and no commit divergence ahead of the stored `baseBranch`
+- command also derives a more specific passive `runtime.no_visible_progress` hint for active sessions when five minutes have passed since the first runtime-ready signal and there is still no inbound non-operator mail, no uncommitted worktree change, and no commit divergence ahead of the stored `baseBranch`
 - command includes one derived best-effort follow-up signal per session so concurrent sessions stay readable as `mail`, `wait`, `review-merge`, `cleanup`, `inspect`, or `done`
 - when unread mailbox items addressed to `operator` exist for a session, command prioritizes `mail` over the more generic lifecycle follow-up hint
 - when a session matches the no-visible-progress rule and no higher-priority unread inbound operator mail exists, command surfaces `inspect` as the follow-up hint instead of `wait`

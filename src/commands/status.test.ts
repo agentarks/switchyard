@@ -822,6 +822,46 @@ test("statusCommand keeps active sessions under the no-visible-progress threshol
   assert.doesNotMatch(output, /runtime\.no_visible_progress/);
 });
 
+test("statusCommand anchors no-visible-progress age to the first readiness signal instead of session creation", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createTrackedStatusSession(repoDir, {
+    id: "session-no-progress-slow-start",
+    agentName: "agent-no-progress-slow-start",
+    runtimePid: 7179,
+    createdAt: "2026-03-09T12:00:00.000Z",
+    runtimeReadyAt: "2026-03-09T12:09:00.000Z",
+    updatedAt: "2026-03-09T12:09:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-no-progress-slow-start",
+      isRuntimeAlive: (pid) => pid === 7179,
+      now: () => "2026-03-09T12:10:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Next: wait/);
+  assert.match(
+    output,
+    /Recent: 2026-03-09T12:09:00.000Z runtime\.ready signal=pid_alive, runtimePid=7179/
+  );
+  assert.doesNotMatch(output, /runtime\.no_visible_progress/);
+});
+
 test("statusCommand marks older active sessions with no visible progress as inspect and prefers that hint over stalled", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
@@ -3489,6 +3529,7 @@ async function createTrackedStatusSession(
     agentName: string;
     runtimePid: number;
     createdAt: string;
+    runtimeReadyAt?: string;
     updatedAt: string;
   }
 ): Promise<string> {
@@ -3515,7 +3556,7 @@ async function createTrackedStatusSession(
       signal: "pid_alive",
       runtimePid: options.runtimePid
     },
-    createdAt: options.createdAt
+    createdAt: options.runtimeReadyAt ?? options.createdAt
   });
 
   return worktreePath;

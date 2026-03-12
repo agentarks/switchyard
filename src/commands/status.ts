@@ -86,6 +86,10 @@ interface StatusRowContext {
 
 const execFileAsync = promisify(execFile);
 const NO_VISIBLE_PROGRESS_THRESHOLD_MS = 5 * 60 * 1000;
+const NO_VISIBLE_PROGRESS_READY_EVENT_TYPES = [
+  "sling.completed",
+  "runtime.ready"
+] as const;
 const STALLED_SESSION_THRESHOLD_MS = 30 * 60 * 1000;
 const RUNTIME_PROGRESS_EVENT_TYPES = [
   "sling.spawned",
@@ -163,6 +167,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
   );
   const noVisibleProgressHints = latestInboundMail.available
     ? await loadNoVisibleProgressHints(
+      config.project.root,
       sessions,
       latestInboundMail.mailBySession,
       (options.now ?? (() => new Date().toISOString()))()
@@ -341,6 +346,7 @@ function buildStatusRowContexts(options: {
 }
 
 async function loadNoVisibleProgressHints(
+  projectRoot: string,
   sessions: SessionRecord[],
   latestInboundMailBySession: Map<string, MailRecord>,
   now: string
@@ -349,6 +355,7 @@ async function loadNoVisibleProgressHints(
 
   for (const session of sessions) {
     const hint = await deriveNoVisibleProgressHint({
+      projectRoot,
       session,
       latestInboundMail: latestInboundMailBySession.get(session.id),
       now
@@ -949,6 +956,7 @@ function selectInspectHint(
 }
 
 async function deriveNoVisibleProgressHint(options: {
+  projectRoot: string;
   session: SessionRecord;
   latestInboundMail?: MailRecord;
   now: string;
@@ -961,7 +969,13 @@ async function deriveNoVisibleProgressHint(options: {
     return undefined;
   }
 
-  const sessionAgeMs = Date.parse(options.now) - Date.parse(options.session.createdAt);
+  const firstReadyProgressAt = await findFirstReadyProgressAt(options.projectRoot, options.session.id);
+
+  if (!firstReadyProgressAt) {
+    return undefined;
+  }
+
+  const sessionAgeMs = Date.parse(options.now) - Date.parse(firstReadyProgressAt);
 
   if (!Number.isFinite(sessionAgeMs) || sessionAgeMs <= NO_VISIBLE_PROGRESS_THRESHOLD_MS) {
     return undefined;
@@ -994,6 +1008,19 @@ async function deriveNoVisibleProgressHint(options: {
     kind: "no_visible_progress",
     sessionAgeMs
   };
+}
+
+async function findFirstReadyProgressAt(projectRoot: string, sessionId: string): Promise<string | undefined> {
+  try {
+    const events = await listEvents(projectRoot, { sessionId });
+    return events.find((event) => {
+      return NO_VISIBLE_PROGRESS_READY_EVENT_TYPES.includes(
+        event.eventType as typeof NO_VISIBLE_PROGRESS_READY_EVENT_TYPES[number]
+      );
+    })?.createdAt;
+  } catch {
+    return undefined;
+  }
 }
 
 async function isGitWorktreeClean(worktreePath: string): Promise<boolean> {

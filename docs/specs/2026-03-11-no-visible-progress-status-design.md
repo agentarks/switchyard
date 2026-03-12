@@ -50,14 +50,14 @@ A session counts as having no visible progress only when all of these are true:
 - there is no inbound non-operator mail for that session, whether it is still unread or has already been consumed by the operator
 - the preserved worktree is clean
 - the agent branch has no commits ahead of the session `baseBranch`
-- the session age exceeds a conservative threshold
+- the time since the first runtime-ready signal exceeds a conservative threshold
 
 This is intentionally stricter than the current stalled-session signal. A session can be quiet but still have visible progress through worktree changes, committed work, or inbound mail. This slice only flags sessions where the operator still has zero visible proof of work, even after accounting for already-read inbound agent mail.
 
 ## Threshold
 
 Use one fixed code-level threshold in this slice:
-- active session age greater than 5 minutes
+- elapsed time greater than 5 minutes since the first `sling.completed` or `runtime.ready` signal
 
 This threshold is not a scheduling policy. It is just enough to stop telling the operator to keep waiting when the system still cannot show any visible progress signal.
 
@@ -100,7 +100,7 @@ Apply these rules:
 5. committed branch divergence suppresses the hint
 6. if both `runtime.stalled` and `runtime.no_visible_progress` would apply, prefer `runtime.no_visible_progress` and render only that suffix
 7. inactive sessions never receive this hint
-8. if git-based progress checks cannot be evaluated, keep current degraded status behavior instead of inventing the hint
+8. if the first readiness anchor or the git-based progress checks cannot be evaluated, keep current degraded status behavior instead of inventing the hint
 
 ## Implementation Notes
 
@@ -119,6 +119,7 @@ The git checks should use the session's preserved worktree and stored branch/bas
 
 Add focused status tests for:
 - active live session under threshold stays `wait`
+- slow-starting active session uses the first readiness signal instead of raw session creation time for the threshold
 - active live session over threshold with clean worktree and no branch divergence becomes `inspect`
 - uncommitted work suppresses the hint
 - committed branch divergence suppresses the hint

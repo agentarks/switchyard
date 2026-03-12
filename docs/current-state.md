@@ -80,7 +80,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - status output that now also orders all-session rows by current follow-up priority before recency so concurrent mail, inspection, and reintegration work surfaces ahead of passive wait states
 - status output that now also treats the `UPDATED` column and same-bucket freshness ordering as the latest operator-visible activity time, so newer merge, mail, and runtime signals do not stay hidden behind stale session-row timestamps
 - status output now also derives a passive stalled-session hint from runtime-side progress and inbound non-operator mail without mutating durable session state
-- status output now also derives a more specific passive `runtime.no_visible_progress` hint for active sessions older than five minutes when the worktree is still clean, the agent branch is not ahead of `baseBranch`, and no inbound non-operator mail exists
+- status output now also derives a more specific passive `runtime.no_visible_progress` hint once five minutes have passed since the first readiness signal and the worktree is still clean, the agent branch is not ahead of `baseBranch`, and no inbound non-operator mail exists
 - status output now also keeps that stalled idle clock separate from `UPDATED`, so newer operator-visible events can stay visible without resetting the passive stalled hint
 - status output now prefers `runtime.no_visible_progress` over `runtime.stalled` when both inspect hints would otherwise apply, and only renders one passive inspect suffix at a time
 - status output now also surfaces a synthesized `mail.unread` recent summary from the newest unread inbound operator mail so concurrent mailbox follow-up stays visible without drilling into `sy mail`
