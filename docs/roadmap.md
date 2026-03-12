@@ -52,9 +52,9 @@ That rule exists to build a stronger base for later breadth, not to permanently 
 The run-tracking slice and the first concurrent proving workflow are now in place.
 
 What to do next:
-- name one small operator-visible blind spot exposed by that proved workflow
-- fix that blind spot without broadening into a generic multi-agent system
-- avoid defaulting back to generic lifecycle hardening unless it directly supports the named gap
+- implement the newly named detached-runtime observability slice
+- keep it narrow: durable raw transcript capture plus `sy logs <session>`
+- avoid broadening immediately into live attach, tmux, or transcript parsing
 
 ## Order After That
 

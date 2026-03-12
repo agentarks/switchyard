@@ -103,13 +103,13 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `sy sling` now creates one durable run record per launched task, moves it from `starting` to `active` after launch success, and marks launch failures as `finished:launch_failed`
 - `sy stop` now updates the latest run outcome to `stopped`, `failed`, `merged`, or `abandoned` when the task outcome becomes clear
 - `sy merge` now updates the latest run outcome to `merged` on success and already-integrated no-op merges
-- explicit v0 decision to keep runtime control pid-backed and defer tmux unless operator workflows require attach or transcript handling
+- explicit v0 decision to keep runtime control pid-backed and defer tmux/live attach unless operator workflows prove the narrower raw-transcript slice insufficient
 - documented first merge and reintegration workflow that keeps the initial contract manual-first and git-native
 - regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
 
 ## What Does Not Exist Yet
 
-- interactive runtime attach or transcript capture
+- interactive runtime attach or first-class transcript capture
 - automatic cleanup after merge
 
 ## Current Command Surface
@@ -256,6 +256,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - older session rows created before `baseBranch` was added now fail closed for `sy merge` and plain merged-cleanup, so operators must use manual git review/merge or explicit `--abandon`
 - the current readiness model is intentionally narrow: `sy sling` only proves the process survived a short launch window, and `sy status` promotes the session to `running` on the first later successful pid liveness check.
 - the current runtime-control model intentionally omits live attach and transcript capture, so debugging still relies on durable events and external process inspection.
+- the next named operator-visible blind spot is detached runtime observability: durable raw transcript capture plus a first-class `sy logs <session>` path, kept narrower than live attach or tmux
 - the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.
 - the detached `sy sling` launch compatibility fix currently depends on the system `script` utility on supported Unix platforms; unsupported platforms still fall back to direct detached Codex spawn and may need a follow-up if Codex requires a TTY there too.
 - older pre-pid session rows cannot be liveness-checked automatically.
@@ -266,9 +267,13 @@ This repository now has a minimal but real operator loop for one repo-local Code
 The first concurrent proving workflow is now minimally real:
 - two delegated sessions can be followed through `sy status`, `sy mail check`, `sy merge`, and `sy stop --cleanup` without losing exact selector clarity
 - the untouched session keeps its run and reintegration state while the other session is reviewed, merged, and cleaned up
-- treat both the run-tracking slice and the first concurrent proving slice as complete unless a concrete operator blind spot now appears
+- treat both the run-tracking slice and the first concurrent proving slice as complete
 
-If a new gap appears, name one small operator-visible follow-up slice before coding.
+The recommended next task is:
+- implement detached runtime observability as one narrow operator-facing slice
+- capture raw detached Codex transcripts under `.switchyard/logs/`
+- add a first-class `sy logs <session>` command
+- keep the slice narrower than live attach, tmux, or transcript parsing
 
 ## How To Use This File
 
