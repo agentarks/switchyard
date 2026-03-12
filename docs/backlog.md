@@ -4,11 +4,11 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Improve diagnostics only where the detached-runtime transcript slice proves current inspection still insufficient
+1. Replace the detached interactive Codex runtime with a bounded `codex exec --json` launch path and readable structured `sy logs`
 
 ## Next
 
-2. Dashboard or TUI work, if still justified
+2. Dashboard or TUI work, if still justified after the bounded headless runtime proves insufficient
 
 ## After That
 
@@ -27,5 +27,6 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 - coordinator processes
 - watchdog daemons
 - dashboard or TUI work
+- tmux-backed interactive control
 - merge queue automation
 - multiple runtimes beyond Codex
