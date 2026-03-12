@@ -47,12 +47,12 @@ In practice, that leaves the operator unsure whether the agent is productively w
 A session counts as having no visible progress only when all of these are true:
 - the durable session state is still active (`starting` or `running`)
 - runtime reconciliation still considers the runtime alive
-- there is no unread inbound operator-targeted mail for that session
+- there is no inbound non-operator mail for that session, whether it is still unread or has already been consumed by the operator
 - the preserved worktree is clean
 - the agent branch has no commits ahead of the session `baseBranch`
 - the session age exceeds a conservative threshold
 
-This is intentionally stricter than the current stalled-session signal. A session can be quiet but still have visible progress through worktree changes, committed work, or inbound mail. This slice only flags sessions where the operator still has zero visible proof of work.
+This is intentionally stricter than the current stalled-session signal. A session can be quiet but still have visible progress through worktree changes, committed work, or inbound mail. This slice only flags sessions where the operator still has zero visible proof of work, even after accounting for already-read inbound agent mail.
 
 ## Threshold
 
@@ -71,6 +71,7 @@ When a session matches the no-visible-progress rule:
 - append a compact hint such as `runtime.no_visible_progress age=...`
 
 This hint should remain lower-priority than stronger operator actions such as unread mail or merge/cleanup follow-up.
+It should also remain mutually exclusive with the existing stalled-session suffix in any single rendered summary.
 
 ### Exact-session `sy status <session>`
 
@@ -78,15 +79,28 @@ The selected-session detail block and row should reflect the same derived hint:
 - `Next: inspect`
 - `Recent:` should preserve the highest-value existing summary and append the same `runtime.no_visible_progress` suffix
 
+### Interaction With `runtime.stalled`
+
+`runtime.no_visible_progress` is a more specific explanation than the existing generic stalled-session hint.
+
+When a session matches both derived conditions:
+- keep only one derived inspect hint in the rendered output
+- prefer `runtime.no_visible_progress`
+- do not also append `runtime.stalled`
+
+Implementation-wise, this should be treated as one inspect-hint selection path with explicit precedence, not as two unrelated suffixes that can both render.
+
 ## Precedence Rules
 
 Apply these rules:
 1. unread inbound operator mail still wins, so `NEXT=mail`
-2. dead runtimes still reconcile to failed state instead of becoming `no visible progress`
-3. visible worktree changes suppress the hint
-4. committed branch divergence suppresses the hint
-5. inactive sessions never receive this hint
-6. if git-based progress checks cannot be evaluated, keep current degraded status behavior instead of inventing the hint
+2. any inbound non-operator mail, including already-read mail, suppresses `runtime.no_visible_progress`
+3. dead runtimes still reconcile to failed state instead of becoming `no visible progress`
+4. visible worktree changes suppress the hint
+5. committed branch divergence suppresses the hint
+6. if both `runtime.stalled` and `runtime.no_visible_progress` would apply, prefer `runtime.no_visible_progress` and render only that suffix
+7. inactive sessions never receive this hint
+8. if git-based progress checks cannot be evaluated, keep current degraded status behavior instead of inventing the hint
 
 ## Implementation Notes
 
@@ -109,7 +123,9 @@ Add focused status tests for:
 - uncommitted work suppresses the hint
 - committed branch divergence suppresses the hint
 - unread inbound mail suppresses the hint
+- already-read inbound mail also suppresses the hint
 - dead runtime still becomes `failed`, not `runtime.no_visible_progress`
+- when both derived conditions would apply, only `runtime.no_visible_progress` renders
 - exact-session status shows the same hint
 
 ## Risks
