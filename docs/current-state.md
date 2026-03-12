@@ -10,6 +10,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - `sy` entrypoint with command registration
 - implemented `sy init`
 - implemented `sy events`
+- implemented `sy logs`
 - implemented `sy status`
 - implemented `sy sling`
 - implemented `sy stop`
@@ -38,6 +39,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - worktree manager with deterministic branch and path naming
 - narrow Codex runtime seam that builds and spawns one detached command
 - pseudo-terminal-backed detached Codex launch compatibility on supported Unix platforms via `script`
+- detached runtime transcript capture under `.switchyard/logs/agent-<session>.log`
 - explicit `sy sling` refusal when the configured canonical branch does not point to a commit yet
 - launch-time session-id visibility in `sy sling` so operators can target an exact preserved session immediately
 - handled merge-failure session-id visibility in `sy merge` so later follow-up commands can reuse the exact preserved session without another lookup
@@ -63,9 +65,10 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - explicit selector disambiguation across session-targeting commands when one normalized agent name matches multiple preserved sessions
 - operator-controlled recent-event window selection in `sy events --limit`
 - exact per-session inspection in `sy status`, including explicit selector disambiguation between session-id and agent-name matches
-- exact per-session inspection in `sy status` now also surfaces stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, launch spec path, latest run summary, a derived next follow-up signal, and the full recent-event summary before the one-row table
+- exact per-session inspection in `sy status` now also surfaces stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, launch spec path, deterministic transcript log path, latest run summary, a derived next follow-up signal, and the full recent-event summary before the one-row table
+- first-class `sy logs <session>` transcript inspection with a default recent tail plus `--all` for the full transcript
 - exact per-session inspection in `sy status` now also supports `--task` to print the full stored launch instruction from the durable spec file
-- launch-event inspection in `sy events` now also carries `taskSummary` and `taskSpecPath` for `sling.spawned`, `sling.completed`, and `sling.failed`
+- launch-event inspection in `sy events` now also carries `taskSummary`, `taskSpecPath`, and `logPath` for `sling.spawned`, `sling.completed`, and `sling.failed`
 - explicit selector disambiguation in `sy stop` and `sy merge` when one raw selector could name different sessions by session-id and agent-name
 - first operator-facing merge path that preflights active sessions, dirty preserved worktrees, and dirty repo-root state before running `git merge --no-ff`
 - merge preflight failures that now surface the blocking git status entries for dirty repo-root and preserved-worktree states
@@ -73,6 +76,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - merge conflict failures that now surface the conflicting paths directly in `sy merge` and durable `merge.failed` events
 - merge and merged-cleanup guards that now refuse to silently retarget preserved work when the configured canonical branch changes after launch
 - first operator-facing cleanup guard that only removes preserved merge artifacts automatically when the branch is confirmed merged, and otherwise requires explicit `--abandon`
+- stop cleanup now also removes preserved transcript logs when cleanup is confirmed or explicitly abandoned, while tolerating already-missing log files
 - status output that now joins each session to its latest durable event context, including the recorded readiness delay for fresh launches
 - status output that now also joins each session to its latest durable run summary so operators can see `starting`, `active`, or `finished:<outcome>` at a glance
 - status output that now also surfaces the latest run task summary per session so concurrent delegated work stays attributable in the all-session view
@@ -109,7 +113,8 @@ This repository now has a minimal but real operator loop for one repo-local Code
 
 ## What Does Not Exist Yet
 
-- interactive runtime attach or first-class transcript capture
+- interactive runtime attach
+- transcript parsing or semantic runtime interpretation
 - automatic cleanup after merge
 
 ## Current Command Surface
@@ -255,8 +260,8 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - the current run model is intentionally narrow: it captures one compact latest run story per launched session, but it is not yet a richer run history, replay, or multi-session coordination layer
 - older session rows created before `baseBranch` was added now fail closed for `sy merge` and plain merged-cleanup, so operators must use manual git review/merge or explicit `--abandon`
 - the current readiness model is intentionally narrow: `sy sling` only proves the process survived a short launch window, and `sy status` promotes the session to `running` on the first later successful pid liveness check.
-- the current runtime-control model intentionally omits live attach and transcript capture, so debugging still relies on durable events and external process inspection.
-- the next named operator-visible blind spot is detached runtime observability: durable raw transcript capture plus a first-class `sy logs <session>` path, kept narrower than live attach or tmux
+- transcript files can grow large for long or noisy sessions because this slice intentionally preserves raw output without parsing or rotation.
+- the detached `script`-backed transcript capture path is platform-sensitive, so future follow-up should stay concrete and operator-driven instead of broadening into speculative runtime abstractions.
 - the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.
 - the detached `sy sling` launch compatibility fix currently depends on the system `script` utility on supported Unix platforms; unsupported platforms still fall back to direct detached Codex spawn and may need a follow-up if Codex requires a TTY there too.
 - older pre-pid session rows cannot be liveness-checked automatically.
@@ -270,10 +275,9 @@ The first concurrent proving workflow is now minimally real:
 - treat both the run-tracking slice and the first concurrent proving slice as complete
 
 The recommended next task is:
-- implement detached runtime observability as one narrow operator-facing slice
-- capture raw detached Codex transcripts under `.switchyard/logs/`
-- add a first-class `sy logs <session>` command
-- keep the slice narrower than live attach, tmux, or transcript parsing
+- improve diagnostics only where the new raw transcript inspection path still leaves a concrete operator blind spot
+- keep `sy logs <session>` as the read-only baseline instead of broadening immediately into attach, tmux, or transcript parsing
+- update scope only after a named operator workflow proves the raw transcript slice insufficient
 
 ## How To Use This File
 

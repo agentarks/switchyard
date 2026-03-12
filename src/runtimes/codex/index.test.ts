@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import type { ChildProcess, spawn, SpawnOptions } from "node:child_process";
+import { access, mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import { spawnCodexSession } from "./index.js";
 
@@ -60,9 +63,11 @@ test("spawnCodexSession rejects when Codex exits before the readiness window com
 test("spawnCodexSession launches Codex through script on darwin while reporting the logical Codex command", async () => {
   const child = new FakeChildProcess();
   const spawns: Array<{ command: string; args: string[]; detached?: boolean; stdio?: SpawnOptions["stdio"] }> = [];
+  const logPath = "/tmp/switchyard-test/agent-one-session.log";
 
   const session = await spawnCodexSession({
     runtimeArgs: ["--model", "gpt-5"],
+    logPath,
     worktreePath: "/tmp/switchyard-test",
     readyTimeoutMs: 0,
     platform: "darwin",
@@ -82,7 +87,7 @@ test("spawnCodexSession launches Codex through script on darwin while reporting 
 
   assert.deepEqual(spawns, [{
     command: "script",
-    args: ["-q", "-e", "/dev/null", "codex", "--model", "gpt-5"],
+    args: ["-q", "-e", logPath, "codex", "--model", "gpt-5"],
     detached: true,
     stdio: "ignore"
   }]);
@@ -93,9 +98,11 @@ test("spawnCodexSession launches Codex through script on darwin while reporting 
 test("spawnCodexSession launches Codex through script with util-linux syntax on linux", async () => {
   const child = new FakeChildProcess();
   const spawns: Array<{ command: string; args: string[] }> = [];
+  const logPath = "/tmp/switchyard-test/agent-one-session.log";
 
   await spawnCodexSession({
     runtimeArgs: ["--model", "gpt-5"],
+    logPath,
     worktreePath: "/tmp/switchyard-test",
     readyTimeoutMs: 0,
     platform: "linux",
@@ -110,8 +117,47 @@ test("spawnCodexSession launches Codex through script with util-linux syntax on 
 
   assert.deepEqual(spawns, [{
     command: "script",
-    args: ["-q", "-e", "/dev/null", "--", "codex", "--model", "gpt-5"]
+    args: ["-q", "-e", logPath, "--", "codex", "--model", "gpt-5"]
   }]);
+});
+
+test("spawnCodexSession redirects direct detached fallback output to one session log file", async () => {
+  const child = new FakeChildProcess();
+  const tempDir = await mkdtemp(join(tmpdir(), "switchyard-codex-log-test-"));
+  const logPath = join(tempDir, "agent-one-session.log");
+  const spawns: Array<{ command: string; args: string[]; stdio?: SpawnOptions["stdio"] }> = [];
+
+  try {
+    await spawnCodexSession({
+      runtimeArgs: ["--json"],
+      logPath,
+      worktreePath: "/tmp/switchyard-test",
+      readyTimeoutMs: 0,
+      platform: "win32",
+      spawnProcess: ((command: string, args: readonly string[], options?: SpawnOptions) => {
+        spawns.push({
+          command,
+          args: [...args],
+          stdio: options?.stdio
+        });
+        queueMicrotask(() => {
+          child.emit("spawn");
+        });
+        return child as unknown as ChildProcess;
+      }) as unknown as typeof spawn
+    });
+
+    assert.equal(spawns.length, 1);
+    assert.equal(spawns[0]?.command, "codex");
+    assert.deepEqual(spawns[0]?.args, ["--json"]);
+    assert.ok(Array.isArray(spawns[0]?.stdio));
+    assert.equal(spawns[0]?.stdio?.[0], "ignore");
+    assert.equal(typeof spawns[0]?.stdio?.[1], "number");
+    assert.equal(spawns[0]?.stdio?.[1], spawns[0]?.stdio?.[2]);
+    await access(logPath);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("spawnCodexSession reports a clear wrapper error when script is unavailable", async () => {

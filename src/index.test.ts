@@ -856,6 +856,45 @@ test("sy mail list --unread preserves unread state through the real CLI entrypoi
   }
 });
 
+test("sy logs prints the default transcript tail through the real CLI entrypoint", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-logs-test-");
+  const sessionId = "session-cli-logs";
+  const agentName = "agent-cli-logs";
+  const logPath = join(repoDir, ".switchyard", "logs", `${agentName}-${sessionId}.log`);
+
+  try {
+    await createSession(repoDir, {
+      id: sessionId,
+      agentName,
+      branch: `agents/${agentName}`,
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", agentName),
+      state: "running",
+      runtimePid: 1919,
+      createdAt: "2026-03-12T09:20:00.000Z",
+      updatedAt: "2026-03-12T09:20:00.000Z"
+    });
+    await writeFile(
+      logPath,
+      Array.from({ length: 205 }, (_, index) => `line ${String(index + 1).padStart(3, "0")}`).join("\n") + "\n",
+      "utf8"
+    );
+
+    const { stdout, stderr } = await execFileAsync(process.execPath, [tsxCliPath, cliEntryPath, "logs", sessionId], {
+      cwd: repoDir
+    });
+
+    assert.equal(stderr, "");
+    assert.match(stdout, /Logs for agent-cli-logs \(session-cli-logs\):/);
+    assert.match(stdout, /Log: \.switchyard\/logs\/agent-cli-logs-session-cli-logs\.log/);
+    assert.doesNotMatch(stdout, /line 001/);
+    assert.match(stdout, /line 006/);
+    assert.match(stdout, /line 205/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("sy sling reports task-file read failures through the Switchyard error contract", async () => {
   const repoDir = await createInitializedRepo("switchyard-cli-sling-test-");
 

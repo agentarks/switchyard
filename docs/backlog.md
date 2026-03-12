@@ -4,23 +4,22 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Implement detached runtime transcript capture plus a first-class `sy logs <session>` command
+1. Improve diagnostics only where the detached-runtime transcript slice proves current inspection still insufficient
 
 ## Next
 
-2. Improve diagnostics only where that detached-runtime slice proves current inspection still insufficient
+2. Dashboard or TUI work, if still justified
 
 ## After That
 
-3. Dashboard or TUI work, if still justified
+3. Broader surface area only if a concrete operator workflow now requires it
 
 ## Then
 
-4. Broader surface area only if a concrete operator workflow now requires it
+4. Multiple runtimes beyond Codex, if still justified
 
 ## Later
 
-- multiple runtimes beyond Codex, if still justified
 - richer runtime matrix, if still justified
 
 ## Not A Priority Yet

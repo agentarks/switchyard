@@ -19,6 +19,7 @@ import {
   listLatestUnreadMailBySession,
   listUnreadMailCountsBySession
 } from "../mail/store.js";
+import { getSessionLogPath } from "../logs/path.js";
 import type { MailRecord, UnreadMailSummary } from "../mail/types.js";
 import { inspectProcessLiveness, isProcessAlive, type ProcessLiveness } from "../runtimes/process.js";
 import { listLatestRunsBySession, updateLatestRunForSession } from "../runs/store.js";
@@ -247,6 +248,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       process.stdout.write(`Created: ${session.createdAt}\n`);
       process.stdout.write(`Task: ${selectedSessionDetails?.taskHandoff?.taskSummary ?? "-"}\n`);
       process.stdout.write(`Spec: ${selectedSessionDetails?.taskHandoff?.taskSpecPath ?? "-"}\n`);
+      process.stdout.write(`Log: ${getSessionLogPath(config.project.root, session.agentName, session.id).relativePath}\n`);
       process.stdout.write(`Unread: ${rowContext.unreadCount}\n`);
       process.stdout.write(`Cleanup: ${rowContext.cleanup}\n`);
       process.stdout.write(`Run: ${formatRunSummary(rowContext.latestRun, latestRuns.available)}\n`);

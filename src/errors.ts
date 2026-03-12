@@ -56,6 +56,12 @@ export class EventsError extends SwitchyardError {
   }
 }
 
+export class LogsError extends SwitchyardError {
+  constructor(message: string) {
+    super(message, "LOGS_ERROR");
+  }
+}
+
 export class StatusError extends SwitchyardError {
   constructor(message: string) {
     super(message, "STATUS_ERROR");

@@ -1,9 +1,11 @@
+import { rm } from "node:fs/promises";
 import { relative } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { StopError } from "../errors.js";
+import { getSessionLogPath } from "../logs/path.js";
 import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 import { stopProcess, isProcessAlive } from "../runtimes/process.js";
 import { updateLatestRunForSession } from "../runs/store.js";
@@ -315,6 +317,7 @@ async function cleanupSessionArtifacts(options: {
       path: options.session.worktreePath,
       baseBranch: options.canonicalBranch
     });
+    await removeSessionLogFile(options.projectRoot, options.session);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new StopCleanupError(`Cleanup failed for ${options.session.agentName}: ${message}`, "cleanup_failed", message);
@@ -414,6 +417,20 @@ function formatRelativePath(projectRoot: string, path: string): string {
   return relativePath.length > 0 ? relativePath : ".";
 }
 
+async function removeSessionLogFile(projectRoot: string, session: SessionRecord): Promise<void> {
+  const sessionLog = getSessionLogPath(projectRoot, session.agentName, session.id);
+
+  try {
+    await rm(sessionLog.path);
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
 async function recordStopCompletedEvent(
   recordEvent: EventRecorder,
   projectRoot: string,
@@ -506,4 +523,8 @@ function determineRunOutcomeAfterStop(
   }
 
   return "stopped";
+}
+
+function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }

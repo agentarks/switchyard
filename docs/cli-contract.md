@@ -49,23 +49,39 @@ Current contract:
 - command loads config from the canonical repo root
 - command creates one deterministic branch and worktree under `.switchyard/worktrees/`
 - command writes one durable task handoff file under `.switchyard/specs/`
+- command derives one deterministic detached transcript path under `.switchyard/logs/<agent>-<session>.log`
 - command passes the explicit task text to Codex as the initial prompt, whether it came from the CLI flag or a task file
 - command starts one detached Codex process from that worktree
 - on supported Unix platforms, detached launch uses the system `script` utility so Codex startup still gets a pseudo-terminal
+- on supported Unix platforms, detached launch writes the `script` transcript to the session log path instead of discarding it
 - command fails explicitly before worktree creation when the configured canonical branch does not resolve to a commit yet, instead of surfacing raw `git worktree` invalid-reference output
 - command persists one `starting` session record in `sessions.db`, including the original canonical branch as session `baseBranch`
 - command creates one durable run record in `runs.db` for that launched task
-- command records `sling.spawned` when the runtime pid exists, including `taskSummary` and `taskSpecPath`
-- command records `sling.completed` after the initial launch window succeeds, including the same task handoff metadata plus `readyAfterMs`
+- command records `sling.spawned` when the runtime pid exists, including `taskSummary`, `taskSpecPath`, and `logPath`
+- command records `sling.completed` after the initial launch window succeeds, including the same task handoff metadata plus `logPath` and `readyAfterMs`
 - command moves that run record to `active` after the launch window succeeds
-- if Codex exits during the launch window, command records `sling.failed` with the launch error and preserves task handoff metadata when available
+- if Codex exits during the launch window, command records `sling.failed` with the launch error and preserves task handoff metadata when available, including `logPath`
 - if launch fails after the run record exists, command marks that run as `finished:launch_failed`
-- command prints the durable session id, launch state, created branch, base branch, task summary, task spec path, worktree path, runtime command line, and initial readiness delay
+- command prints the durable session id, launch state, created branch, base branch, task summary, task spec path, transcript path, worktree path, runtime command line, and initial readiness delay
 - if the `script` wrapper is unavailable on a supported platform, command fails explicitly instead of pretending the launch succeeded
-- on unsupported platforms, detached launch falls back to direct Codex spawn
+- on unsupported platforms, detached launch falls back to direct Codex spawn with stdout and stderr redirected to the same session log file
 
 Future target:
-- add richer runtime metadata only if operator workflows require attach or transcript inspection
+- add richer runtime metadata only if operator workflows require more than raw transcript inspection
+
+## `sy logs <session>`
+
+Current contract:
+- command resolves one session by id or normalized agent name
+- command accepts an exact session id before agent-name normalization, even when that selector is not a valid normalized agent name
+- command rejects selectors that match one session by id and a different session by normalized agent name
+- command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
+- command derives the transcript path from the resolved agent name and session id instead of relying on separate durable metadata
+- command prints a short heading with the resolved agent name, session id, and transcript path
+- by default, command prints the last 200 transcript lines
+- with `--all`, command prints the full transcript
+- when the selected session exists but the transcript file does not, command prints an explicit operator-facing message that includes the resolved session id and expected transcript path
+- command fails explicitly when the selector does not resolve or the transcript file cannot be read for a reason other than being absent
 
 ## `sy status [session]`
 
@@ -108,6 +124,7 @@ Current contract:
 - if run summaries cannot be loaded, command still renders status and prints `?` in both the task and run columns instead of failing
 - active sessions show the post-stop cleanup result with a `stop-then:` prefix instead of hiding whether cleanup would be merged-safe or abandon-only
 - command surfaces partial preserved-artifact loss in that cleanup-readiness label when the branch still exists but the preserved worktree is already missing
+- with an exact selector, command also prints the deterministic transcript path for that session
 - command keeps that missing-worktree case distinct in recent stop-event history instead of collapsing it into the harmless already-absent case
 - if cleanup readiness cannot be evaluated for a session, command still renders status and prints `?` in the cleanup column instead of failing
 - command keeps operator-relevant `merge.failed` context in the recent-event summary, including branch-drift targets, preserved-worktree paths, and git error text when those details exist
@@ -158,14 +175,16 @@ Current contract:
 - command prints the durable session id in handled operator-facing success paths so later `events`, `merge`, or cleanup commands can target the preserved session directly
 - command also prints the resolved durable session id before failing when a repeated stop targets an already inactive session
 - command preserves the worktree by default so the operator can still review or merge the branch later
+- command preserves the transcript log by default so the operator can inspect detached runtime output after stop
 - command still stops an active session even when a requested cleanup cannot proceed safely
 - if runtime shutdown fails before state changes, command leaves the session active and records a durable `stop.failed` event with the failure reason and error text
 - if cleanup artifact removal fails after the stop state is already known, command still prints the resolved session id and handled stop summary before exiting nonzero
-- command removes the worktree and branch when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch`
+- command removes the worktree, branch, and transcript log when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch`
 - command refuses plain merged-cleanup for legacy rows that do not have stored `baseBranch` metadata
 - command requires `--cleanup --abandon` to discard work that is not confirmed merged
 - command rejects `--abandon` unless `--cleanup` is also set
 - command reports already-absent artifacts as already absent instead of reporting a removal that did not happen
+- an already-missing transcript log does not block an otherwise-safe cleanup path
 - command refuses plain cleanup when the preserved branch still exists but the preserved worktree path is already missing, and tells the operator to restore it manually or use explicit abandon
 - command records that missing-worktree refusal distinctly from the fully-absent branch-plus-worktree case in durable `stop.completed` history
 - command records a durable `stop.completed` event with cleanup failure details when cleanup is blocked or artifact removal fails after the stop state is already known

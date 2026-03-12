@@ -1851,6 +1851,7 @@ test("statusCommand selected-session view surfaces stored base branch and runtim
   assert.match(output, /Base: main/);
   assert.match(output, /Runtime pid: 5151/);
   assert.match(output, /Runtime: codex --model gpt-5/);
+  assert.match(output, /Log: \.switchyard\/logs\/agent-selected-session-selected\.log/);
   assert.match(output, /Created: 2026-03-08T12:00:00.000Z/);
   assert.match(output, /Unread: 0/);
   assert.match(output, /Cleanup: [^\n]+/);
