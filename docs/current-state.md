@@ -267,9 +267,13 @@ This repository now has a minimal but real operator loop for one repo-local Code
 The first concurrent proving workflow is now minimally real:
 - two delegated sessions can be followed through `sy status`, `sy mail check`, `sy merge`, and `sy stop --cleanup` without losing exact selector clarity
 - the untouched session keeps its run and reintegration state while the other session is reviewed, merged, and cleaned up
-- treat both the run-tracking slice and the first concurrent proving slice as complete unless a concrete operator blind spot now appears
+- treat both the run-tracking slice and the first concurrent proving slice as complete
 
-If a new gap appears, name one small operator-visible follow-up slice before coding.
+The recommended next task is:
+- implement detached runtime observability as one narrow operator-facing slice
+- capture raw detached Codex transcripts under `.switchyard/logs/`
+- add a first-class `sy logs <session>` command
+- keep the slice narrower than live attach, tmux, or transcript parsing
 
 ## How To Use This File
 
