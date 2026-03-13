@@ -48,6 +48,7 @@ Completed enough to count as minimally real:
 - read-only unread-only mailbox inspection inside the mail path
 - unread mailbox visibility in `sy status`
 - cleanup-readiness visibility in `sy status`
+- dirty-preserved-worktree cleanup blocking in `sy status` and `sy stop --cleanup`
 - session-id visibility in `sy status`
 - exact per-session inspection in `sy status`
 - richer exact-session inspection in `sy status` for stored base-branch, runtime-pid, and full recent-event context
@@ -72,7 +73,7 @@ Completed enough to count as minimally real:
 - explicit reused-agent selector disambiguation across session-targeting commands
 - first readiness and early-failure handling as hardening work ahead of M8
 - Unix zombie-runtime detection in pid liveness checks so stale sessions no longer look healthy
-- bounded `sy sling` launch via `codex exec --json`
+- bounded `sy sling` launch via `codex exec --json` with a default `workspace-write` sandbox
 - first-class `sy sling` task input via `--task` or `--task-file`, with durable task specs under `.switchyard/specs/`
 - launch-task visibility in `sy sling`, `sy events`, and exact-session `sy status`
 - opt-in full launch-task inspection in exact-session `sy status --task`
@@ -104,6 +105,7 @@ Current planning state:
 
 These are the right kinds of tasks right now:
 - preserve the bounded Codex exec runtime as the narrow baseline instead of broadening into interactive control
+- preserve writable-by-default bounded Codex exec launches as the narrow baseline unless the operator explicitly overrides sandboxing
 - improve operator diagnostics through narrow readable Codex JSONL rendering where the raw transcript path proved insufficient
 - keep task ownership visible in the all-session view so concurrent sessions do not require immediate drilldown
 - keep latest run state and terminal outcome trustworthy as concurrent sessions overlap

@@ -6,7 +6,21 @@ import { access, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
-import { spawnCodexSession } from "./index.js";
+import { buildCodexCommand, spawnCodexSession } from "./index.js";
+
+test("buildCodexCommand defaults exec sessions to a workspace-write sandbox", () => {
+  assert.deepEqual(buildCodexCommand(["--model", "gpt-5"]), {
+    command: "codex",
+    args: ["exec", "--json", "--sandbox", "workspace-write", "--model", "gpt-5"]
+  });
+});
+
+test("buildCodexCommand preserves an explicit operator sandbox selection", () => {
+  assert.deepEqual(buildCodexCommand(["--sandbox", "read-only", "--model", "gpt-5"]), {
+    command: "codex",
+    args: ["exec", "--json", "--sandbox", "read-only", "--model", "gpt-5"]
+  });
+});
 
 test("spawnCodexSession reports the observed readiness delay from spawn through launch setup", async () => {
   const child = new FakeChildProcess();
@@ -36,7 +50,7 @@ test("spawnCodexSession reports the observed readiness delay from spawn through 
   assert.equal(session.pid, 4242);
   assert.ok(session.readyAfterMs >= 40);
   assert.equal(child.unrefCalled, true);
-  assert.deepEqual(spawned, [{ pid: 4242, command: "codex exec --json" }]);
+  assert.deepEqual(spawned, [{ pid: 4242, command: "codex exec --json --sandbox workspace-write" }]);
 });
 
 test("spawnCodexSession rejects when Codex exits before the readiness window completes", async () => {
@@ -60,7 +74,7 @@ test("spawnCodexSession rejects when Codex exits before the readiness window com
   assert.equal(child.unrefCalled, false);
 });
 
-test("spawnCodexSession launches codex exec --json directly on darwin", async () => {
+test("spawnCodexSession launches codex exec --json with the default writable sandbox on darwin", async () => {
   const child = new FakeChildProcess();
   const spawns: Array<{ command: string; args: string[]; detached?: boolean; stdio?: SpawnOptions["stdio"] }> = [];
   const tempDir = await mkdtemp(join(tmpdir(), "switchyard-codex-darwin-log-test-"));
@@ -88,19 +102,19 @@ test("spawnCodexSession launches codex exec --json directly on darwin", async ()
 
     assert.equal(spawns.length, 1);
     assert.equal(spawns[0]?.command, "codex");
-    assert.deepEqual(spawns[0]?.args, ["exec", "--json", "--model", "gpt-5"]);
+    assert.deepEqual(spawns[0]?.args, ["exec", "--json", "--sandbox", "workspace-write", "--model", "gpt-5"]);
     assert.equal(spawns[0]?.detached, true);
     assert.ok(Array.isArray(spawns[0]?.stdio));
     assert.equal(spawns[0]?.stdio?.[0], "ignore");
     assert.equal(spawns[0]?.stdio?.[1], spawns[0]?.stdio?.[2]);
     assert.equal(session.command.command, "codex");
-    assert.deepEqual(session.command.args, ["exec", "--json", "--model", "gpt-5"]);
+    assert.deepEqual(session.command.args, ["exec", "--json", "--sandbox", "workspace-write", "--model", "gpt-5"]);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
 });
 
-test("spawnCodexSession launches codex exec --json directly on linux", async () => {
+test("spawnCodexSession launches codex exec --json with the default writable sandbox on linux", async () => {
   const child = new FakeChildProcess();
   const spawns: Array<{ command: string; args: string[] }> = [];
   const tempDir = await mkdtemp(join(tmpdir(), "switchyard-codex-linux-log-test-"));
@@ -123,7 +137,7 @@ test("spawnCodexSession launches codex exec --json directly on linux", async () 
 
     assert.deepEqual(spawns, [{
       command: "codex",
-      args: ["exec", "--json", "--model", "gpt-5"]
+      args: ["exec", "--json", "--sandbox", "workspace-write", "--model", "gpt-5"]
     }]);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
@@ -157,7 +171,7 @@ test("spawnCodexSession redirects detached codex exec output to one session log 
 
     assert.equal(spawns.length, 1);
     assert.equal(spawns[0]?.command, "codex");
-    assert.deepEqual(spawns[0]?.args, ["exec", "--json", "--json"]);
+    assert.deepEqual(spawns[0]?.args, ["exec", "--json", "--sandbox", "workspace-write", "--json"]);
     assert.ok(Array.isArray(spawns[0]?.stdio));
     assert.equal(spawns[0]?.stdio?.[0], "ignore");
     assert.equal(typeof spawns[0]?.stdio?.[1], "number");

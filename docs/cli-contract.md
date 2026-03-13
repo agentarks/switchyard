@@ -51,7 +51,7 @@ Current contract:
 - command writes one durable task handoff file under `.switchyard/specs/`
 - command derives one deterministic detached log path under `.switchyard/logs/<agent>-<session>.log`
 - command passes the explicit task text to Codex as the initial prompt, whether it came from the CLI flag or a task file
-- command starts one detached `codex exec --json` process from that worktree
+- command starts one detached `codex exec --json` process from that worktree, defaulting to `--sandbox workspace-write` unless the operator already passed an explicit sandbox or automation mode
 - detached launch redirects stdout and stderr directly to the session log path instead of wrapping through `script`
 - command fails explicitly before worktree creation when the configured canonical branch does not resolve to a commit yet, instead of surfacing raw `git worktree` invalid-reference output
 - command persists one `starting` session record in `sessions.db`, including the original canonical branch as session `baseBranch`
@@ -108,7 +108,7 @@ Current contract:
 - command includes the durable session id in the main status table so later commands can target an exact session
 - command includes one best-effort unread-mail count per session from `mail.db`
 - if unread mail counts cannot be loaded, command still renders status and prints `?` in the unread column instead of failing
-- command includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`
+- command includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`, including refusing merged-safe cleanup when a preserved worktree still has uncommitted non-Switchyard entries
 - command includes one best-effort latest-run task summary per session from `runs.db`
 - command includes one best-effort latest-run state summary per session from `runs.db`
 - command uses the newest durable event or unread inbound operator mail timestamp for the `UPDATED` column when that activity is newer than the stored `sessions.db` row timestamp
@@ -183,7 +183,7 @@ Current contract:
 - command still stops an active session even when a requested cleanup cannot proceed safely
 - if runtime shutdown fails before state changes, command leaves the session active and records a durable `stop.failed` event with the failure reason and error text
 - if cleanup artifact removal fails after the stop state is already known, command still prints the resolved session id and handled stop summary before exiting nonzero
-- command removes the worktree, branch, and log file when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch`
+- command removes the worktree, branch, and log file when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch` and the preserved worktree has no uncommitted non-Switchyard entries
 - command refuses plain merged-cleanup for legacy rows that do not have stored `baseBranch` metadata
 - command requires `--cleanup --abandon` to discard work that is not confirmed merged
 - command rejects `--abandon` unless `--cleanup` is also set

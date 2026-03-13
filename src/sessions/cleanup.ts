@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import { relative } from "node:path";
 import { promisify } from "node:util";
+import { listMeaningfulDirtyEntries } from "../git/status.js";
 import { isActiveSessionState, type SessionRecord } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -14,6 +15,7 @@ export type CleanupReason =
   | "missing_base_branch_metadata"
   | "missing_branch_metadata"
   | "not_merged"
+  | "worktree_dirty"
   | "worktree_missing";
 
 export type CleanupDecision =
@@ -105,7 +107,16 @@ export async function determineCleanupDecision(options: CleanupDecisionOptions):
     };
   }
 
-  if (branch === canonicalBranch || await isBranchMergedIntoCanonical(options.projectRoot, branch, canonicalBranch)) {
+  const mergedIntoCanonical = branch === canonicalBranch || await isBranchMergedIntoCanonical(options.projectRoot, branch, canonicalBranch);
+
+  if (mergedIntoCanonical) {
+    if (!isActiveSessionState(options.session.state) && worktreeExists) {
+      const dirtyWorktreeDecision = await getDirtyPreservedWorktreeDecision(options.projectRoot, options.session);
+      if (dirtyWorktreeDecision) {
+        return dirtyWorktreeDecision;
+      }
+    }
+
     return { kind: "perform", mode: "merged", canonicalBranch };
   }
 
@@ -164,6 +175,8 @@ function formatCleanupOutcomeLabel(decision: CleanupDecision): string {
       return "abandon-only:no-branch";
     case "not_merged":
       return "abandon-only:not-merged";
+    case "worktree_dirty":
+      return "abandon-only:worktree-dirty";
     case "worktree_missing":
       return "abandon-only:worktree-missing";
     case "artifacts_missing":
@@ -206,4 +219,31 @@ async function pathExists(path: string): Promise<boolean> {
 async function runGit(projectRoot: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("git", args, { cwd: projectRoot });
   return stdout.trim();
+}
+
+async function getDirtyPreservedWorktreeDecision(
+  projectRoot: string,
+  session: SessionRecord
+): Promise<CleanupDecision | undefined> {
+  try {
+    const dirtyEntries = await listMeaningfulDirtyEntries(session.worktreePath);
+
+    if (dirtyEntries.length === 0) {
+      return undefined;
+    }
+
+    return {
+      kind: "blocked",
+      reason: "worktree_dirty",
+      canonicalBranch: session.baseBranch?.trim() ?? "",
+      message: `Refusing cleanup for ${session.agentName}: preserved worktree '${formatRelativePath(projectRoot, session.worktreePath)}' still has uncommitted entries. Commit, merge, or discard those entries there first, or pass '--cleanup --abandon' to remove them explicitly.`,
+      details: {
+        worktreePath: formatRelativePath(projectRoot, session.worktreePath),
+        dirtyCount: dirtyEntries.length,
+        ...(dirtyEntries[0] ? { firstDirtyEntry: dirtyEntries[0] } : {})
+      }
+    };
+  } catch {
+    return undefined;
+  }
 }
