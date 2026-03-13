@@ -108,7 +108,7 @@ Current contract:
 - command includes the durable session id in the main status table so later commands can target an exact session
 - command includes one best-effort unread-mail count per session from `mail.db`
 - if unread mail counts cannot be loaded, command still renders status and prints `?` in the unread column instead of failing
-- command includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`, including refusing merged-safe cleanup when a preserved worktree still has uncommitted non-Switchyard entries
+- command includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`, including refusing merged-safe cleanup when a preserved worktree still has uncommitted non-Switchyard entries or when that dirtiness check cannot be completed safely
 - command includes one best-effort latest-run task summary per session from `runs.db`
 - command includes one best-effort latest-run state summary per session from `runs.db`
 - command uses the newest durable event or unread inbound operator mail timestamp for the `UPDATED` column when that activity is newer than the stored `sessions.db` row timestamp
@@ -184,6 +184,7 @@ Current contract:
 - if runtime shutdown fails before state changes, command leaves the session active and records a durable `stop.failed` event with the failure reason and error text
 - if cleanup artifact removal fails after the stop state is already known, command still prints the resolved session id and handled stop summary before exiting nonzero
 - command removes the worktree, branch, and log file when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch` and the preserved worktree has no uncommitted non-Switchyard entries
+- command fails closed when it cannot inspect a preserved worktree for merged-cleanup safety, instead of silently treating that cleanup as merged-safe
 - command refuses plain merged-cleanup for legacy rows that do not have stored `baseBranch` metadata
 - command requires `--cleanup --abandon` to discard work that is not confirmed merged
 - command rejects `--abandon` unless `--cleanup` is also set
