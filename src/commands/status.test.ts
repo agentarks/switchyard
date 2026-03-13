@@ -427,6 +427,7 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
   try {
     await git(repoDir, ["branch", "agents/agent-active"]);
     await git(repoDir, ["branch", "agents/merged-ready"]);
+    await git(repoDir, ["branch", "agents/dirty-merged-ready"]);
     await git(repoDir, ["branch", "agents/missing-worktree"]);
     await git(repoDir, ["switch", "-c", "agents/not-ready"]);
     await writeFile(join(repoDir, "not-ready.txt"), "pending merge\n", "utf8");
@@ -435,6 +436,11 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
     await git(repoDir, ["switch", "main"]);
     await mkdir(join(repoDir, ".switchyard", "worktrees", "agent-active"), { recursive: true });
     await mkdir(join(repoDir, ".switchyard", "worktrees", "agent-merged"), { recursive: true });
+    await git(
+      repoDir,
+      ["worktree", "add", join(repoDir, ".switchyard", "worktrees", "agent-dirty-merged"), "agents/dirty-merged-ready"]
+    );
+    await writeFile(join(repoDir, ".switchyard", "worktrees", "agent-dirty-merged", "TASK_RESULT.md"), "pending output\n", "utf8");
     await mkdir(join(repoDir, ".switchyard", "worktrees", "agent-unmerged"), { recursive: true });
 
     await createSession(repoDir, {
@@ -458,6 +464,17 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
       runtimePid: null,
       createdAt: "2026-03-08T09:05:00.000Z",
       updatedAt: "2026-03-08T09:05:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "session-dirty-merged",
+      agentName: "agent-dirty-merged",
+      branch: "agents/dirty-merged-ready",
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-dirty-merged"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-08T09:07:00.000Z",
+      updatedAt: "2026-03-08T09:07:00.000Z"
     });
     await createSession(repoDir, {
       id: "session-absent",
@@ -532,6 +549,10 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
   const output = writes.join("");
   assert.match(output, /running\tsession-active\tagent-active[^\n]*\tstop-then:merged\t-\t-\twait\t-/);
   assert.match(output, /stopped\tsession-merged\tagent-merged[^\n]*\tready:merged\t-\t-\tcleanup\t-/);
+  assert.match(
+    output,
+    /stopped\tsession-dirty-merged\tagent-dirty-merged[^\n]*\tabandon-only:worktree-dirty\t-\t-\tinspect\t-/
+  );
   assert.match(output, /stopped\tsession-absent\tagent-absent[^\n]*\tready:absent\t-\t-\tdone\t-/);
   assert.match(
     output,

@@ -10,7 +10,7 @@ Current outcome:
 - stop treating the old detached interactive runtime as the open gap
 - keep the all-session `sy status` view as the default control plane for concurrent task ownership and follow-up state
 - keep the runtime slice narrow and operator-first instead of broadening into live attach or tmux
-- `sy sling` now launches bounded `codex exec --json` tasks with durable JSONL logs under `.switchyard/logs/`
+- `sy sling` now launches bounded `codex exec --json` tasks with a default `workspace-write` sandbox and durable JSONL logs under `.switchyard/logs/`
 - `sy logs <session>` now renders readable structured output from Codex JSONL instead of raw transcript dumps
 - natural task completion is now truthful in `sy status`, recent events, and run outcomes
 - the next task should be chosen from the next concrete operator-visible blind spot instead of naming another runtime expansion by default
@@ -27,7 +27,8 @@ That means the runtime slice no longer needs to dominate the execution filter. T
 ## Exact Order
 
 1. Treat the bounded `codex exec --json` runtime as complete
-   - keep `.switchyard/logs/` as the durable operator log path
+- keep `.switchyard/logs/` as the durable operator log path
+- keep writable-by-default bounded launches as the operator-safe baseline unless an explicit runtime override is passed
    - keep `sy logs <session>` as the read-only inspection path with narrow readable structured output
    - keep natural task completion truthful in `sy status`, recent events, and run outcomes
 
@@ -38,7 +39,7 @@ That means the runtime slice no longer needs to dominate the execution filter. T
 ## Latest Completed Slice
 
 Completed slice:
-- bounded `codex exec --json` launch in `sy sling`
+- bounded `codex exec --json` launch in `sy sling`, now defaulting to `--sandbox workspace-write`
 - readable structured `sy logs <session>` over raw Codex JSONL
 - natural completion reconciliation in `sy status`
 - truthful already-finished handling in `sy stop`
@@ -55,6 +56,7 @@ Completed slice:
 - run terminal outcomes in `sy stop` and `sy merge`
 - file-backed mail-body input in `sy mail send` via `--body-file <path>`
 - truthful already-absent cleanup reporting for `sy stop <session> --cleanup --abandon`
+- merged-cleanup readiness that now refuses preserved worktrees with uncommitted non-Switchyard entries
 - file-backed launch-task input in `sy sling` via `--task-file <path>`
 - exact launch-task inspection in `sy status <session> --task`
 - exact launch-command inspection in `sy status <session>`
@@ -82,7 +84,7 @@ Current status:
 - the first concurrent proving workflow is now materially real
 - passive stalled-session visibility and no-visible-progress visibility in `sy status` are complete
 - detached runtime observability through structured Codex JSONL plus `sy logs <session>` is now complete
-- the bounded `codex exec --json` runtime is now the repo's runtime baseline
+- the bounded `codex exec --json` runtime with a default `workspace-write` sandbox is now the repo's runtime baseline
 - the next slice should stay narrower than live attach or tmux-backed runtime control and should be named only after a new operator-visible gap is reproduced
 
 ## What To Keep Small

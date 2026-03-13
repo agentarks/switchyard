@@ -7,6 +7,7 @@ import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { MergeError } from "../errors.js";
+import { listMeaningfulDirtyEntries } from "../git/status.js";
 import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 import { updateLatestRunForSession } from "../runs/store.js";
 import type { UpdateRunInput } from "../runs/types.js";
@@ -217,8 +218,7 @@ async function resolveSession(projectRoot: string, selector: string): Promise<Se
 }
 
 async function ensureProjectRootIsClean(projectRoot: string, session: SessionRecord): Promise<void> {
-  const { stdout } = await runGit(projectRoot, ["status", "--porcelain", "--untracked-files=all"]);
-  const dirtyEntries = parseDirtyEntries(stdout);
+  const dirtyEntries = await listMeaningfulDirtyEntries(projectRoot);
 
   if (dirtyEntries.length > 0) {
     throw recordedMergeError(
@@ -279,8 +279,7 @@ async function ensurePreservedWorktreeIsClean(projectRoot: string, session: Sess
     );
   }
 
-  const { stdout } = await runGit(session.worktreePath, ["status", "--porcelain", "--untracked-files=all"]);
-  const dirtyEntries = parseDirtyEntries(stdout);
+  const dirtyEntries = await listMeaningfulDirtyEntries(session.worktreePath);
 
   if (dirtyEntries.length > 0) {
     throw recordedMergeError(
@@ -490,29 +489,6 @@ function formatConflictPathSummary(paths: string[]): string {
   return visiblePaths.join("; ");
 }
 
-function isSwitchyardStateEntry(entry: string): boolean {
-  const pathField = entry.slice(3).trim();
-  const normalizedPath = unquoteGitPath(pathField);
-
-  if (normalizedPath.includes(" -> ")) {
-    const [fromPath, toPath] = normalizedPath.split(" -> ", 2);
-    return typeof fromPath === "string"
-      && typeof toPath === "string"
-      && isSwitchyardPath(fromPath)
-      && isSwitchyardPath(toPath);
-  }
-
-  return isSwitchyardPath(normalizedPath);
-}
-
-function parseDirtyEntries(stdout: string): string[] {
-  return stdout
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0)
-    .filter((line) => !isSwitchyardStateEntry(line));
-}
-
 function formatDirtyEntrySummary(entries: string[]): string {
   const visibleEntries = entries.slice(0, MAX_DIRTY_ENTRY_DETAILS);
 
@@ -523,18 +499,6 @@ function formatDirtyEntrySummary(entries: string[]): string {
   }
 
   return visibleEntries.join("; ");
-}
-
-function isSwitchyardPath(path: string): boolean {
-  return path === ".switchyard" || path.startsWith(".switchyard/");
-}
-
-function unquoteGitPath(path: string): string {
-  if (path.startsWith("\"") && path.endsWith("\"")) {
-    return path.slice(1, -1);
-  }
-
-  return path;
 }
 
 function formatRelativePath(projectRoot: string, path: string): string {

@@ -14,6 +14,7 @@ import { createSession } from "../sessions/store.js";
 import type { CreateSessionInput } from "../sessions/types.js";
 import { summarizeTask, writeTaskSpec, type TaskSpecRecord } from "../specs/task.js";
 import {
+  buildCodexCommand,
   type SpawnedRuntimeProcess,
   type SpawnedRuntimeSession,
   spawnCodexSession
@@ -69,7 +70,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
 
   const managedWorktree = await createWorktree(config, options.agentName);
   const runtimeArgs = options.runtimeArgs ?? [];
-  const runtimeArgsWithTask = ["exec", "--json", ...runtimeArgs, task];
+  const runtimeArgsWithTask = [...buildCodexCommand(runtimeArgs).args, task];
   const createdAt = new Date().toISOString();
   let lastLifecycleTimestamp = createdAt;
   const sessionId = randomUUID();

@@ -162,7 +162,7 @@ test("eventsCommand surfaces task handoff details from sling launch events", asy
       task,
       startDir: repoDir,
       spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
-        assert.deepEqual(runtimeArgs, ["exec", "--json", task]);
+        assert.deepEqual(runtimeArgs, ["exec", "--json", "--sandbox", "workspace-write", task]);
         const runtime = {
           pid: 7171,
           command: {
@@ -192,8 +192,8 @@ test("eventsCommand surfaces task handoff details from sling launch events", asy
     assert.match(output, /sling\.completed/);
     assert.match(output, /taskSummary=\"Review the current operator loop and call out the next concrete gap\.\"/);
     assert.match(output, new RegExp(`taskSpecPath=\\.switchyard/specs/agent-task-events-${sessionId}\\.md`));
-    assert.match(output, /runtimeCommand=\"codex exec --json\"/);
-    assert.doesNotMatch(output, /runtimeCommand=\"codex exec --json Review the current operator loop/);
+    assert.match(output, /runtimeCommand=\"codex exec --json --sandbox workspace-write\"/);
+    assert.doesNotMatch(output, /runtimeCommand=\"codex exec --json --sandbox workspace-write Review the current operator loop/);
   } finally {
     await removeTempDir(repoDir);
   }

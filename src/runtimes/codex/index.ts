@@ -32,10 +32,13 @@ export function buildCodexCommand(runtimeArgs: string[] = []): RuntimeCommand {
   const args = runtimeArgs[0] === "exec" && runtimeArgs[1] === "--json"
     ? runtimeArgs
     : ["exec", "--json", ...runtimeArgs];
+  const normalizedArgs = hasExplicitSandboxMode(args)
+    ? args
+    : ["exec", "--json", "--sandbox", "workspace-write", ...args.slice(2)];
 
   return {
     command: "codex",
-    args
+    args: normalizedArgs
   };
 }
 
@@ -188,4 +191,14 @@ function formatSpawnError(error: Error): string {
 
 function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function hasExplicitSandboxMode(args: string[]): boolean {
+  return args.some((arg) => {
+    return arg === "--sandbox"
+      || arg.startsWith("--sandbox=")
+      || arg === "-s"
+      || arg === "--full-auto"
+      || arg === "--dangerously-bypass-approvals-and-sandbox";
+  });
 }
