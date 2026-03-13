@@ -157,6 +157,84 @@ test("stopCommand reports natural completion truthfully when the task already fi
   assert.match(output, /Worktree preserved: \.switchyard\/worktrees\/agent-natural-complete/);
 });
 
+test("stopCommand records abandoned when cleanup abandons an already-finished task", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-natural-complete-abandon");
+
+  try {
+    await createSession(repoDir, {
+      id: "session-natural-complete-abandon",
+      agentName: "agent-natural-complete-abandon",
+      branch: "agents/agent-natural-complete-abandon",
+      baseBranch: "main",
+      worktreePath,
+      state: "running",
+      runtimePid: 5353,
+      createdAt: "2026-03-08T12:00:00.000Z",
+      updatedAt: "2026-03-08T12:00:00.000Z"
+    });
+    await createRun(repoDir, {
+      id: "run-natural-complete-abandon",
+      sessionId: "session-natural-complete-abandon",
+      agentName: "agent-natural-complete-abandon",
+      taskSummary: TEST_TASK,
+      taskSpecPath: ".switchyard/specs/agent-natural-complete-abandon-session-natural-complete-abandon.md",
+      state: "active",
+      createdAt: "2026-03-08T12:00:00.000Z",
+      updatedAt: "2026-03-08T12:00:00.000Z"
+    });
+    await writeFile(
+      getSessionLogPath(repoDir, "agent-natural-complete-abandon", "session-natural-complete-abandon").path,
+      "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":10,\"cached_input_tokens\":4,\"output_tokens\":2}}\n",
+      "utf8"
+    );
+    await mkdir(worktreePath, { recursive: true });
+    await git(repoDir, [
+      "worktree",
+      "add",
+      worktreePath,
+      "-b",
+      "agents/agent-natural-complete-abandon",
+      "main"
+    ]);
+    await git(worktreePath, ["switch", "agents/agent-natural-complete-abandon"]);
+    await git(worktreePath, ["commit", "--allow-empty", "-m", "Agent natural completion change"]);
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await stopCommand({
+      selector: "agent-natural-complete-abandon",
+      startDir: repoDir,
+      cleanup: true,
+      abandon: true,
+      isRuntimeAlive: () => false
+    });
+
+    const sessions = await listSessions(repoDir);
+    const latestRun = await getLatestRunForSession(repoDir, "session-natural-complete-abandon");
+    const events = await listEvents(repoDir, { sessionId: "session-natural-complete-abandon" });
+
+    assert.equal(sessions[0]?.state, "stopped");
+    assert.equal(latestRun?.state, "finished");
+    assert.equal(latestRun?.outcome, "abandoned");
+    assert.equal(events[0]?.eventType, "stop.completed");
+    assert.equal(events[0]?.payload.outcome, "already_finished");
+    assert.equal(events[0]?.payload.cleanupMode, "abandoned");
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Session agent-natural-complete-abandon already finished successfully\./);
+  assert.match(output, /Cleanup: removed worktree and branch after explicit abandon\./);
+});
+
 test("stopCommand rejects selectors that match different sessions by id and agent name", async () => {
   const repoDir = await createInitializedRepo();
 

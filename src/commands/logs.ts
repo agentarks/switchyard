@@ -122,8 +122,10 @@ function renderTranscriptLine(line: string): string[] {
     case "error":
       return [`Error: ${formatEventMessage(event.message, "unknown error")}`];
     case "item.started":
-    case "item.completed":
-      return renderItemEvent(event.item);
+    case "item.completed": {
+      const renderedItem = renderItemEvent(event.item);
+      return renderedItem.length > 0 ? renderedItem : [line];
+    }
     default:
       return [line];
   }

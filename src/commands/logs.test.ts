@@ -159,6 +159,42 @@ test("logsCommand preserves malformed JSONL lines while still rendering terminal
   }
 });
 
+test("logsCommand preserves unknown JSONL item events as raw lines", async () => {
+  const repoDir = await createInitializedRepo();
+  const sessionId = "session-logs-jsonl-unknown-item";
+  const logPath = join(repoDir, ".switchyard", "logs", `agent-logs-jsonl-unknown-item-${sessionId}.log`);
+  const unknownLine = "{\"type\":\"item.completed\",\"item\":{\"id\":\"item_9\",\"type\":\"tool_call\",\"name\":\"bash\"}}";
+
+  try {
+    await createSession(repoDir, {
+      id: sessionId,
+      agentName: "agent-logs-jsonl-unknown-item",
+      branch: "agents/agent-logs-jsonl-unknown-item",
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-logs-jsonl-unknown-item"),
+      state: "stopped",
+      runtimePid: null,
+      createdAt: "2026-03-12T09:08:00.000Z",
+      updatedAt: "2026-03-12T09:08:00.000Z"
+    });
+    await writeFile(logPath, [
+      "{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"agent_message\",\"text\":\"known line\"}}",
+      unknownLine,
+      "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"output_tokens\":1}}"
+    ].join("\n") + "\n", "utf8");
+
+    const output = await captureStdout(async () => {
+      await logsCommand({ selector: sessionId, startDir: repoDir, showAll: true });
+    });
+
+    assert.match(output, /known line/);
+    assert.match(output, new RegExp(escapeForRegExp(unknownLine)));
+    assert.match(output, /Turn completed\./);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("logsCommand reports an explicit message when the session exists but the transcript file does not", async () => {
   const repoDir = await createInitializedRepo();
   const sessionId = "session-logs-missing";
@@ -330,4 +366,8 @@ async function captureStdout(
   }
 
   return writes.join("");
+}
+
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -571,7 +571,7 @@ async function updateRunAfterStopBestEffort(
   cleanupMode?: CleanupMode,
   overrideOutcome?: RunOutcome
 ): Promise<void> {
-  const outcome = overrideOutcome ?? determineRunOutcomeAfterStop(sessionState, cleanupMode);
+  const outcome = determineRunOutcomeAfterStop(sessionState, cleanupMode, overrideOutcome);
   const finishedAt = new Date().toISOString();
 
   try {
@@ -588,7 +588,8 @@ async function updateRunAfterStopBestEffort(
 
 function determineRunOutcomeAfterStop(
   sessionState: SessionRecord["state"],
-  cleanupMode?: CleanupMode
+  cleanupMode?: CleanupMode,
+  overrideOutcome?: RunOutcome
 ): RunOutcome {
   if (cleanupMode === "abandoned") {
     return "abandoned";
@@ -600,6 +601,10 @@ function determineRunOutcomeAfterStop(
 
   if (sessionState === "failed") {
     return "failed";
+  }
+
+  if (overrideOutcome) {
+    return overrideOutcome;
   }
 
   return "stopped";
