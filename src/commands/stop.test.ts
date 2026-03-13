@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { listEvents } from "../events/store.js";
 import { StopError } from "../errors.js";
-import { getLatestRunForSession } from "../runs/store.js";
+import { getSessionLogPath } from "../logs/path.js";
+import { createRun, getLatestRunForSession } from "../runs/store.js";
 import { createSession, listSessions, updateSessionState } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
@@ -81,6 +82,79 @@ test("stopCommand stops an active session and preserves the worktree by default"
   assert.match(output, /Stopped agent-one/);
   assert.match(output, /Session: [^\n]+/);
   assert.match(output, /Worktree preserved: \.switchyard\/worktrees\/agent-one/);
+});
+
+test("stopCommand reports natural completion truthfully when the task already finished", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  let stopAttempted = false;
+
+  try {
+    await createSession(repoDir, {
+      id: "session-natural-complete",
+      agentName: "agent-natural-complete",
+      branch: "agents/agent-natural-complete",
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-natural-complete"),
+      state: "running",
+      runtimePid: 4343,
+      createdAt: "2026-03-08T12:00:00.000Z",
+      updatedAt: "2026-03-08T12:00:00.000Z"
+    });
+    await createRun(repoDir, {
+      id: "run-natural-complete",
+      sessionId: "session-natural-complete",
+      agentName: "agent-natural-complete",
+      taskSummary: TEST_TASK,
+      taskSpecPath: ".switchyard/specs/agent-natural-complete-session-natural-complete.md",
+      state: "active",
+      createdAt: "2026-03-08T12:00:00.000Z",
+      updatedAt: "2026-03-08T12:00:00.000Z"
+    });
+    await writeFile(
+      getSessionLogPath(repoDir, "agent-natural-complete", "session-natural-complete").path,
+      "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":10,\"cached_input_tokens\":4,\"output_tokens\":2}}\n",
+      "utf8"
+    );
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await stopCommand({
+      selector: "agent-natural-complete",
+      startDir: repoDir,
+      isRuntimeAlive: () => false,
+      stopRuntime: async () => {
+        stopAttempted = true;
+        return true;
+      }
+    });
+
+    const sessions = await listSessions(repoDir);
+    const latestRun = await getLatestRunForSession(repoDir, "session-natural-complete");
+    const events = await listEvents(repoDir, { sessionId: "session-natural-complete" });
+
+    assert.equal(stopAttempted, false);
+    assert.equal(sessions[0]?.state, "stopped");
+    assert.equal(sessions[0]?.runtimePid, null);
+    assert.equal(latestRun?.state, "finished");
+    assert.equal(latestRun?.outcome, "completed");
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "stop.completed");
+    assert.equal(events[0]?.payload.outcome, "already_finished");
+    assert.equal(events[0]?.payload.completed, true);
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Session agent-natural-complete already finished successfully\./);
+  assert.match(output, /Session: session-natural-complete/);
+  assert.match(output, /Worktree preserved: \.switchyard\/worktrees\/agent-natural-complete/);
 });
 
 test("stopCommand rejects selectors that match different sessions by id and agent name", async () => {

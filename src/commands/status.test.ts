@@ -7,8 +7,9 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { buildDefaultConfig, writeConfig } from "../config.js";
 import { createEvent, listEvents } from "../events/store.js";
+import { getSessionLogPath } from "../logs/path.js";
 import { createMail, readUnreadMailForSession } from "../mail/store.js";
-import { createRun } from "../runs/store.js";
+import { createRun, getLatestRunForSession } from "../runs/store.js";
 import { createSession, listSessions } from "../sessions/store.js";
 import { summarizeTask, writeTaskSpec } from "../specs/task.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
@@ -2946,6 +2947,139 @@ test("statusCommand does not leak unknown event payload fields into the recent s
   );
   assert.doesNotMatch(output, /should-not-appear/);
   assert.doesNotMatch(output, /also-hidden/);
+});
+
+test("statusCommand reconciles a naturally completed codex exec task as successful", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-completed",
+    agentName: "agent-completed",
+    branch: "agents/agent-completed",
+    baseBranch: "main",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-completed"),
+    state: "running",
+    runtimePid: 9393,
+    createdAt: "2026-03-06T09:00:00.000Z",
+    updatedAt: "2026-03-06T10:00:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-completed",
+    sessionId: "session-completed",
+    agentName: "agent-completed",
+    taskSummary: "Finish the bounded codex task.",
+    taskSpecPath: ".switchyard/specs/agent-completed-session-completed.md",
+    state: "active",
+    createdAt: "2026-03-06T09:00:00.000Z",
+    updatedAt: "2026-03-06T10:00:00.000Z"
+  });
+  await writeFile(
+    getSessionLogPath(repoDir, "agent-completed", "session-completed").path,
+    "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":10,\"cached_input_tokens\":4,\"output_tokens\":2}}\n",
+    "utf8"
+  );
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false,
+      now: () => "2026-03-08T09:47:00.000Z"
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "stopped");
+    assert.equal(sessions[0]?.runtimePid, null);
+    const latestRun = await getLatestRunForSession(repoDir, "session-completed");
+    assert.equal(latestRun?.state, "finished");
+    assert.equal(latestRun?.outcome, "completed");
+    const events = await listEvents(repoDir, { sessionId: "session-completed" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "runtime.completed");
+    assert.equal(events[0]?.payload.runtimePid, 9393);
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(
+    output,
+    /stopped\tsession-completed\tagent-completed\tagents\/agent-completed\t\.switchyard\/worktrees\/agent-completed\t2026-03-08T09:47:00.000Z\t0\t[^\t]+\tFinish the bounded codex task\.\tfinished:completed\t[^\t]+\t2026-03-08T09:47:00.000Z runtime\.completed runtimePid=9393/
+  );
+});
+
+test("statusCommand reconciles a naturally failed codex exec task as failed", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-runtime-failed",
+    agentName: "agent-runtime-failed",
+    branch: "agents/agent-runtime-failed",
+    baseBranch: "main",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-runtime-failed"),
+    state: "running",
+    runtimePid: 9494,
+    createdAt: "2026-03-06T09:00:00.000Z",
+    updatedAt: "2026-03-06T10:00:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-runtime-failed",
+    sessionId: "session-runtime-failed",
+    agentName: "agent-runtime-failed",
+    taskSummary: "Finish the bounded codex task.",
+    taskSpecPath: ".switchyard/specs/agent-runtime-failed-session-runtime-failed.md",
+    state: "active",
+    createdAt: "2026-03-06T09:00:00.000Z",
+    updatedAt: "2026-03-06T10:00:00.000Z"
+  });
+  await writeFile(
+    getSessionLogPath(repoDir, "agent-runtime-failed", "session-runtime-failed").path,
+    "{\"type\":\"turn.failed\",\"error\":{\"message\":\"boom\"}}\n",
+    "utf8"
+  );
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      isRuntimeAlive: () => false,
+      now: () => "2026-03-08T09:48:00.000Z"
+    });
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(sessions[0]?.runtimePid, null);
+    const latestRun = await getLatestRunForSession(repoDir, "session-runtime-failed");
+    assert.equal(latestRun?.state, "finished");
+    assert.equal(latestRun?.outcome, "failed");
+    const events = await listEvents(repoDir, { sessionId: "session-runtime-failed" });
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.eventType, "runtime.failed");
+    assert.equal(events[0]?.payload.runtimePid, 9494);
+    assert.equal(events[0]?.payload.errorMessage, "boom");
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(
+    output,
+    /failed\tsession-runtime-failed\tagent-runtime-failed\tagents\/agent-runtime-failed\t\.switchyard\/worktrees\/agent-runtime-failed\t2026-03-08T09:48:00.000Z\t0\t[^\t]+\tFinish the bounded codex task\.\tfinished:failed\t[^\t]+\t2026-03-08T09:48:00.000Z runtime\.failed runtimePid=9494, errorMessage=boom/
+  );
 });
 
 test("statusCommand marks stale running sessions as failed", async () => {

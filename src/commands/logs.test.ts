@@ -79,6 +79,86 @@ test("logsCommand prints the full transcript when --all is requested", async () 
   }
 });
 
+test("logsCommand renders codex exec JSONL into readable operator output", async () => {
+  const repoDir = await createInitializedRepo();
+  const sessionId = "session-logs-jsonl";
+  const logPath = join(repoDir, ".switchyard", "logs", `agent-logs-jsonl-${sessionId}.log`);
+
+  try {
+    await createSession(repoDir, {
+      id: sessionId,
+      agentName: "agent-logs-jsonl",
+      branch: "agents/agent-logs-jsonl",
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-logs-jsonl"),
+      state: "running",
+      runtimePid: 1313,
+      createdAt: "2026-03-12T09:06:00.000Z",
+      updatedAt: "2026-03-12T09:06:00.000Z"
+    });
+    await writeFile(logPath, [
+      "{\"type\":\"thread.started\",\"thread_id\":\"thread-1\"}",
+      "{\"type\":\"turn.started\"}",
+      "{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"agent_message\",\"text\":\"hello\"}}",
+      "{\"type\":\"item.started\",\"item\":{\"id\":\"item_1\",\"type\":\"command_execution\",\"command\":\"printf 'hi\\\\n'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}",
+      "{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"command_execution\",\"command\":\"printf 'hi\\\\n'\",\"aggregated_output\":\"hi\\n\",\"exit_code\":0,\"status\":\"completed\"}}",
+      "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":10,\"cached_input_tokens\":4,\"output_tokens\":2}}"
+    ].join("\n") + "\n", "utf8");
+
+    const output = await captureStdout(async () => {
+      await logsCommand({ selector: sessionId, startDir: repoDir, showAll: true });
+    });
+
+    assert.match(output, /hello/);
+    assert.match(output, /Command started: printf 'hi\\n'/);
+    assert.match(output, /Command exited with 0: printf 'hi\\n'/);
+    assert.match(output, /Output:\n  hi/);
+    assert.match(output, /Turn completed\./);
+    assert.match(output, /Usage: input=10, cached=4, output=2/);
+    assert.doesNotMatch(output, /thread\.started/);
+    assert.doesNotMatch(output, /turn\.started/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("logsCommand preserves malformed JSONL lines while still rendering terminal failure events", async () => {
+  const repoDir = await createInitializedRepo();
+  const sessionId = "session-logs-jsonl-malformed";
+  const logPath = join(repoDir, ".switchyard", "logs", `agent-logs-jsonl-malformed-${sessionId}.log`);
+
+  try {
+    await createSession(repoDir, {
+      id: sessionId,
+      agentName: "agent-logs-jsonl-malformed",
+      branch: "agents/agent-logs-jsonl-malformed",
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-logs-jsonl-malformed"),
+      state: "failed",
+      runtimePid: null,
+      createdAt: "2026-03-12T09:07:00.000Z",
+      updatedAt: "2026-03-12T09:07:00.000Z"
+    });
+    await writeFile(logPath, [
+      "{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"agent_message\",\"text\":\"partial transcript\"}}",
+      "{\"type\":\"item.started\"",
+      "raw trailing line",
+      "{\"type\":\"turn.failed\",\"error\":{\"message\":\"boom\"}}"
+    ].join("\n") + "\n", "utf8");
+
+    const output = await captureStdout(async () => {
+      await logsCommand({ selector: sessionId, startDir: repoDir, showAll: true });
+    });
+
+    assert.match(output, /partial transcript/);
+    assert.match(output, /\{\"type\":\"item\.started\"/);
+    assert.match(output, /raw trailing line/);
+    assert.match(output, /Turn failed: boom/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("logsCommand reports an explicit message when the session exists but the transcript file does not", async () => {
   const repoDir = await createInitializedRepo();
   const sessionId = "session-logs-missing";

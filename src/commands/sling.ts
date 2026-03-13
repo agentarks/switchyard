@@ -69,7 +69,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
 
   const managedWorktree = await createWorktree(config, options.agentName);
   const runtimeArgs = options.runtimeArgs ?? [];
-  const runtimeArgsWithTask = [...runtimeArgs, task];
+  const runtimeArgsWithTask = ["exec", "--json", ...runtimeArgs, task];
   const createdAt = new Date().toISOString();
   let lastLifecycleTimestamp = createdAt;
   const sessionId = randomUUID();

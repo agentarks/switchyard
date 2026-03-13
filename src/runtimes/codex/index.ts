@@ -1,11 +1,9 @@
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
-import process from "node:process";
 import { RuntimeError } from "../../errors.js";
 
 const DEFAULT_READY_TIMEOUT_MS = 500;
-const SCRIPT_TYPESCRIPT_PATH = "/dev/null";
 
 export interface RuntimeCommand {
   command: string;
@@ -28,28 +26,30 @@ export interface SpawnCodexSessionOptions {
   readyTimeoutMs?: number;
   onSpawned?: (runtime: SpawnedRuntimeProcess) => void | Promise<void>;
   spawnProcess?: typeof spawn;
-  platform?: NodeJS.Platform;
 }
 
 export function buildCodexCommand(runtimeArgs: string[] = []): RuntimeCommand {
+  const args = runtimeArgs[0] === "exec" && runtimeArgs[1] === "--json"
+    ? runtimeArgs
+    : ["exec", "--json", ...runtimeArgs];
+
   return {
     command: "codex",
-    args: runtimeArgs
+    args
   };
 }
 
 export async function spawnCodexSession(options: SpawnCodexSessionOptions): Promise<SpawnedRuntimeSession> {
   const command = buildCodexCommand(options.runtimeArgs);
-  const launchCommand = buildCodexLaunchCommand(command, options.platform ?? process.platform, options.logPath);
   const spawnProcess = options.spawnProcess ?? spawn;
   let logFileDescriptor: number | undefined;
 
-  if (launchCommand.command === command.command && typeof options.logPath === "string") {
+  if (typeof options.logPath === "string") {
     try {
       logFileDescriptor = openSync(options.logPath, "a");
     } catch (error) {
       throw new RuntimeError(
-        `Failed to start Codex: unable to open transcript log '${options.logPath}': ${formatErrorMessage(error)}`
+        `Failed to start Codex: unable to open log '${options.logPath}': ${formatErrorMessage(error)}`
       );
     }
   }
@@ -57,7 +57,7 @@ export async function spawnCodexSession(options: SpawnCodexSessionOptions): Prom
   let child: ChildProcess;
 
   try {
-    child = spawnProcess(launchCommand.command, launchCommand.args, {
+    child = spawnProcess(command.command, command.args, {
       cwd: options.worktreePath,
       detached: true,
       stdio: typeof logFileDescriptor === "number"
@@ -78,37 +78,15 @@ export async function spawnCodexSession(options: SpawnCodexSessionOptions): Prom
 
   return await waitForChildReady(child, {
     command,
-    launchCommand,
     readyTimeoutMs: options.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS,
     onSpawned: options.onSpawned
   });
-}
-
-function buildCodexLaunchCommand(command: RuntimeCommand, platform: NodeJS.Platform, logPath?: string): RuntimeCommand {
-  switch (platform) {
-    case "darwin":
-    case "freebsd":
-    case "netbsd":
-    case "openbsd":
-      return {
-        command: "script",
-        args: ["-q", "-e", logPath ?? SCRIPT_TYPESCRIPT_PATH, command.command, ...command.args]
-      };
-    case "linux":
-      return {
-        command: "script",
-        args: ["-q", "-e", logPath ?? SCRIPT_TYPESCRIPT_PATH, "--", command.command, ...command.args]
-      };
-    default:
-      return command;
-  }
 }
 
 async function waitForChildReady(
   child: ChildProcess,
   options: {
     command: RuntimeCommand;
-    launchCommand: RuntimeCommand;
     readyTimeoutMs: number;
     onSpawned?: (runtime: SpawnedRuntimeProcess) => void | Promise<void>;
   }
@@ -154,7 +132,7 @@ async function waitForChildReady(
     };
 
     const handleError = (error: Error): void => {
-      fail(new RuntimeError(formatSpawnError(error, options.launchCommand, options.command)));
+      fail(new RuntimeError(formatSpawnError(error)));
     };
 
     const handleExit = (code: number | null, signal: NodeJS.Signals | null): void => {
@@ -204,11 +182,7 @@ function formatEarlyExitMessage(code: number | null, signal: NodeJS.Signals | nu
   return `Codex exited before Switchyard marked the session ready (${outcome}).`;
 }
 
-function formatSpawnError(error: Error, launchCommand: RuntimeCommand, command: RuntimeCommand): string {
-  if (launchCommand.command !== command.command && "code" in error && error.code === "ENOENT") {
-    return "Failed to start Codex: pseudo-terminal wrapper 'script' is not available on PATH.";
-  }
-
+function formatSpawnError(error: Error): string {
   return `Failed to start Codex: ${error.message}`;
 }
 

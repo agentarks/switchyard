@@ -4,47 +4,44 @@ This file is the owner-facing execution guide for deciding whether a new meaning
 
 ## Current Decision
 
-The first concurrent proving workflow is now complete enough to stop being the default next task.
+The bounded Codex exec runtime slice is now complete enough to stop being the default next task.
 
 Current outcome:
-- stop treating the first two-session proof as the open gap
-- use that proved workflow to choose one small operator-visible blind spot instead of expanding surface area blindly
-- the passive stalled-session visibility and no-visible-progress visibility slices in `sy status` are now complete
-- detached runtime observability is now materially real through durable transcript capture plus a first-class `sy logs <session>` inspection path
+- stop treating the old detached interactive runtime as the open gap
 - keep the all-session `sy status` view as the default control plane for concurrent task ownership and follow-up state
 - keep the runtime slice narrow and operator-first instead of broadening into live attach or tmux
-- real end-to-end testing now shows the detached interactive raw-transcript path is insufficient on macOS/BSD
-- the next task is to replace that runtime path with a bounded `codex exec --json` launch plus readable structured `sy logs`
+- `sy sling` now launches bounded `codex exec --json` tasks with durable JSONL logs under `.switchyard/logs/`
+- `sy logs <session>` now renders readable structured output from Codex JSONL instead of raw transcript dumps
+- natural task completion is now truthful in `sy status`, recent events, and run outcomes
+- the next task should be chosen from the next concrete operator-visible blind spot instead of naming another runtime expansion by default
 
-## Why This Is Next
+## Why This Matters
 
-The repo now proves the first two-session path end to end, including passive stalled-session visibility, no-visible-progress visibility, and detached runtime inspection. Real end-to-end testing also showed that the current detached interactive Codex launch path does not produce reliable live observability on macOS/BSD, so the next product gap is no longer "how do we inspect a detached live session at all?" but "what is the smallest truthful runtime model that gives live readable task output and natural completion?"
+The repo now proves the first concurrent workflow end to end with a truthful bounded runtime:
+- detached task logs are readable while the task is running
+- natural completion no longer looks like a stale failed pid by default
+- `sy stop` remains useful for cancellation and cleanup without pretending normal completion needs an explicit stop
 
-Without naming this slice:
-- effort drifts back into generic hardening instead of a named operator problem
-- breadth risks arriving before the next real constraint is identified
-- docs stop being useful as an execution filter
+That means the runtime slice no longer needs to dominate the execution filter. The next slice should be named only after a new concrete operator gap appears.
 
 ## Exact Order
 
-1. Replace the detached interactive Codex launch path with a bounded `codex exec --json` runtime
+1. Treat the bounded `codex exec --json` runtime as complete
    - keep `.switchyard/logs/` as the durable operator log path
-   - keep `sy logs <session>` as the read-only inspection path, but render readable structured output from Codex JSONL
-   - keep natural task completion truthful in `sy status`, `sy events`, and run outcomes
-   - no live attach or tmux unless the bounded headless runtime proves insufficient
-   - chosen after real end-to-end testing on 2026-03-12 showed the raw detached interactive transcript path was not trustworthy enough
+   - keep `sy logs <session>` as the read-only inspection path with narrow readable structured output
+   - keep natural task completion truthful in `sy status`, recent events, and run outcomes
 
-2. Fix the prior blind spot: no visible progress visibility in `sy status`
-   - completed on 2026-03-11
-
-3. Keep the slice narrow
-   - do not broaden into dashboards, automation, interactive attach, tmux-backed control, broad transcript parsing, or generic workflow engines
-   - do not invent another broad multi-agent milestone until a concrete gap earns it
-   - update docs only where the named blind spot changes project meaningfully
+2. Choose the next small operator-visible blind spot from the proved workflow
+   - avoid naming a new broad milestone before a concrete gap earns it
+   - prefer the next reviewable lifecycle or inspection problem over broadening the surface area
 
 ## Latest Completed Slice
 
 Completed slice:
+- bounded `codex exec --json` launch in `sy sling`
+- readable structured `sy logs <session>` over raw Codex JSONL
+- natural completion reconciliation in `sy status`
+- truthful already-finished handling in `sy stop`
 - detached runtime transcript capture under `.switchyard/logs/`
 - first-class `sy logs <session>` with default tail and `--all`
 - transcript path visibility in exact-session `sy status`
@@ -84,9 +81,9 @@ Decision rule:
 Current status:
 - the first concurrent proving workflow is now materially real
 - passive stalled-session visibility and no-visible-progress visibility in `sy status` are complete
-- detached runtime observability through transcript capture plus `sy logs <session>` is now complete
-- the raw detached interactive transcript path is no longer considered sufficient after real end-to-end testing
-- the next slice should stay narrower than live attach or tmux-backed runtime control and should focus on bounded `codex exec --json` task runs plus readable structured logs
+- detached runtime observability through structured Codex JSONL plus `sy logs <session>` is now complete
+- the bounded `codex exec --json` runtime is now the repo's runtime baseline
+- the next slice should stay narrower than live attach or tmux-backed runtime control and should be named only after a new operator-visible gap is reproduced
 
 ## What To Keep Small
 

@@ -1,6 +1,6 @@
 export type RunState = "starting" | "active" | "finished";
 
-export type RunOutcome = "launch_failed" | "stopped" | "failed" | "merged" | "abandoned";
+export type RunOutcome = "launch_failed" | "stopped" | "completed" | "failed" | "merged" | "abandoned";
 
 export interface RunRecord {
   id: string;

@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn with launch-time session-id visibility, first-class `sy sling` task handoff via explicit `--task` or `--task-file` input with durable spec files under `.switchyard/specs/`, readiness-aware status with session-id visibility plus unread-mail counts, cleanup-readiness inspection, passive stalled-session visibility for quiet active sessions, a more specific passive `runtime.no_visible_progress` hint for long-lived active sessions that still show no inbound mail or repo-visible work artifact, and exact per-session inspection that now surfaces stored base-branch, runtime-pid, latest stored launch-command metadata, a derived next follow-up signal, plus the full recent-event summary and latest launch task handoff, with optional full task-text inspection via `sy status <session> --task`, stop with exact session-id visibility in operator-facing completion output including post-stop cleanup-removal failures plus repeated-stop already-inactive refusals, events with explicit selector disambiguation plus an operator-controlled recent-event window, orphaned agent-name recovery when the session row is gone, exact session-id visibility when a selected tracked session has no events yet, and all-session `sy status` output that now also surfaces the latest run task summary per session plus a compact next-step hint so two delegated sessions can be distinguished and followed through reintegration without drilling into each one, with actionable rows now surfaced ahead of passive wait/done rows, with each row's `UPDATED` value now following the freshest operator-visible activity instead of the last raw session-row mutation so recent merge, mail, and runtime changes are harder to miss, and with `RECENT` output now appending either `runtime.no_visible_progress age=...` or `runtime.stalled idleFor=...` without replacing better diagnostics, durable mail with unread consumption plus both full-history and unread-only read-only inspection that now also echoes the resolved session id, frames each message body as an explicit block, preserves the exact mail body text sent by the operator, and now also supports file-backed `sy mail send --body-file <path>` input for exact multiline follow-up mail, and a narrow merge path for the documented reintegration workflow that now also echoes the resolved session id in handled session-scoped failure output all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The CLI entrypoint now also has realistic end-to-end regression coverage for repo bootstrap plus exact follow-up paths such as `sy status --task`, `sy events --limit`, `sy stop --cleanup --abandon`, `sy merge`, `sy mail list --unread`, `sy mail send --body-file`, task-file validation in `sy sling`, and one full two-session operator workflow that spans mailbox review, merge, and cleanup without losing the untouched session's run or reintegration state. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. `sy init` now also warns when the chosen canonical branch does not point to a commit yet, so operators learn they still need an initial commit before `sy sling`. The detached `sy sling` launch path now also wraps Codex with the system `script` utility on supported Unix platforms so local Codex builds that reject non-TTY stdin can still start inside the current operator loop, and it now fails explicitly when the configured canonical branch does not point to a commit yet instead of leaking raw `git worktree` invalid-reference output. The `sy sling` launch flow now also forwards the explicit task text to Codex as the initial prompt and records the task summary, durable spec path, and logical launch command in launch output and launch events, regardless of whether the task came from an inline flag or a file. Merge conflicts now also surface the conflicting paths directly in `sy merge`, with compact conflict metadata carried into durable events and recent status context, repo-root merge-in-progress preflight now fails with an explicit recovery message instead of a generic dirty-worktree error, session-scoped merge preflight refusals now also record durable `merge.failed` events so later `sy status` and `sy events` inspection still show what blocked reintegration, and handled session-scoped merge failures now also echo the resolved session id so later exact-session follow-up commands do not require a fresh lookup, `sy stop` shutdown failures before any state mutation now also record durable `stop.failed` events so later `sy status` and `sy events` inspection still show what blocked shutdown, `sy status` now keeps higher-value merge-failure context like branch-drift targets, preserved-worktree paths, git error text, stop-failure shutdown diagnostics, and stop cleanup mode in its recent-event summary, cleanup inspection now also distinguishes when a preserved worktree has already gone missing while the branch still remains so `sy status`, `sy stop --cleanup`, and later durable `stop.completed` history no longer collapse that partial-artifact-loss case into the harmless already-absent path, explicit-abandon cleanup now also reports when both preserved artifacts were already gone instead of falsely claiming removal, and stop cleanup removal failures now still echo the handled stopped-session summary before exiting nonzero so operators do not lose track of the preserved session they must inspect, repeated-stop already-inactive `sy stop` failures now also echo the resolved session id before they exit nonzero so exact-session follow-up commands do not require a fresh lookup, and Unix zombie runtime pids are now treated as stale dead sessions instead of being misreported as healthy just because the pid still answers a signal probe.
+This repository now has a minimal but real operator loop for one repo-local Codex session. The codebase is still early, but init, spawn with launch-time session-id visibility, first-class `sy sling` task handoff via explicit `--task` or `--task-file` input with durable spec files under `.switchyard/specs/`, readiness-aware status with session-id visibility plus unread-mail counts, cleanup-readiness inspection, passive stalled-session visibility for quiet active sessions, a more specific passive `runtime.no_visible_progress` hint for long-lived active sessions that still show no inbound mail or repo-visible work artifact, and exact per-session inspection that now surfaces stored base-branch, runtime-pid, latest stored launch-command metadata, a derived next follow-up signal, plus the full recent-event summary and latest launch task handoff, with optional full task-text inspection via `sy status <session> --task`, stop with exact session-id visibility in operator-facing completion output including post-stop cleanup-removal failures plus repeated-stop already-inactive refusals, events with explicit selector disambiguation plus an operator-controlled recent-event window, orphaned agent-name recovery when the session row is gone, exact session-id visibility when a selected tracked session has no events yet, and all-session `sy status` output that now also surfaces the latest run task summary per session plus a compact next-step hint so two delegated sessions can be distinguished and followed through reintegration without drilling into each one, with actionable rows now surfaced ahead of passive wait/done rows, with each row's `UPDATED` value now following the freshest operator-visible activity instead of the last raw session-row mutation so recent merge, mail, and runtime changes are harder to miss, and with `RECENT` output now appending either `runtime.no_visible_progress age=...` or `runtime.stalled idleFor=...` without replacing better diagnostics, durable mail with unread consumption plus both full-history and unread-only read-only inspection that now also echoes the resolved session id, frames each message body as an explicit block, preserves the exact mail body text sent by the operator, and now also supports file-backed `sy mail send --body-file <path>` input for exact multiline follow-up mail, and a narrow merge path for the documented reintegration workflow that now also echoes the resolved session id in handled session-scoped failure output all exist end-to-end. Session-targeting commands now also fail closed when one reused agent name could refer to multiple preserved sessions, so operators have to choose an exact session id instead of relying on an implicit latest-session pick. The CLI entrypoint now also has realistic end-to-end regression coverage for repo bootstrap plus exact follow-up paths such as `sy status --task`, `sy events --limit`, `sy stop --cleanup --abandon`, `sy merge`, `sy mail list --unread`, `sy mail send --body-file`, task-file validation in `sy sling`, and one full two-session operator workflow that spans mailbox review, merge, and cleanup without losing the untouched session's run or reintegration state. Session records now also retain the original merge target branch so later recovery does not depend on drifted config. `sy init` now also warns when the chosen canonical branch does not point to a commit yet, so operators learn they still need an initial commit before `sy sling`. The detached `sy sling` launch path now runs one bounded `codex exec --json` task per session, writes Codex JSONL directly to the deterministic session log path, and now fails explicitly when the configured canonical branch does not point to a commit yet instead of leaking raw `git worktree` invalid-reference output. The `sy sling` launch flow now also forwards the explicit task text to Codex as the initial prompt and records the task summary, durable spec path, and logical launch command in launch output and launch events, regardless of whether the task came from an inline flag or a file. `sy logs` now renders that JSONL into readable operator output while tolerating malformed partial lines, `sy status` now treats natural `codex exec --json` completion as a normal success path instead of a dead-runtime failure, and `sy stop` now reports already-finished bounded tasks truthfully instead of pretending it stopped a live runtime. Merge conflicts now also surface the conflicting paths directly in `sy merge`, with compact conflict metadata carried into durable events and recent status context, repo-root merge-in-progress preflight now fails with an explicit recovery message instead of a generic dirty-worktree error, session-scoped merge preflight refusals now also record durable `merge.failed` events so later `sy status` and `sy events` inspection still show what blocked reintegration, and handled session-scoped merge failures now also echo the resolved session id so later exact-session follow-up commands do not require a fresh lookup, `sy stop` shutdown failures before any state mutation now also record durable `stop.failed` events so later `sy status` and `sy events` inspection still show what blocked shutdown, `sy status` now keeps higher-value merge-failure context like branch-drift targets, preserved-worktree paths, git error text, stop-failure shutdown diagnostics, and stop cleanup mode in its recent-event summary, cleanup inspection now also distinguishes when a preserved worktree has already gone missing while the branch still remains so `sy status`, `sy stop --cleanup`, and later durable `stop.completed` history no longer collapse that partial-artifact-loss case into the harmless already-absent path, explicit-abandon cleanup now also reports when both preserved artifacts were already gone instead of falsely claiming removal, and stop cleanup removal failures now still echo the handled stopped-session summary before exiting nonzero so operators do not lose track of the preserved session they must inspect, repeated-stop already-inactive `sy stop` failures now also echo the resolved session id before they exit nonzero so exact-session follow-up commands do not require a fresh lookup, and Unix zombie runtime pids are now treated as stale dead sessions instead of being misreported as healthy just because the pid still answers a signal probe.
 
 ## What Exists
 
@@ -38,7 +38,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - session records that distinguish launch-time `starting` from confirmed `running`
 - worktree manager with deterministic branch and path naming
 - narrow Codex runtime seam that builds and spawns one detached command
-- pseudo-terminal-backed detached Codex launch compatibility on supported Unix platforms via `script`
+- bounded headless Codex launch via `codex exec --json`
 - detached runtime transcript capture under `.switchyard/logs/agent-<session>.log`
 - explicit `sy sling` refusal when the configured canonical branch does not point to a commit yet
 - launch-time session-id visibility in `sy sling` so operators can target an exact preserved session immediately
@@ -57,7 +57,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - durable lifecycle event appends around `sy sling`, `sy stop`, `sy mail send`, `sy mail check`, and `sy mail list`
 - durable `stop.failed` events for shutdown errors that happen before `sy stop` can change session state
 - spawn lifecycle events that now distinguish `sling.spawned` from `sling.completed`
-- durable runtime reconciliation events for `runtime.ready`, `runtime.exited_early`, and `runtime.exited`
+- durable runtime reconciliation events for `runtime.ready`, `runtime.completed`, `runtime.failed`, `runtime.exited_early`, and `runtime.exited`
 - first operator-facing event inspection path over `events.db`
 - explicit selector disambiguation in `sy events` when one raw selector could name different session-id, agent-name, or orphaned-event targets
 - orphaned agent-name event recovery in `sy events` when the session row is already gone
@@ -66,7 +66,7 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - operator-controlled recent-event window selection in `sy events --limit`
 - exact per-session inspection in `sy status`, including explicit selector disambiguation between session-id and agent-name matches
 - exact per-session inspection in `sy status` now also surfaces stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, launch spec path, deterministic transcript log path, latest run summary, a derived next follow-up signal, and the full recent-event summary before the one-row table
-- first-class `sy logs <session>` transcript inspection with a default recent tail plus `--all` for the full transcript
+- first-class `sy logs <session>` inspection with a default recent tail plus `--all` for the full log, rendered as readable Codex JSONL when possible
 - exact per-session inspection in `sy status` now also supports `--task` to print the full stored launch instruction from the durable spec file
 - launch-event inspection in `sy events` now also carries `taskSummary`, `taskSpecPath`, and `logPath` for `sling.spawned`, `sling.completed`, and `sling.failed`
 - explicit selector disambiguation in `sy stop` and `sy merge` when one raw selector could name different sessions by session-id and agent-name
@@ -105,16 +105,16 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - durable stop cleanup failure events when cleanup is blocked or artifact removal fails after the stop state is already known
 - first-readiness reconciliation in `sy status` that promotes launched sessions to `running` or marks them failed with a durable reason
 - `sy sling` now creates one durable run record per launched task, moves it from `starting` to `active` after launch success, and marks launch failures as `finished:launch_failed`
-- `sy stop` now updates the latest run outcome to `stopped`, `failed`, `merged`, or `abandoned` when the task outcome becomes clear
+- `sy stop` now updates the latest run outcome to `completed`, `stopped`, `failed`, `merged`, or `abandoned` when the task outcome becomes clear
 - `sy merge` now updates the latest run outcome to `merged` on success and already-integrated no-op merges
 - explicit v0 decision to keep runtime control pid-backed and defer tmux/live attach unless operator workflows prove the narrower raw-transcript slice insufficient
 - documented first merge and reintegration workflow that keeps the initial contract manual-first and git-native
 - regression tests around config/root behavior, worktree creation, session persistence, mail, stop, and command parsing
 
 Current planning note:
-- real end-to-end testing on 2026-03-12 showed the detached interactive raw-transcript path is not a trustworthy long-term runtime answer on macOS/BSD
-- the approved next runtime slice is now a bounded `codex exec --json` launch path plus narrow readable structured `sy logs`
-- natural task completion is planned to remain a foreground reconciliation responsibility of `sy status`, while explicit cancellation stays owned by `sy stop`
+- the bounded `codex exec --json` runtime slice is now complete in the current operator loop
+- natural task completion is now a foreground reconciliation responsibility of `sy status`, while explicit cancellation stays owned by `sy stop`
+- the next slice should be chosen from the next concrete operator-visible blind spot instead of broadening runtime scope by default
 
 ## What Does Not Exist Yet
 
@@ -146,7 +146,7 @@ Current planning note:
   - writes one durable task handoff file under `.switchyard/specs/`
   - passes the explicit task text to Codex as the initial prompt
   - spawns one Codex process from that worktree
-  - uses the system `script` utility on macOS, Linux, and BSD platforms so detached Codex startup still gets a pseudo-terminal
+  - launches one bounded `codex exec --json` task from that worktree
   - fails explicitly when the configured canonical branch does not point to a commit yet, instead of surfacing raw `git worktree` invalid-reference output
   - persists the original canonical branch as session `baseBranch`
   - prints the durable session id, task summary, and task spec path in the initial launch summary
@@ -154,7 +154,6 @@ Current planning note:
   - waits for one short initial readiness window before persisting the session as `starting`
   - records `sling.completed` after that launch window succeeds, including `readyAfterMs`, `taskSummary`, and `taskSpecPath`
   - records `sling.failed` when the runtime exits during that launch window, preserving task handoff metadata when available
-  - falls back to direct detached Codex spawn on other platforms
 - `sy status [session]`
   - loads config and session state
   - optionally resolves one session by id or normalized agent name and renders only that session
@@ -165,8 +164,10 @@ Current planning note:
   - rejects ambiguous selectors that would match different sessions by id and agent name
   - rejects reused agent-name selectors when multiple sessions share that normalized agent name, and requires an exact session id instead
   - promotes `starting` sessions to `running` when the pid survives the first liveness check
-  - marks early-dead `starting` sessions as `failed`
-  - marks obviously stale `running` pid-backed sessions as `failed`
+  - reconciles naturally completed bounded tasks to `stopped` with a successful `runtime.completed` event when the session log shows `turn.completed`
+  - reconciles naturally failed bounded tasks to `failed` with a `runtime.failed` event when the session log shows `turn.failed` or a terminal top-level error
+  - marks early-dead `starting` sessions without a terminal completion marker as `failed`
+  - marks obviously stale `running` pid-backed sessions without a terminal completion marker as `failed`
   - treats Unix zombie runtime pids as stale not-running sessions and records `process_state_zombie` in the reconciliation event reason
   - when a selector is present, only reconciles that targeted session before printing
   - prints an empty-state message when no sessions exist
@@ -191,7 +192,8 @@ Current planning note:
   - resolves one session by id or normalized agent name
   - rejects ambiguous selectors that would match different sessions by id and agent name
   - rejects reused agent-name selectors when multiple sessions share that normalized agent name, and requires an exact session id instead
-  - stops one active pid-backed runtime and updates durable session state
+  - cancels one active pid-backed runtime and updates durable session state
+  - reports already-finished bounded tasks truthfully when the runtime is already gone and the log shows natural completion
   - prints the resolved durable session id in operator-facing handled success paths so later `events`, `merge`, or cleanup commands can reuse it directly
   - still prints that handled stop summary and resolved session id when cleanup artifact removal fails after the stop state is already known, before the command exits nonzero
   - prints the resolved durable session id before failing when a repeated stop targets an already inactive session without cleanup
@@ -265,10 +267,9 @@ Current planning note:
 - the current run model is intentionally narrow: it captures one compact latest run story per launched session, but it is not yet a richer run history, replay, or multi-session coordination layer
 - older session rows created before `baseBranch` was added now fail closed for `sy merge` and plain merged-cleanup, so operators must use manual git review/merge or explicit `--abandon`
 - the current readiness model is intentionally narrow: `sy sling` only proves the process survived a short launch window, and `sy status` promotes the session to `running` on the first later successful pid liveness check.
-- transcript files can grow large for long or noisy sessions because this slice intentionally preserves raw output without parsing or rotation.
-- the detached `script`-backed transcript capture path is platform-sensitive, so future follow-up should stay concrete and operator-driven instead of broadening into speculative runtime abstractions.
+- log files can grow large for long or noisy sessions because this slice intentionally preserves raw Codex JSONL without rotation.
+- the bounded runtime model is intentionally narrow: it depends on Codex JSONL staying recognizably shaped enough for tolerant log rendering and terminal-state detection.
 - the readiness signal is intentionally narrow: surviving the first launch window proves only that the process stayed alive briefly, not that Codex completed a richer handshake.
-- the detached `sy sling` launch compatibility fix currently depends on the system `script` utility on supported Unix platforms; unsupported platforms still fall back to direct detached Codex spawn and may need a follow-up if Codex requires a TTY there too.
 - older pre-pid session rows cannot be liveness-checked automatically.
 - the merge and cleanup paths are intentionally narrow: they preflight obvious unsafe states and keep review, conflict resolution, post-merge validation, and explicit abandon decisions manual-first.
 
@@ -280,9 +281,9 @@ The first concurrent proving workflow is now minimally real:
 - treat both the run-tracking slice and the first concurrent proving slice as complete
 
 The recommended next task is:
-- replace the detached interactive Codex launch path with a bounded `codex exec --json` runtime
-- keep `sy logs <session>` as the read-only operator path, but move it toward narrow readable structured output instead of raw terminal transcripts
-- keep the slice narrower than attach or tmux-backed control, and update scope again only after the bounded headless runtime proves insufficient
+- choose the next small operator-visible blind spot from the proved concurrent workflow
+- keep the runtime baseline narrow and resist broadening into attach or tmux-backed control without a reproduced need
+- update scope again only when a concrete gap changes the operator workflow meaningfully
 
 ## How To Use This File
 
