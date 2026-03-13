@@ -85,6 +85,7 @@ Current status:
 - passive stalled-session visibility and no-visible-progress visibility in `sy status` are complete
 - detached runtime observability through structured Codex JSONL plus `sy logs <session>` is now complete
 - the bounded `codex exec --json` runtime with a default `workspace-write` sandbox is now the repo's runtime baseline
+- fresh temp-repo manual smoke with the real `sy` entrypoint and Codex CLI validated that runtime baseline, natural completion reconciliation, dirty preserved-worktree cleanup refusal, and explicit-abandon cleanup
 - the next slice should stay narrower than live attach or tmux-backed runtime control and should be named only after a new operator-visible gap is reproduced
 
 ## What To Keep Small
