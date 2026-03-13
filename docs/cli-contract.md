@@ -49,11 +49,10 @@ Current contract:
 - command loads config from the canonical repo root
 - command creates one deterministic branch and worktree under `.switchyard/worktrees/`
 - command writes one durable task handoff file under `.switchyard/specs/`
-- command derives one deterministic detached transcript path under `.switchyard/logs/<agent>-<session>.log`
+- command derives one deterministic detached log path under `.switchyard/logs/<agent>-<session>.log`
 - command passes the explicit task text to Codex as the initial prompt, whether it came from the CLI flag or a task file
-- command starts one detached Codex process from that worktree
-- on supported Unix platforms, detached launch uses the system `script` utility so Codex startup still gets a pseudo-terminal
-- on supported Unix platforms, detached launch writes the `script` transcript to the session log path instead of discarding it
+- command starts one detached `codex exec --json` process from that worktree
+- detached launch redirects stdout and stderr directly to the session log path instead of wrapping through `script`
 - command fails explicitly before worktree creation when the configured canonical branch does not resolve to a commit yet, instead of surfacing raw `git worktree` invalid-reference output
 - command persists one `starting` session record in `sessions.db`, including the original canonical branch as session `baseBranch`
 - command creates one durable run record in `runs.db` for that launched task
@@ -62,12 +61,10 @@ Current contract:
 - command moves that run record to `active` after the launch window succeeds
 - if Codex exits during the launch window, command records `sling.failed` with the launch error and preserves task handoff metadata when available, including `logPath`
 - if launch fails after the run record exists, command marks that run as `finished:launch_failed`
-- command prints the durable session id, launch state, created branch, base branch, task summary, task spec path, transcript path, worktree path, runtime command line, and initial readiness delay
-- if the `script` wrapper is unavailable on a supported platform, command fails explicitly instead of pretending the launch succeeded
-- on unsupported platforms, detached launch falls back to direct Codex spawn with stdout and stderr redirected to the same session log file
+- command prints the durable session id, launch state, created branch, base branch, task summary, task spec path, log path, worktree path, runtime command line, and initial readiness delay
 
 Future target:
-- add richer runtime metadata only if operator workflows require more than raw transcript inspection
+- add richer runtime metadata only if operator workflows require more than bounded task execution plus readable structured logs
 
 ## `sy logs <session>`
 
@@ -76,14 +73,16 @@ Current contract:
 - command accepts an exact session id before agent-name normalization, even when that selector is not a valid normalized agent name
 - command rejects selectors that match one session by id and a different session by normalized agent name
 - command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
-- command derives the transcript path from the resolved agent name and session id instead of relying on separate durable metadata
-- command prints a short heading with the resolved agent name, session id, and transcript path
-- by default, command prints the last 200 transcript lines
-- with `--all`, command prints the full transcript
-- command strips the leading BSD `script` control-character prefix from displayed transcript output when that wrapper artifact is present
+- command derives the log path from the resolved agent name and session id instead of relying on separate durable metadata
+- command prints a short heading with the resolved agent name, session id, and log path
+- by default, command renders the last 200 log lines as readable structured output when they parse as Codex JSONL
+- with `--all`, command renders the full log file
+- command renders assistant messages plainly, command execution start/completion lines concisely, command output as readable blocks, and final turn completion or failure lines when present
+- command preserves malformed or partial lines as raw output instead of crashing
+- command still strips the leading BSD `script` control-character prefix from displayed output when that legacy wrapper artifact is present
 - command exits cleanly when stdout closes early in a downstream pipe instead of surfacing an unhandled broken-pipe error
-- when the selected session exists but the transcript file does not, command prints an explicit operator-facing message that includes the resolved session id and expected transcript path
-- command fails explicitly when the selector does not resolve or the transcript file cannot be read for a reason other than being absent
+- when the selected session exists but the log file does not, command prints an explicit operator-facing message that includes the resolved session id and expected log path
+- command fails explicitly when the selector does not resolve or the log file cannot be read for a reason other than being absent
 
 ## `sy status [session]`
 
@@ -98,8 +97,10 @@ Current contract:
 - command rejects selectors that match one session by id and a different session by normalized agent name
 - command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
 - command promotes `starting` sessions to `running` when the first pid liveness check succeeds
-- command marks early-dead `starting` sessions as `failed`
-- command marks obviously stale pid-backed `running` sessions as `failed`
+- command reconciles dead bounded-task sessions to `stopped` with a successful `runtime.completed` event when the session log shows `turn.completed`
+- command reconciles dead bounded-task sessions to `failed` with a `runtime.failed` event when the session log shows `turn.failed` or a terminal top-level error
+- command marks early-dead `starting` sessions without a terminal completion marker as `failed`
+- command marks obviously stale pid-backed `running` sessions without a terminal completion marker as `failed`
 - on Unix-like platforms, command treats zombie runtime pids as stale dead sessions and records `process_state_zombie` in the reconciliation reason
 - command records durable runtime reconciliation events when it changes session state
 - with a selector, command only reconciles that targeted session before rendering
@@ -126,7 +127,7 @@ Current contract:
 - if run summaries cannot be loaded, command still renders status and prints `?` in both the task and run columns instead of failing
 - active sessions show the post-stop cleanup result with a `stop-then:` prefix instead of hiding whether cleanup would be merged-safe or abandon-only
 - command surfaces partial preserved-artifact loss in that cleanup-readiness label when the branch still exists but the preserved worktree is already missing
-- with an exact selector, command also prints the deterministic transcript path for that session
+- with an exact selector, command also prints the deterministic log path for that session
 - command keeps that missing-worktree case distinct in recent stop-event history instead of collapsing it into the harmless already-absent case
 - if cleanup readiness cannot be evaluated for a session, command still renders status and prints `?` in the cleanup column instead of failing
 - command keeps operator-relevant `merge.failed` context in the recent-event summary, including branch-drift targets, preserved-worktree paths, and git error text when those details exist
@@ -171,26 +172,27 @@ Current contract:
 - command resolves one session by id or normalized agent name
 - command rejects selectors that match one session by id and a different session by normalized agent name
 - command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
-- command stops one active pid-backed runtime cleanly
+- command cancels one active pid-backed bounded task cleanly
 - on Unix-like platforms, command treats zombie runtime pids as already not running instead of timing out against an unreapable stale pid
 - command updates durable session state in `sessions.db`
 - command prints the durable session id in handled operator-facing success paths so later `events`, `merge`, or cleanup commands can target the preserved session directly
 - command also prints the resolved durable session id before failing when a repeated stop targets an already inactive session
 - command preserves the worktree by default so the operator can still review or merge the branch later
-- command preserves the transcript log by default so the operator can inspect detached runtime output after stop
+- command preserves the log file by default so the operator can inspect detached runtime output after stop
+- when the runtime is already gone and the log shows natural task completion, command reports that finished task truthfully instead of pretending it stopped a live runtime
 - command still stops an active session even when a requested cleanup cannot proceed safely
 - if runtime shutdown fails before state changes, command leaves the session active and records a durable `stop.failed` event with the failure reason and error text
 - if cleanup artifact removal fails after the stop state is already known, command still prints the resolved session id and handled stop summary before exiting nonzero
-- command removes the worktree, branch, and transcript log when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch`
+- command removes the worktree, branch, and log file when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch`
 - command refuses plain merged-cleanup for legacy rows that do not have stored `baseBranch` metadata
 - command requires `--cleanup --abandon` to discard work that is not confirmed merged
 - command rejects `--abandon` unless `--cleanup` is also set
 - command reports already-absent artifacts as already absent instead of reporting a removal that did not happen
-- an already-missing transcript log does not block an otherwise-safe cleanup path
+- an already-missing log file does not block an otherwise-safe cleanup path
 - command refuses plain cleanup when the preserved branch still exists but the preserved worktree path is already missing, and tells the operator to restore it manually or use explicit abandon
 - command records that missing-worktree refusal distinctly from the fully-absent branch-plus-worktree case in durable `stop.completed` history
 - command records a durable `stop.completed` event with cleanup failure details when cleanup is blocked or artifact removal fails after the stop state is already known
-- when the latest run record exists, command updates it to a terminal outcome such as `stopped`, `failed`, `merged`, or `abandoned` when the task outcome becomes clear
+- when the latest run record exists, command updates it to a terminal outcome such as `completed`, `stopped`, `failed`, `merged`, or `abandoned` when the task outcome becomes clear
 
 Future target:
 - revisit alternate runtime control only if the pid-based path proves too narrow in real operator workflows

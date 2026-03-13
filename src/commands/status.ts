@@ -21,9 +21,10 @@ import {
 } from "../mail/store.js";
 import { getSessionLogPath } from "../logs/path.js";
 import type { MailRecord, UnreadMailSummary } from "../mail/types.js";
+import { readCodexTerminalState } from "../runtimes/codex/log.js";
 import { inspectProcessLiveness, isProcessAlive, type ProcessLiveness } from "../runtimes/process.js";
 import { listLatestRunsBySession, updateLatestRunForSession } from "../runs/store.js";
-import type { RunRecord, UpdateRunInput } from "../runs/types.js";
+import type { RunOutcome, RunRecord, UpdateRunInput } from "../runs/types.js";
 import { getCleanupReadinessLabel } from "../sessions/cleanup.js";
 import { isActiveSessionState, type SessionRecord, type SessionState } from "../sessions/types.js";
 import { getSessionById, listSessions, updateSessionState } from "../sessions/store.js";
@@ -97,6 +98,8 @@ const RUNTIME_PROGRESS_EVENT_TYPES = [
   "sling.completed",
   "sling.failed",
   "runtime.ready",
+  "runtime.completed",
+  "runtime.failed",
   "runtime.exited",
   "runtime.exited_early"
 ] as const;
@@ -525,7 +528,7 @@ async function reconcileSessionLifecycles(
     }
 
     const createdAt = now();
-    const nextState = determineNextLifecycleState(session, inspectRuntimeLiveness);
+    const nextState = await determineNextLifecycleState(projectRoot, session, inspectRuntimeLiveness);
 
     if (!nextState) {
       continue;
@@ -540,7 +543,14 @@ async function reconcileSessionLifecycles(
 
     const reconciledEvent = buildReconciledEvent(nextSession, nextState.eventType, nextState.payload, createdAt);
     reconciledEventsBySession.set(nextSession.id, reconciledEvent);
-    await syncRunStateAfterReconcile(projectRoot, nextSession.id, nextState.state, createdAt, updateLatestRun);
+    await syncRunStateAfterReconcile(
+      projectRoot,
+      nextSession.id,
+      nextState.state,
+      nextState.runOutcome,
+      createdAt,
+      updateLatestRun
+    );
 
     await recordEventBestEffortForStatus(recordEvent, projectRoot, {
       sessionId: nextSession.id,
@@ -1086,20 +1096,23 @@ function summarizeMailBody(body: string): string {
   return `${normalized.slice(0, 57)}...`;
 }
 
-function determineNextLifecycleState(
+async function determineNextLifecycleState(
+  projectRoot: string,
   session: SessionRecord,
   inspectRuntimeLiveness: (pid: number) => ProcessLiveness
-): {
+): Promise<{
   state: SessionState;
   runtimePid: number | null;
   eventType: string;
+  runOutcome?: RunOutcome;
   payload: Record<string, EventPayloadValue>;
-} | undefined {
+} | undefined> {
   if (typeof session.runtimePid !== "number") {
     return {
       state: "failed",
       runtimePid: null,
       eventType: session.state === "starting" ? "runtime.exited_early" : "runtime.exited",
+      runOutcome: "failed",
       payload: {
         previousState: session.state,
         reason: "missing_runtime_pid"
@@ -1122,11 +1135,47 @@ function determineNextLifecycleState(
         }
       };
     }
+  }
 
+  if (runtimeLiveness.alive) {
+    return undefined;
+  }
+
+  const terminalState = await readCodexTerminalState(getSessionLogPath(projectRoot, session.agentName, session.id).path);
+
+  if (terminalState?.outcome === "completed") {
+    return {
+      state: "stopped",
+      runtimePid: null,
+      eventType: "runtime.completed",
+      runOutcome: "completed",
+      payload: {
+        previousState: session.state,
+        runtimePid: session.runtimePid
+      }
+    };
+  }
+
+  if (terminalState?.outcome === "failed") {
+    return {
+      state: "failed",
+      runtimePid: null,
+      eventType: "runtime.failed",
+      runOutcome: "failed",
+      payload: {
+        previousState: session.state,
+        runtimePid: session.runtimePid,
+        ...(terminalState.errorMessage ? { errorMessage: terminalState.errorMessage } : {})
+      }
+    };
+  }
+
+  if (session.state === "starting") {
     return {
       state: "failed",
       runtimePid: null,
       eventType: "runtime.exited_early",
+      runOutcome: "failed",
       payload: {
         previousState: session.state,
         runtimePid: session.runtimePid,
@@ -1135,14 +1184,11 @@ function determineNextLifecycleState(
     };
   }
 
-  if (runtimeLiveness.alive) {
-    return undefined;
-  }
-
   return {
     state: "failed",
     runtimePid: null,
     eventType: "runtime.exited",
+    runOutcome: "failed",
     payload: {
       previousState: session.state,
       runtimePid: session.runtimePid,
@@ -1301,6 +1347,7 @@ async function syncRunStateAfterReconcile(
   projectRoot: string,
   sessionId: string,
   nextState: SessionState,
+  runOutcome: RunOutcome | undefined,
   updatedAt: string,
   updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>
 ): Promise<void> {
@@ -1314,10 +1361,10 @@ async function syncRunStateAfterReconcile(
       return;
     }
 
-    if (nextState === "failed") {
+    if (nextState === "failed" || nextState === "stopped") {
       await updateLatestRun(projectRoot, sessionId, {
         state: "finished",
-        outcome: "failed",
+        outcome: runOutcome ?? "failed",
         updatedAt,
         finishedAt: updatedAt
       });
@@ -1421,8 +1468,10 @@ const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "mail.sent": ["sender", "bodyLength"],
   "merge.completed": ["canonicalBranch", "branch"],
   "merge.skipped": ["reason", "branch"],
+  "runtime.completed": ["runtimePid"],
   "runtime.exited": ["reason", "runtimePid"],
   "runtime.exited_early": ["reason", "runtimePid"],
+  "runtime.failed": ["runtimePid", "errorMessage"],
   "runtime.ready": ["signal", "runtimePid"],
   "sling.completed": ["runtimePid", "baseBranch", "taskSummary", "taskSpecPath", "readyAfterMs"],
   "sling.failed": ["errorMessage", "taskSummary", "taskSpecPath", "cleanupSucceeded"],
@@ -1431,5 +1480,11 @@ const RECENT_EVENT_DETAIL_KEYS: Record<string, string[]> = {
   "stop.failed": ["reason", "runtimePid", "errorMessage"]
 };
 
-const RECONCILED_RUNTIME_EVENT_TYPES = new Set(["runtime.ready", "runtime.exited", "runtime.exited_early"]);
+const RECONCILED_RUNTIME_EVENT_TYPES = new Set([
+  "runtime.ready",
+  "runtime.completed",
+  "runtime.failed",
+  "runtime.exited",
+  "runtime.exited_early"
+]);
 const SLING_LAUNCH_EVENT_TYPES = new Set(["sling.spawned", "sling.completed", "sling.failed"]);

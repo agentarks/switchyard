@@ -4,7 +4,7 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Replace the detached interactive Codex runtime with a bounded `codex exec --json` launch path and readable structured `sy logs`
+1. Choose the next small operator-visible blind spot after the bounded `codex exec --json` runtime proves out
 
 ## Next
 

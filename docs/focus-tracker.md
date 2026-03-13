@@ -72,7 +72,7 @@ Completed enough to count as minimally real:
 - explicit reused-agent selector disambiguation across session-targeting commands
 - first readiness and early-failure handling as hardening work ahead of M8
 - Unix zombie-runtime detection in pid liveness checks so stale sessions no longer look healthy
-- detached `sy sling` launch compatibility hardening for TTY-requiring Codex builds on supported Unix platforms
+- bounded `sy sling` launch via `codex exec --json`
 - first-class `sy sling` task input via `--task` or `--task-file`, with durable task specs under `.switchyard/specs/`
 - launch-task visibility in `sy sling`, `sy events`, and exact-session `sy status`
 - opt-in full launch-task inspection in exact-session `sy status --task`
@@ -85,6 +85,9 @@ Completed enough to count as minimally real:
 - freshest-activity timestamps and same-bucket freshness ordering in `sy status` so recent merge, mail, and runtime changes stay visible in the control-plane view
 - passive stalled-session visibility in `sy status`, including a separate idle clock from `UPDATED` plus appended `runtime.stalled idleFor=...` summaries
 - passive no-visible-progress visibility in `sy status`, including `runtime.no_visible_progress age=...` summaries when long-lived active sessions still show no inbound mail or repo-visible work artifact
+- readable structured `sy logs <session>` rendering over raw Codex JSONL
+- truthful natural task completion in `sy status` via `runtime.completed` and `runtime.failed`
+- truthful already-finished handling in `sy stop` when a bounded task completed naturally before cancellation
 - terminal run outcomes from `sy stop` and `sy merge`
 - end-to-end coverage around `sy init`
 
@@ -92,15 +95,15 @@ Current planning state:
 - the run-tracking slice is now materially real in the current operator loop
 - the first concurrent proving workflow on top of that run model is now materially real
 - the passive stalled-session visibility and no-visible-progress visibility slices in `sy status` are now complete
-- detached runtime observability through raw transcript capture and a first-class `sy logs <session>` path is now complete
-- real end-to-end testing showed the detached interactive raw transcript path is not a trustworthy long-term runtime answer on macOS/BSD
-- the next slice should stay narrower than live attach or tmux and should focus on a bounded `codex exec --json` runtime plus readable structured `sy logs`
+- detached runtime observability through bounded `codex exec --json` launch plus readable structured `sy logs <session>` is now complete
+- natural task completion is now a truthful foreground reconciliation path in `sy status`
+- the next slice should stay narrower than live attach or tmux and should be named only after the next operator-visible gap is reproduced
 - treat raw event visibility as supporting detail, not as the primary answer to "what happened to this task?"
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- replace the detached interactive Codex runtime with a bounded headless task model that remains operator-readable
+- preserve the bounded Codex exec runtime as the narrow baseline instead of broadening into interactive control
 - improve operator diagnostics through narrow readable Codex JSONL rendering where the raw transcript path proved insufficient
 - keep task ownership visible in the all-session view so concurrent sessions do not require immediate drilldown
 - keep latest run state and terminal outcome trustworthy as concurrent sessions overlap

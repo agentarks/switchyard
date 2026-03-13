@@ -6,6 +6,7 @@ import { loadConfig } from "../config.js";
 import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { StopError } from "../errors.js";
 import { getSessionLogPath } from "../logs/path.js";
+import { readCodexTerminalState } from "../runtimes/codex/log.js";
 import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
 import { stopProcess, isProcessAlive } from "../runtimes/process.js";
 import { updateLatestRunForSession } from "../runs/store.js";
@@ -222,19 +223,97 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     throw error;
   }
 
-  let stopped: boolean;
+  if (!wasAlive) {
+    const terminalState = await readCodexTerminalState(getSessionLogPath(config.project.root, session.agentName, session.id).path);
 
-  try {
-    stopped = await stopRuntime(session.runtimePid);
-  } catch (error) {
-    await recordStopFailedEvent(recordEvent, config.project.root, session, {
-      previousState: session.state,
-      runtimePid: session.runtimePid,
-      reason: "runtime_stop_failed",
-      errorMessage: formatErrorMessage(error),
-      cleanupRequested: options.cleanup ? true : false
-    });
-    throw error;
+    if (terminalState?.outcome === "completed") {
+      const completedSession = await updateSessionState(config.project.root, {
+        id: session.id,
+        state: "stopped",
+        runtimePid: null
+      });
+
+      let cleanup;
+
+      try {
+        cleanup = await resolveCleanupRequest({
+          projectRoot: config.project.root,
+          canonicalBranch: config.project.canonicalBranch,
+          session,
+          cleanupRequested: options.cleanup,
+          abandon: options.abandon,
+          failOnBlocked: false,
+          removeSessionWorktree
+        });
+      } catch (error) {
+        await recordStopCompletedEvent(recordEvent, config.project.root, completedSession, {
+          previousState: session.state,
+          nextState: completedSession.state,
+          outcome: "already_finished",
+          completed: true,
+          cleanupRequested: options.cleanup ? true : false,
+          cleanupPerformed: false,
+          ...buildCleanupFailurePayload(error)
+        });
+        await updateRunAfterStopBestEffort(
+          config.project.root,
+          completedSession.id,
+          completedSession.state,
+          updateLatestRun,
+          undefined,
+          "completed"
+        );
+        writeStopResult(
+          `Session ${session.agentName} already finished successfully.`,
+          completedSession.id,
+          `Cleanup failed after stop: ${formatErrorMessage(error)}`
+        );
+        throw error;
+      }
+
+      await recordStopCompletedEvent(recordEvent, config.project.root, completedSession, {
+        previousState: session.state,
+        nextState: completedSession.state,
+        outcome: "already_finished",
+        completed: true,
+        cleanupRequested: options.cleanup ? true : false,
+        cleanupPerformed: cleanup.performed,
+        ...(cleanup.cleanupMode ? { cleanupMode: cleanup.cleanupMode } : {}),
+        ...(cleanup.cleanupReason ? { cleanupReason: cleanup.cleanupReason } : {}),
+        ...(cleanup.cleanupDetails ?? {})
+      });
+      await updateRunAfterStopBestEffort(
+        config.project.root,
+        completedSession.id,
+        completedSession.state,
+        updateLatestRun,
+        cleanup.cleanupMode,
+        "completed"
+      );
+      writeStopResult(
+        `Session ${session.agentName} already finished successfully.`,
+        completedSession.id,
+        cleanup.message ?? `Worktree preserved: ${formatRelativePath(config.project.root, session.worktreePath)}`
+      );
+      return;
+    }
+  }
+
+  let stopped = false;
+
+  if (wasAlive) {
+    try {
+      stopped = await stopRuntime(session.runtimePid);
+    } catch (error) {
+      await recordStopFailedEvent(recordEvent, config.project.root, session, {
+        previousState: session.state,
+        runtimePid: session.runtimePid,
+        reason: "runtime_stop_failed",
+        errorMessage: formatErrorMessage(error),
+        cleanupRequested: options.cleanup ? true : false
+      });
+      throw error;
+    }
   }
 
   if (!wasAlive) {
@@ -489,9 +568,10 @@ async function updateRunAfterStopBestEffort(
   sessionId: string,
   sessionState: SessionRecord["state"],
   updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>,
-  cleanupMode?: CleanupMode
+  cleanupMode?: CleanupMode,
+  overrideOutcome?: RunOutcome
 ): Promise<void> {
-  const outcome = determineRunOutcomeAfterStop(sessionState, cleanupMode);
+  const outcome = determineRunOutcomeAfterStop(sessionState, cleanupMode, overrideOutcome);
   const finishedAt = new Date().toISOString();
 
   try {
@@ -508,7 +588,8 @@ async function updateRunAfterStopBestEffort(
 
 function determineRunOutcomeAfterStop(
   sessionState: SessionRecord["state"],
-  cleanupMode?: CleanupMode
+  cleanupMode?: CleanupMode,
+  overrideOutcome?: RunOutcome
 ): RunOutcome {
   if (cleanupMode === "abandoned") {
     return "abandoned";
@@ -520,6 +601,10 @@ function determineRunOutcomeAfterStop(
 
   if (sessionState === "failed") {
     return "failed";
+  }
+
+  if (overrideOutcome) {
+    return overrideOutcome;
   }
 
   return "stopped";

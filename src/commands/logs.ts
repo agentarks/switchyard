@@ -56,7 +56,7 @@ export async function logsCommand(options: LogsCommandOptions): Promise<void> {
   }
 
   const renderedTranscript = options.showAll ? transcript : tailTranscript(transcript, DEFAULT_TAIL_LINES);
-  const normalizedTranscript = normalizeTranscriptForDisplay(renderedTranscript);
+  const normalizedTranscript = normalizeTranscriptForDisplay(renderStructuredTranscript(renderedTranscript));
   const output = `${heading}\n${normalizedTranscript}${normalizedTranscript.endsWith("\n") ? "" : "\n"}`;
   await writeLogsOutput(output);
 }
@@ -87,6 +87,135 @@ function tailTranscript(transcript: string, lineCount: number): string {
 
 function normalizeTranscriptForDisplay(transcript: string): string {
   return transcript.replace(BSD_SCRIPT_CONTROL_PREFIX, "");
+}
+
+function renderStructuredTranscript(transcript: string): string {
+  const lines = transcript.split(/\r?\n/);
+  const renderedLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.length === 0) {
+      continue;
+    }
+
+    renderedLines.push(...renderTranscriptLine(line));
+  }
+
+  return renderedLines.join("\n");
+}
+
+function renderTranscriptLine(line: string): string[] {
+  const event = parseJsonLine(line);
+
+  if (!event || typeof event.type !== "string") {
+    return [line];
+  }
+
+  switch (event.type) {
+    case "thread.started":
+    case "turn.started":
+      return [];
+    case "turn.completed":
+      return renderTurnCompleted(event);
+    case "turn.failed":
+      return [`Turn failed: ${formatEventMessage(event.error?.message, "unknown error")}`];
+    case "error":
+      return [`Error: ${formatEventMessage(event.message, "unknown error")}`];
+    case "item.started":
+    case "item.completed": {
+      const renderedItem = renderItemEvent(event.item);
+      return renderedItem.length > 0 ? renderedItem : [line];
+    }
+    default:
+      return [line];
+  }
+}
+
+function renderTurnCompleted(event: {
+  usage?: {
+    input_tokens?: number;
+    cached_input_tokens?: number;
+    output_tokens?: number;
+  };
+}): string[] {
+  const lines = ["Turn completed."];
+
+  if (event.usage) {
+    lines.push(
+      `Usage: input=${formatTokenCount(event.usage.input_tokens)}, cached=${formatTokenCount(event.usage.cached_input_tokens)}, output=${formatTokenCount(event.usage.output_tokens)}`
+    );
+  }
+
+  return lines;
+}
+
+function renderItemEvent(item: unknown): string[] {
+  if (!item || typeof item !== "object" || !("type" in item) || typeof item.type !== "string") {
+    return [];
+  }
+
+  if (item.type === "agent_message") {
+    const text = "text" in item && typeof item.text === "string" ? item.text.trim() : "";
+    return text.length > 0 ? [text] : [];
+  }
+
+  if (item.type === "command_execution") {
+    return renderCommandExecutionItem(item);
+  }
+
+  if (item.type === "error") {
+    const message = "message" in item && typeof item.message === "string" ? item.message : "unknown error";
+    return [`Error: ${message}`];
+  }
+
+  return [];
+}
+
+function renderCommandExecutionItem(item: Record<string, unknown>): string[] {
+  const command = typeof item.command === "string" ? item.command : "unknown command";
+  const status = typeof item.status === "string" ? item.status : "";
+  const lines: string[] = [];
+
+  if (status === "in_progress") {
+    lines.push(`Command started: ${command}`);
+    return lines;
+  }
+
+  if (typeof item.exit_code === "number") {
+    lines.push(`Command exited with ${item.exit_code}: ${command}`);
+  } else {
+    lines.push(`Command finished: ${command}`);
+  }
+
+  if (typeof item.aggregated_output === "string" && item.aggregated_output.length > 0) {
+    lines.push("Output:");
+    lines.push(...formatIndentedBlock(item.aggregated_output));
+  }
+
+  return lines;
+}
+
+function formatIndentedBlock(text: string): string[] {
+  return text
+    .replace(/\n$/, "")
+    .split(/\r?\n/)
+    .map((line) => `  ${line}`);
+}
+
+function parseJsonLine(line: string): Record<string, any> | undefined {
+  try {
+    return JSON.parse(line) as Record<string, any>;
+  } catch {
+    return undefined;
+  }
+}
+
+function formatEventMessage(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.length > 0 ? value : fallback;
+}
+
+function formatTokenCount(value: unknown): string {
+  return typeof value === "number" ? String(value) : "?";
 }
 
 async function writeLogsOutput(output: string): Promise<void> {
