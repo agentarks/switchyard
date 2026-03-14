@@ -98,6 +98,7 @@ Current planning state:
 - the passive stalled-session visibility and no-visible-progress visibility slices in `sy status` are now complete
 - detached runtime observability through bounded `codex exec --json` launch plus readable structured `sy logs <session>` is now complete
 - natural task completion is now a truthful foreground reconciliation path in `sy status`
+- fresh temp-repo manual smoke with the real `sy` entrypoint and Codex CLI now also proves the default runtime command plus dirty-worktree cleanup refusal and explicit-abandon cleanup behavior end to end
 - the next slice should stay narrower than live attach or tmux and should be named only after the next operator-visible gap is reproduced
 - treat raw event visibility as supporting detail, not as the primary answer to "what happened to this task?"
 

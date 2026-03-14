@@ -117,6 +117,7 @@ Current planning note:
 - the bounded `codex exec --json` runtime slice is now complete in the current operator loop, with `workspace-write` as the default launch sandbox
 - natural task completion is now a foreground reconciliation responsibility of `sy status`, while explicit cancellation stays owned by `sy stop`
 - the next slice should be chosen from the next concrete operator-visible blind spot instead of broadening runtime scope by default
+- fresh manual smoke validation in a new temp repo with the real `sy` entrypoint and Codex CLI confirmed the default `Runtime: codex exec --json --sandbox workspace-write` launch output, active `Run: active` plus `Cleanup: stop-then:merged` status, natural completion reconciliation to `State: stopped` with `Run: finished:completed` and `Cleanup: abandon-only:worktree-dirty`, fail-closed dirty-worktree cleanup refusal without `--abandon`, and successful explicit-abandon cleanup; the Codex transcript also showed repeated `refresh_token_reused` auth errors, but the task still completed and Switchyard's lifecycle semantics held
 
 ## What Does Not Exist Yet
 
