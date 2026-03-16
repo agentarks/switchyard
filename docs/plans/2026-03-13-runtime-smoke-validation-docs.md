@@ -15,7 +15,7 @@
 ### Task 1: Add the execution plan file
 
 **Files:**
-- Create: `docs/superpowers/plans/2026-03-13-runtime-smoke-validation-docs.md`
+- Create: `docs/plans/2026-03-13-runtime-smoke-validation-docs.md`
 
 - [ ] **Step 1: Write the plan file**
 
