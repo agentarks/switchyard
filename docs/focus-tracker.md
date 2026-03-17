@@ -4,6 +4,8 @@ This file exists to keep the project moving toward the intended version instead 
 
 Use it at the start and end of each session.
 
+Canonical implementation-slice counts now live in [docs/slice-ledger.md](slice-ledger.md); this file stays focused on target, scope, and planning state.
+
 ## Current Target
 
 The current target is a reliable single-repo, single-agent operator loop with durable state, enough CLI inspection to understand what happened, and a narrow reintegration path that stays operator-visible.

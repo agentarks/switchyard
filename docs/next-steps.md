@@ -2,6 +2,8 @@
 
 This file is the owner-facing execution guide for deciding whether a new meaningful slice exists. If you are unsure what to do next, start here.
 
+Canonical implementation-slice counts now live in [docs/slice-ledger.md](slice-ledger.md); this file stays focused on choosing the next slice.
+
 ## Current Decision
 
 The bounded Codex exec runtime slice is now complete enough to stop being the default next task.
