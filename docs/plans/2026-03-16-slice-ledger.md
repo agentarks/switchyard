@@ -21,6 +21,7 @@
 - Read: `docs/plans/2026-03-11-stalled-session-status.md`
 - Read: `docs/plans/2026-03-12-codex-exec-runtime.md`
 - Read: `docs/plans/2026-03-12-detached-runtime-logs.md`
+- Read: `docs/superpowers/specs/2026-03-15-slice-ledger-design.md`
 - Read: `docs/specs/2026-03-11-no-visible-progress-status-design.md`
 - Read: `docs/specs/2026-03-11-stalled-session-status-design.md`
 - Read: `docs/specs/2026-03-12-codex-exec-runtime-design.md`
@@ -162,12 +163,15 @@ Expected:
 Run:
 
 ```bash
-git diff -- docs/slice-ledger.md docs/next-steps.md docs/focus-tracker.md
+git diff --name-only -- docs
 ```
 
 Expected:
-- only the ledger file and the two source-of-truth pointer notes changed
-- no unrelated docs were modified
+- exactly these files appear:
+  - `docs/slice-ledger.md`
+  - `docs/next-steps.md`
+  - `docs/focus-tracker.md`
+- no other docs paths appear
 
 - [ ] **Step 5: Run the repo check if behavior wording changed materially**
 
