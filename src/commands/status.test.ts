@@ -775,6 +775,136 @@ test("statusCommand marks blocked and risky reintegration states in the all-sess
   );
 });
 
+test("statusCommand keeps a failed preserved run on risky inspect instead of needs-review", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-review-failed-preserved",
+    agentName: "agent-review-failed-preserved",
+    branch: "agents/agent-review-failed-preserved",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-review-failed-preserved"),
+    state: "failed",
+    runtimePid: null,
+    createdAt: "2026-03-10T10:20:00.000Z",
+    updatedAt: "2026-03-10T10:25:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-review-failed-preserved",
+    sessionId: "session-review-failed-preserved",
+    agentName: "agent-review-failed-preserved",
+    taskSummary: "Inspect the failed preserved branch before reintegration.",
+    state: "finished",
+    outcome: "failed",
+    createdAt: "2026-03-10T10:20:00.000Z",
+    updatedAt: "2026-03-10T10:25:00.000Z",
+    finishedAt: "2026-03-10T10:25:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-review-failed-preserved",
+      isRuntimeAlive: () => false,
+      getCleanupReadiness: async () => "abandon-only:not-merged",
+      now: () => "2026-03-10T10:30:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Review: risky/);
+  assert.match(output, /Why: latest run failed, so preserved work should be inspected before reintegration/);
+  assert.match(output, /Next: inspect/);
+  assert.match(
+    output,
+    /failed\tsession-review-failed-preserved\tagent-review-failed-preserved[^\n]*\tabandon-only:not-merged\tInspect the failed preserved branch before reintegration\.\tfinished:failed\trisky\tinspect\t-/
+  );
+});
+
+test("statusCommand keeps merge blockers blocked after later operator activity becomes recent", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await createSession(repoDir, {
+    id: "session-review-blocked-history",
+    agentName: "agent-review-blocked-history",
+    branch: "agents/agent-review-blocked-history",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-review-blocked-history"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-10T10:40:00.000Z",
+    updatedAt: "2026-03-10T10:45:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-review-blocked-history",
+    sessionId: "session-review-blocked-history",
+    agentName: "agent-review-blocked-history",
+    taskSummary: "Resolve the failed merge before reintegration.",
+    state: "finished",
+    outcome: "completed",
+    createdAt: "2026-03-10T10:40:00.000Z",
+    updatedAt: "2026-03-10T10:45:00.000Z",
+    finishedAt: "2026-03-10T10:45:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-review-blocked-history",
+    agentName: "agent-review-blocked-history",
+    eventType: "merge.failed",
+    payload: {
+      reason: "merge_conflict",
+      conflictCount: 2
+    },
+    createdAt: "2026-03-10T10:46:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-review-blocked-history",
+    agentName: "agent-review-blocked-history",
+    eventType: "mail.checked",
+    payload: {
+      unreadCount: 0
+    },
+    createdAt: "2026-03-10T10:47:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-review-blocked-history",
+      isRuntimeAlive: () => false,
+      getCleanupReadiness: async () => "abandon-only:not-merged",
+      now: () => "2026-03-10T10:50:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Review: blocked/);
+  assert.match(output, /Why: previous merge attempt failed and reintegration is currently blocked/);
+  assert.match(output, /Next: review-merge/);
+  assert.match(output, /Recent: 2026-03-10T10:47:00.000Z mail\.checked unreadCount=0/);
+  assert.match(
+    output,
+    /stopped\tsession-review-blocked-history\tagent-review-blocked-history[^\n]*\tabandon-only:not-merged\tResolve the failed merge before reintegration\.\tfinished:completed\tblocked\treview-merge\t2026-03-10T10:47:00.000Z mail\.checked unreadCount=0/
+  );
+});
+
 test("statusCommand prints only the selected session and reconciles only that session", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];

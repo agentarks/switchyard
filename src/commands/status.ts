@@ -45,6 +45,11 @@ interface StatusOptions {
     sessionIds: string[],
     eventTypes: string[]
   ) => Promise<Map<string, EventRecord>>;
+  listLatestMergeStatusEvents?: (
+    projectRoot: string,
+    sessionIds: string[],
+    eventTypes: string[]
+  ) => Promise<Map<string, EventRecord>>;
   listLatestInboundMail?: (
     projectRoot: string,
     sessionIds: string[],
@@ -110,6 +115,10 @@ const RUNTIME_PROGRESS_EVENT_TYPES = [
   "runtime.exited",
   "runtime.exited_early"
 ] as const;
+const MERGE_STATUS_EVENT_TYPES = [
+  "merge.failed",
+  "merge.completed"
+] as const;
 const RUNTIME_PROGRESS_EVENT_TYPE_SET = new Set<string>(RUNTIME_PROGRESS_EVENT_TYPES);
 
 export function createStatusCommand(): Command {
@@ -169,6 +178,13 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     options.listLatestRuntimeProgressEvents ?? listLatestEventsBySessionForTypes,
     [...RUNTIME_PROGRESS_EVENT_TYPES],
     "latest runtime progress events"
+  );
+  const latestMergeStatusEvents = await loadLatestEventsBestEffort(
+    config.project.root,
+    sessionIds,
+    options.listLatestMergeStatusEvents ?? listLatestEventsBySessionForTypes,
+    [...MERGE_STATUS_EVENT_TYPES],
+    "latest merge status events"
   );
   const latestInboundMail = await loadLatestInboundMailBestEffort(
     config.project.root,
@@ -240,6 +256,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     reconciledEventsBySession,
     unreadOperatorMailSummaries: effectiveUnreadOperatorMailSummaries,
     latestRuntimeProgressEvents: latestRuntimeProgressEvents.available ? latestRuntimeProgressEvents.eventsBySession : undefined,
+    latestMergeStatusEvents: latestMergeStatusEvents.available ? latestMergeStatusEvents.eventsBySession : undefined,
     latestInboundMail: latestInboundMail.available ? latestInboundMail.mailBySession : undefined,
     noVisibleProgressHints,
     now: (options.now ?? (() => new Date().toISOString()))()
@@ -315,6 +332,7 @@ function buildStatusRowContexts(options: {
   reconciledEventsBySession: Map<string, EventRecord>;
   unreadOperatorMailSummaries: Map<string, UnreadMailSummary>;
   latestRuntimeProgressEvents?: Map<string, EventRecord>;
+  latestMergeStatusEvents?: Map<string, EventRecord>;
   latestInboundMail?: Map<string, MailRecord>;
   noVisibleProgressHints: Map<string, DerivedNoVisibleProgressHint>;
   now: string;
@@ -333,6 +351,7 @@ function buildStatusRowContexts(options: {
       latestStoredRuntimeProgressEvent: options.latestRuntimeProgressEvents?.get(session.id),
       reconciledEvent: options.reconciledEventsBySession.get(session.id)
     });
+    const latestMergeStatusEvent = options.latestMergeStatusEvents?.get(session.id);
     const stalledHint = deriveStalledHint({
       session,
       latestRuntimeProgressEvent,
@@ -348,7 +367,7 @@ function buildStatusRowContexts(options: {
       latestRun,
       cleanup,
       followUp,
-      recentEvent
+      latestMergeStatusEvent
     });
 
     rowContexts.set(session.id, {
@@ -654,7 +673,7 @@ function deriveReintegrationAssessment(options: {
   latestRun?: RunRecord;
   cleanup: string;
   followUp: string;
-  recentEvent?: EventRecord;
+  latestMergeStatusEvent?: EventRecord;
 }): ReintegrationAssessment | undefined {
   if (isActiveSessionState(options.session.state)) {
     return undefined;
@@ -668,7 +687,7 @@ function deriveReintegrationAssessment(options: {
     return undefined;
   }
 
-  if (options.recentEvent?.eventType === "merge.failed") {
+  if (options.latestMergeStatusEvent?.eventType === "merge.failed") {
     return {
       label: "blocked",
       reason: "previous merge attempt failed and reintegration is currently blocked"
@@ -711,11 +730,6 @@ function deriveReintegrationAssessment(options: {
         label: "risky",
         reason: "preserved worktree has uncommitted changes and should be inspected before reintegration"
       };
-    case "abandon-only:not-merged":
-      return {
-        label: "needs-review",
-        reason: "run finished successfully and preserved work still needs operator review"
-      };
     default:
       break;
   }
@@ -731,6 +745,13 @@ function deriveReintegrationAssessment(options: {
     return {
       label: "risky",
       reason: "latest launch failed, so preserved work should be inspected before reintegration"
+    };
+  }
+
+  if (options.cleanup === "abandon-only:not-merged") {
+    return {
+      label: "needs-review",
+      reason: "run finished successfully and preserved work still needs operator review"
     };
   }
 
@@ -774,12 +795,12 @@ function formatFollowUpAction(
     return "cleanup";
   }
 
-  if (cleanup === "abandon-only:not-merged") {
-    return "review-merge";
-  }
-
   if (run?.outcome === "launch_failed" || run?.outcome === "failed") {
     return "inspect";
+  }
+
+  if (cleanup === "abandon-only:not-merged") {
+    return "review-merge";
   }
 
   if (cleanup.startsWith("abandon-only:")) {
