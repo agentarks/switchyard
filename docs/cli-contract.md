@@ -111,10 +111,12 @@ Current contract:
 - command includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`, including refusing merged-safe cleanup when a preserved worktree still has uncommitted non-Switchyard entries or when that dirtiness check cannot be completed safely
 - command includes one best-effort latest-run task summary per session from `runs.db`
 - command includes one best-effort latest-run state summary per session from `runs.db`
+- command includes one conservative reintegration assessment per inactive session in a `REVIEW` column, using `ready`, `needs-review`, `blocked`, `risky`, or `-`
 - command uses the newest durable event or unread inbound operator mail timestamp for the `UPDATED` column when that activity is newer than the stored `sessions.db` row timestamp
 - command also derives a passive stalled-session hint for active sessions when the latest agent/runtime-side activity is older than the stalled threshold, without mutating durable session state
 - command also derives a more specific passive `runtime.no_visible_progress` hint for active sessions when five minutes have passed since the first runtime-ready signal and there is still no inbound non-operator mail, no uncommitted worktree change, and no commit divergence ahead of the stored `baseBranch`
 - command includes one derived best-effort follow-up signal per session so concurrent sessions stay readable as `mail`, `wait`, `review-merge`, `cleanup`, `inspect`, or `done`
+- active sessions render `-` in `REVIEW` and keep their existing `NEXT` behavior
 - when unread mailbox items addressed to `operator` exist for a session, command prioritizes `mail` over the more generic lifecycle follow-up hint
 - when a session matches the no-visible-progress rule and no higher-priority unread inbound operator mail exists, command surfaces `inspect` as the follow-up hint instead of `wait`
 - inbound non-operator mail, even if it has already been read, suppresses the no-visible-progress hint
@@ -135,13 +137,16 @@ Current contract:
 - command keeps operator-relevant `stop.completed` cleanup mode in the recent-event summary so later status inspection still shows whether cleanup happened after a confirmed merge or an explicit abandon
 - when the same `sy status` run also records an automatic runtime reconciliation event, command still keeps a latest pre-existing `stop.failed` visible in the current recent summary instead of immediately replacing it with that synthetic runtime event
 - with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, latest launch spec path, unread-mail count, cleanup-readiness label, latest run summary, the derived follow-up signal, and the full recent-event summary
+- with a selector, command also prints `Review:` plus `Why:` for inactive sessions where reintegration meaningfully applies and the assessment can be justified conservatively
+- with a selector, command keeps `Review:` and `Why:` omitted for active sessions, already-closed `done` sessions, and sessions where cleanup/readiness data is unavailable
 - with `--task` plus a selector, command also prints the full stored launch instruction from `.switchyard/specs/`
 - command rejects `--task` without an exact selector
 - command fails explicitly when `--task` is requested but the stored task text cannot be read
 - when no sessions exist, print `No Switchyard sessions recorded yet.`
-- when sessions exist, print a concise tab-separated table with the most actionable follow-up rows first and the freshest operator-visible activity first within the same follow-up bucket, including `TASK`, `RUN`, and `NEXT` columns
+- when sessions exist, print a concise tab-separated table with the most actionable follow-up rows first and the freshest operator-visible activity first within the same follow-up bucket, including `TASK`, `RUN`, `REVIEW`, and `NEXT` columns
 - within the `mail` follow-up bucket, order rows by the newest unread inbound mail before falling back to the derived activity timestamp and then session recency
 - the current follow-up ordering is operator-first: `mail`, `inspect`, `review-merge`, `cleanup`, `wait`, `done`, then `-`
+- the `NEXT` column keeps that existing vocabulary even when `REVIEW` is present
 
 Future target:
 - show concise operator-friendly status for active and recent sessions

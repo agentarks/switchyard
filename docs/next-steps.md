@@ -13,7 +13,6 @@ The active milestone is:
 
 That means the next slices should make it easier for an operator to:
 - understand what a finished task produced
-- decide whether preserved work is ready, blocked, risky, or needs review
 - merge or abandon a session cleanly
 - retain enough history after closure to understand what happened
 
@@ -46,9 +45,9 @@ The thinner area is what happens after a task completes. Runtime observability i
 ## Likely Next Slice Categories
 
 The next implementation slice should come from one of these categories:
-- reintegration decision support
 - completed-task review summaries
 - session closure and post-closure history
+- additional reintegration hardening only where the new `REVIEW`/`Why` support still leaves operator ambiguity
 
 These are milestone categories, not a license to build all of them at once. Choose the smallest slice that materially advances the closure path.
 
