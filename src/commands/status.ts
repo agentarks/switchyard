@@ -367,6 +367,7 @@ function buildStatusRowContexts(options: {
       latestRun,
       cleanup,
       followUp,
+      recentEvent,
       latestMergeStatusEvent
     });
 
@@ -673,6 +674,7 @@ function deriveReintegrationAssessment(options: {
   latestRun?: RunRecord;
   cleanup: string;
   followUp: string;
+  recentEvent?: EventRecord;
   latestMergeStatusEvent?: EventRecord;
 }): ReintegrationAssessment | undefined {
   if (isActiveSessionState(options.session.state)) {
@@ -687,7 +689,9 @@ function deriveReintegrationAssessment(options: {
     return undefined;
   }
 
-  if (options.latestMergeStatusEvent?.eventType === "merge.failed") {
+  const relevantMergeStatusEvent = options.latestMergeStatusEvent ?? options.recentEvent;
+
+  if (relevantMergeStatusEvent?.eventType === "merge.failed") {
     return {
       label: "blocked",
       reason: "previous merge attempt failed and reintegration is currently blocked"
@@ -748,7 +752,7 @@ function deriveReintegrationAssessment(options: {
     };
   }
 
-  if (options.cleanup === "abandon-only:not-merged") {
+  if (options.cleanup === "abandon-only:not-merged" && options.latestRun) {
     return {
       label: "needs-review",
       reason: "run finished successfully and preserved work still needs operator review"

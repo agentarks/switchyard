@@ -562,7 +562,7 @@ test("statusCommand shows cleanup readiness for active and preserved sessions", 
     output,
     /failed\tsession-legacy-missing-worktree\tagent-legacy-missing-worktree[^\n]*\tabandon-only:worktree-missing\t-\t-\tblocked\tinspect\t-/
   );
-  assert.match(output, /stopped\tsession-unmerged\tagent-unmerged[^\n]*\tabandon-only:not-merged\t-\t-\tneeds-review\treview-merge\t-/);
+  assert.match(output, /stopped\tsession-unmerged\tagent-unmerged[^\n]*\tabandon-only:not-merged\t-\t-\t-\treview-merge\t-/);
   assert.match(output, /failed\tsession-legacy-cleanup\tagent-legacy-cleanup[^\n]*\tabandon-only:legacy\t-\t-\tblocked\tinspect\t-/);
 });
 
@@ -1208,6 +1208,153 @@ test("statusCommand keeps reintegration review output conservative when assessme
   assert.match(
     stderrWrites.join(""),
     /WARN: failed to evaluate cleanup readiness for session 'session-review-unavailable': cleanup unavailable/
+  );
+});
+
+test("statusCommand omits needs-review guidance when preserved cleanup is known but run data is unavailable", async () => {
+  const repoDir = await createInitializedRepo();
+  const stdoutWrites: string[] = [];
+  const stderrWrites: string[] = [];
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  await createSession(repoDir, {
+    id: "session-review-run-unavailable",
+    agentName: "agent-review-run-unavailable",
+    branch: "agents/agent-review-run-unavailable",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-review-run-unavailable"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-10T12:10:00.000Z",
+    updatedAt: "2026-03-10T12:10:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-review-run-unavailable",
+    sessionId: "session-review-run-unavailable",
+    agentName: "agent-review-run-unavailable",
+    taskSummary: "Review the preserved worktree after the missing run load.",
+    state: "finished",
+    outcome: "completed",
+    createdAt: "2026-03-10T12:10:00.000Z",
+    updatedAt: "2026-03-10T12:10:00.000Z",
+    finishedAt: "2026-03-10T12:10:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    stdoutWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stderr.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-review-run-unavailable",
+      isRuntimeAlive: () => false,
+      listLatestRuns: async () => {
+        throw new Error("runs unavailable");
+      },
+      getCleanupReadiness: async () => "abandon-only:not-merged",
+      now: () => "2026-03-10T12:15:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = stdoutWrites.join("");
+  assert.match(output, /Cleanup: abandon-only:not-merged/);
+  assert.match(output, /Run: \?/);
+  assert.match(output, /Next: review-merge/);
+  assert.doesNotMatch(output, /Review:/);
+  assert.doesNotMatch(output, /Why:/);
+  assert.match(
+    output,
+    /stopped\tsession-review-run-unavailable\tagent-review-run-unavailable[^\n]*\tabandon-only:not-merged\t\?\t\?\t-\treview-merge\t-/
+  );
+  assert.match(stderrWrites.join(""), /WARN: failed to load latest runs: runs unavailable/);
+});
+
+test("statusCommand falls back to recent merge failure when merge-status history is unavailable", async () => {
+  const repoDir = await createInitializedRepo();
+  const stdoutWrites: string[] = [];
+  const stderrWrites: string[] = [];
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  await createSession(repoDir, {
+    id: "session-review-merge-status-unavailable",
+    agentName: "agent-review-merge-status-unavailable",
+    branch: "agents/agent-review-merge-status-unavailable",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-review-merge-status-unavailable"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-10T12:20:00.000Z",
+    updatedAt: "2026-03-10T12:20:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-review-merge-status-unavailable",
+    sessionId: "session-review-merge-status-unavailable",
+    agentName: "agent-review-merge-status-unavailable",
+    taskSummary: "Resolve the merge blocker with degraded merge-history loading.",
+    state: "finished",
+    outcome: "completed",
+    createdAt: "2026-03-10T12:20:00.000Z",
+    updatedAt: "2026-03-10T12:20:00.000Z",
+    finishedAt: "2026-03-10T12:20:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-review-merge-status-unavailable",
+    agentName: "agent-review-merge-status-unavailable",
+    eventType: "merge.failed",
+    payload: {
+      reason: "merge_conflict",
+      conflictCount: 1
+    },
+    createdAt: "2026-03-10T12:25:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    stdoutWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stderr.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-review-merge-status-unavailable",
+      isRuntimeAlive: () => false,
+      listLatestMergeStatusEvents: async () => {
+        throw new Error("merge status unavailable");
+      },
+      getCleanupReadiness: async () => "abandon-only:not-merged",
+      now: () => "2026-03-10T12:30:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = stdoutWrites.join("");
+  assert.match(output, /Review: blocked/);
+  assert.match(output, /Why: previous merge attempt failed and reintegration is currently blocked/);
+  assert.match(output, /Recent: 2026-03-10T12:25:00.000Z merge\.failed reason=merge_conflict, conflictCount=1/);
+  assert.match(
+    output,
+    /stopped\tsession-review-merge-status-unavailable\tagent-review-merge-status-unavailable[^\n]*\tfinished:completed\tblocked\treview-merge\t2026-03-10T12:25:00.000Z merge\.failed reason=merge_conflict, conflictCount=1/
+  );
+  assert.match(
+    stderrWrites.join(""),
+    /WARN: failed to load latest merge status events: merge status unavailable/
   );
 });
 
