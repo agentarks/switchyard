@@ -45,6 +45,11 @@ interface StatusOptions {
     sessionIds: string[],
     eventTypes: string[]
   ) => Promise<Map<string, EventRecord>>;
+  listLatestMergeStatusEvents?: (
+    projectRoot: string,
+    sessionIds: string[],
+    eventTypes: string[]
+  ) => Promise<Map<string, EventRecord>>;
   listLatestInboundMail?: (
     projectRoot: string,
     sessionIds: string[],
@@ -73,12 +78,19 @@ interface DerivedNoVisibleProgressHint {
 }
 
 type DerivedInspectHint = DerivedNoVisibleProgressHint | DerivedStalledHint;
+type ReintegrationAssessmentLabel = "ready" | "needs-review" | "blocked" | "risky";
+
+interface ReintegrationAssessment {
+  label: ReintegrationAssessmentLabel;
+  reason: string;
+}
 
 interface StatusRowContext {
   session: SessionRecord;
   unreadCount: string;
   cleanup: string;
   latestRun?: RunRecord;
+  review?: ReintegrationAssessment;
   followUp: string;
   recentEvent?: EventRecord;
   unreadOperatorMailSummary?: UnreadMailSummary;
@@ -103,7 +115,12 @@ const RUNTIME_PROGRESS_EVENT_TYPES = [
   "runtime.exited",
   "runtime.exited_early"
 ] as const;
+const MERGE_STATUS_EVENT_TYPES = [
+  "merge.failed",
+  "merge.completed"
+] as const;
 const RUNTIME_PROGRESS_EVENT_TYPE_SET = new Set<string>(RUNTIME_PROGRESS_EVENT_TYPES);
+const MERGE_STATUS_EVENT_TYPE_SET = new Set<string>(MERGE_STATUS_EVENT_TYPES);
 
 export function createStatusCommand(): Command {
   return new Command("status")
@@ -162,6 +179,11 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     options.listLatestRuntimeProgressEvents ?? listLatestEventsBySessionForTypes,
     [...RUNTIME_PROGRESS_EVENT_TYPES],
     "latest runtime progress events"
+  );
+  const latestMergeStatusEvents = await loadLatestMergeStatusEventsBestEffort(
+    config.project.root,
+    sessionIds,
+    options.listLatestMergeStatusEvents ?? listLatestEventsBySessionForTypes
   );
   const latestInboundMail = await loadLatestInboundMailBestEffort(
     config.project.root,
@@ -233,6 +255,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     reconciledEventsBySession,
     unreadOperatorMailSummaries: effectiveUnreadOperatorMailSummaries,
     latestRuntimeProgressEvents: latestRuntimeProgressEvents.available ? latestRuntimeProgressEvents.eventsBySession : undefined,
+    latestMergeStatusEvents,
     latestInboundMail: latestInboundMail.available ? latestInboundMail.mailBySession : undefined,
     noVisibleProgressHints,
     now: (options.now ?? (() => new Date().toISOString()))()
@@ -255,6 +278,10 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       process.stdout.write(`Unread: ${rowContext.unreadCount}\n`);
       process.stdout.write(`Cleanup: ${rowContext.cleanup}\n`);
       process.stdout.write(`Run: ${formatRunSummary(rowContext.latestRun, latestRuns.available)}\n`);
+      if (rowContext.review) {
+        process.stdout.write(`Review: ${rowContext.review.label}\n`);
+        process.stdout.write(`Why: ${rowContext.review.reason}\n`);
+      }
       process.stdout.write(`Next: ${rowContext.followUp}\n`);
       process.stdout.write(
         `Recent: ${formatRelevantRecentSummary(
@@ -278,13 +305,13 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 
   const orderedRowContexts = [...rowContexts.values()].sort(compareStatusRowContexts);
 
-  process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tNEXT\tRECENT\n");
+  process.stdout.write("STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tREVIEW\tNEXT\tRECENT\n");
 
   for (const rowContext of orderedRowContexts) {
     const session = rowContext.session;
     const worktree = formatWorktreePath(config.project.root, session.worktreePath);
     process.stdout.write(
-        `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${rowContext.activityAt}\t${rowContext.unreadCount}\t${rowContext.cleanup}\t${formatTaskSummary(rowContext.latestRun, latestRuns.available)}\t${formatRunSummary(rowContext.latestRun, latestRuns.available)}\t${rowContext.followUp}\t${formatRelevantRecentSummary(
+        `${session.state}\t${session.id}\t${session.agentName}\t${session.branch}\t${worktree}\t${rowContext.activityAt}\t${rowContext.unreadCount}\t${rowContext.cleanup}\t${formatTaskSummary(rowContext.latestRun, latestRuns.available)}\t${formatRunSummary(rowContext.latestRun, latestRuns.available)}\t${rowContext.review?.label ?? "-"}\t${rowContext.followUp}\t${formatRelevantRecentSummary(
         rowContext.recentEvent,
         rowContext.unreadOperatorMailSummary,
         rowContext.inspectHint
@@ -304,6 +331,7 @@ function buildStatusRowContexts(options: {
   reconciledEventsBySession: Map<string, EventRecord>;
   unreadOperatorMailSummaries: Map<string, UnreadMailSummary>;
   latestRuntimeProgressEvents?: Map<string, EventRecord>;
+  latestMergeStatusEvents?: Map<string, EventRecord>;
   latestInboundMail?: Map<string, MailRecord>;
   noVisibleProgressHints: Map<string, DerivedNoVisibleProgressHint>;
   now: string;
@@ -322,6 +350,7 @@ function buildStatusRowContexts(options: {
       latestStoredRuntimeProgressEvent: options.latestRuntimeProgressEvents?.get(session.id),
       reconciledEvent: options.reconciledEventsBySession.get(session.id)
     });
+    const latestMergeStatusEvent = options.latestMergeStatusEvents?.get(session.id);
     const stalledHint = deriveStalledHint({
       session,
       latestRuntimeProgressEvent,
@@ -331,6 +360,15 @@ function buildStatusRowContexts(options: {
     const inspectHint = selectInspectHint(options.noVisibleProgressHints.get(session.id), stalledHint);
     const unreadOperatorMailSummary = options.unreadOperatorMailSummaries.get(session.id);
     const cleanup = options.cleanupReadiness.get(session.id) ?? "?";
+    const followUp = formatFollowUpAction(session, latestRun, cleanup, unreadOperatorCount, inspectHint);
+    const review = deriveReintegrationAssessment({
+      session,
+      latestRun,
+      cleanup,
+      followUp,
+      recentEvent,
+      latestMergeStatusEvent
+    });
 
     rowContexts.set(session.id, {
       session,
@@ -339,7 +377,8 @@ function buildStatusRowContexts(options: {
         : String(options.unreadMailCounts.get(session.id) ?? 0),
       cleanup,
       latestRun,
-      followUp: formatFollowUpAction(session, latestRun, cleanup, unreadOperatorCount, inspectHint),
+      review,
+      followUp,
       recentEvent,
       unreadOperatorMailSummary,
       inspectHint,
@@ -436,6 +475,59 @@ async function loadLatestEventsBestEffort(
       available: false
     };
   }
+}
+
+async function loadLatestMergeStatusEventsBestEffort(
+  projectRoot: string,
+  sessionIds: string[],
+  listLatestMergeStatusEvents: (
+    projectRoot: string,
+    sessionIds: string[],
+    eventTypes: string[]
+  ) => Promise<Map<string, EventRecord>>
+): Promise<Map<string, EventRecord>> {
+  try {
+    return await listLatestMergeStatusEvents(projectRoot, sessionIds, [...MERGE_STATUS_EVENT_TYPES]);
+  } catch (error) {
+    process.stderr.write(`WARN: failed to load latest merge status events: ${formatErrorMessage(error)}\n`);
+    return await loadLatestMergeStatusEventsFromHistoryBestEffort(projectRoot, sessionIds);
+  }
+}
+
+async function loadLatestMergeStatusEventsFromHistoryBestEffort(
+  projectRoot: string,
+  sessionIds: string[]
+): Promise<Map<string, EventRecord>> {
+  const eventsBySession = new Map<string, EventRecord>();
+
+  for (const sessionId of sessionIds) {
+    try {
+      const sessionEvents = await listEvents(projectRoot, { sessionId });
+      const latestMergeStatusEvent = findLatestMergeStatusEvent(sessionEvents);
+
+      if (latestMergeStatusEvent) {
+        eventsBySession.set(sessionId, latestMergeStatusEvent);
+      }
+    } catch (error) {
+      process.stderr.write(
+        `WARN: failed to load merge status history for session '${sessionId}': ${formatErrorMessage(error)}\n`
+      );
+    }
+  }
+
+  return eventsBySession;
+}
+
+function findLatestMergeStatusEvent(events: EventRecord[]): EventRecord | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+
+    if (event && MERGE_STATUS_EVENT_TYPE_SET.has(event.eventType)) {
+      return event;
+    }
+  }
+
+  return undefined;
 }
 
 async function loadLatestInboundMailBestEffort(
@@ -629,6 +721,99 @@ function formatTaskSummary(run: RunRecord | undefined, available = true): string
   return run.taskSummary;
 }
 
+function deriveReintegrationAssessment(options: {
+  session: SessionRecord;
+  latestRun?: RunRecord;
+  cleanup: string;
+  followUp: string;
+  recentEvent?: EventRecord;
+  latestMergeStatusEvent?: EventRecord;
+}): ReintegrationAssessment | undefined {
+  if (isActiveSessionState(options.session.state)) {
+    return undefined;
+  }
+
+  if (options.cleanup === "ready:absent" || options.followUp === "done") {
+    return undefined;
+  }
+
+  if (options.cleanup === "?") {
+    return undefined;
+  }
+
+  const relevantMergeStatusEvent = options.latestMergeStatusEvent ?? options.recentEvent;
+
+  if (relevantMergeStatusEvent?.eventType === "merge.failed") {
+    return {
+      label: "blocked",
+      reason: "previous merge attempt failed and reintegration is currently blocked"
+    };
+  }
+
+  switch (options.cleanup) {
+    case "abandon-only:branch-missing":
+      return {
+        label: "blocked",
+        reason: "preserved branch is missing and reintegration is currently blocked"
+      };
+    case "abandon-only:legacy":
+      return {
+        label: "blocked",
+        reason: "legacy session metadata is incomplete, so reintegration is currently blocked"
+      };
+    case "abandon-only:no-branch":
+      return {
+        label: "blocked",
+        reason: "preserved branch is unavailable and reintegration is currently blocked"
+      };
+    case "abandon-only:worktree-inspection-failed":
+      return {
+        label: "blocked",
+        reason: "preserved worktree could not be inspected, so reintegration is currently blocked"
+      };
+    case "abandon-only:worktree-missing":
+      return {
+        label: "blocked",
+        reason: "preserved worktree is missing and reintegration is currently blocked"
+      };
+    case "ready:merged":
+      return {
+        label: "ready",
+        reason: "merge is already integrated and cleanup is the next valid action"
+      };
+    case "abandon-only:worktree-dirty":
+      return {
+        label: "risky",
+        reason: "preserved worktree has uncommitted changes and should be inspected before reintegration"
+      };
+    default:
+      break;
+  }
+
+  if (options.latestRun?.outcome === "failed") {
+    return {
+      label: "risky",
+      reason: "latest run failed, so preserved work should be inspected before reintegration"
+    };
+  }
+
+  if (options.latestRun?.outcome === "launch_failed") {
+    return {
+      label: "risky",
+      reason: "latest launch failed, so preserved work should be inspected before reintegration"
+    };
+  }
+
+  if (options.cleanup === "abandon-only:not-merged" && options.latestRun) {
+    return {
+      label: "needs-review",
+      reason: "run finished successfully and preserved work still needs operator review"
+    };
+  }
+
+  return undefined;
+}
+
 const FOLLOW_UP_PRIORITY = {
   mail: 0,
   inspect: 1,
@@ -666,12 +851,12 @@ function formatFollowUpAction(
     return "cleanup";
   }
 
-  if (cleanup === "abandon-only:not-merged") {
-    return "review-merge";
-  }
-
   if (run?.outcome === "launch_failed" || run?.outcome === "failed") {
     return "inspect";
+  }
+
+  if (cleanup === "abandon-only:not-merged") {
+    return "review-merge";
   }
 
   if (cleanup.startsWith("abandon-only:")) {

@@ -5,7 +5,7 @@ This ledger is the canonical count of completed Switchyard implementation slices
 - Count only implementation slices that materially changed the repo-local operator loop.
 - Do not count spec-only or doc-only follow-ups as separate slices; fold them into the implementation row they support.
 - Rows `S01` through `S09` are best-effort reconstructions from milestone docs and git history; rows `S10+` come from the later slice cadence and directly traceable implementation PRs, so they are canonical.
-- Headline total: `15` counted implementation slices.
+- Headline total: `16` counted implementation slices.
 
 | SEQ | DATE | SLUG | SUMMARY | ARTIFACTS | NOTES |
 | --- | --- | --- | --- | --- | --- |
@@ -24,3 +24,4 @@ This ledger is the canonical count of completed Switchyard implementation slices
 | S13 | 2026-03-11 | `detached-runtime-logs` | Added durable detached runtime transcript capture plus the first-class `sy logs <session>` inspection path. | [plan](plans/2026-03-12-detached-runtime-logs.md); [spec](specs/2026-03-12-detached-runtime-logs-design.md); PR #77 | `sy logs` output hardening in PR #78 is folded into this implementation row. |
 | S14 | 2026-03-13 | `bounded-codex-exec-runtime` | Replaced the detached interactive launch path with bounded `codex exec --json` runs and truthful natural completion handling. | [plan](plans/2026-03-12-codex-exec-runtime.md); [spec](specs/2026-03-12-codex-exec-runtime-design.md); PR #80 | [Runtime smoke-validation docs](plans/2026-03-13-runtime-smoke-validation-docs.md) are supporting evidence for this row, not a separate counted slice. |
 | S15 | 2026-03-13 | `runtime-default-and-cleanup-safety` | Made bounded launches writable by default and failed cleanup readiness closed when preserved worktree inspection was unsafe. | [plan](plans/2026-03-13-runtime-default-and-cleanup-safety.md); PR #81 | Narrow post-runtime implementation slice focused on launch defaults and cleanup inspection. |
+| S16 | 2026-03-18 | `reintegration-decision-support` | Added conservative reintegration review support in `sy status` through all-session `REVIEW` output plus exact-session `Review` and `Why` guidance while preserving the existing `NEXT` vocabulary. | [plan](plans/2026-03-18-reintegration-decision-support.md); [spec](superpowers/specs/2026-03-18-reintegration-decision-support-design.md); PR pending | Completed implementation row; add the implementation PR link once it exists. |

@@ -56,12 +56,13 @@ What to do next:
 - finish reintegration and operator closure for the current v0 workflow
 - keep runtime work in a supporting role unless a concrete failure disproves the current bounded model
 - choose narrow slices that move the operator from `task finished` to `session closed`
+- treat reintegration decision support as now materially real and focus next on review summaries, closure flow, and post-closure history
 
 ## Order After That
 
-1. improve reintegration decision support
-2. improve completed-task review summaries and closure paths
-3. preserve enough durable post-closure history that finished sessions stay understandable
+1. improve completed-task review summaries and closure paths
+2. preserve enough durable post-closure history that finished sessions stay understandable
+3. add only narrow reintegration hardening where the new review assessment still leaves operator ambiguity
 4. revisit broader runtime breadth or automation only after the reintegration milestone stops being the main constraint
 
 ## Explicitly Deferred

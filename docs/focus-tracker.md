@@ -86,6 +86,7 @@ Completed enough to count as minimally real:
 - latest run summaries in `sy status`
 - latest run task ownership in the all-session `sy status` view
 - derived next-step visibility in `sy status` so concurrent sessions stay operator-actionable
+- conservative reintegration review visibility in `sy status` through all-session `REVIEW` plus exact-session `Review` and `Why`
 - synthesized unread-mail recency summaries in `sy status` so concurrent mailbox follow-up stays visible
 - mail-bucket ordering in `sy status` by newest unread inbound mail
 - freshest-activity timestamps and same-bucket freshness ordering in `sy status` so recent merge, mail, and runtime changes stay visible in the control-plane view
@@ -103,9 +104,10 @@ Current planning state:
 - the passive stalled-session visibility and no-visible-progress visibility slices in `sy status` are now complete
 - detached runtime observability through bounded `codex exec --json` launch plus readable structured `sy logs <session>` is now complete
 - natural task completion is now a truthful foreground reconciliation path in `sy status`
+- reintegration decision support is now materially real in `sy status`
 - fresh temp-repo manual smoke with the real `sy` entrypoint and Codex CLI now also proves the default runtime command plus dirty-worktree cleanup refusal and explicit-abandon cleanup behavior end to end
 - the bounded runtime baseline is now stable enough for the current phase and should not be reopened by default
-- the project should now advance the reintegration/operator-closure milestone through several narrow slices
+- the project should now advance the reintegration/operator-closure milestone through completed-task review summaries, closure flow, post-closure history, and only narrow reintegration hardening where the new review assessment still leaves ambiguity
 - treat runtime observability and raw event visibility as supporting detail, not as the primary answer to "how does this session get reviewed and closed?"
 
 ## Current In-Scope Work
@@ -113,8 +115,8 @@ Current planning state:
 These are the right kinds of tasks right now:
 - preserve the bounded Codex exec runtime as the narrow baseline instead of broadening into interactive control
 - preserve writable-by-default bounded Codex exec launches as the narrow baseline unless the operator explicitly overrides sandboxing
-- improve reintegration decision support after a task finishes
 - improve completed-task review and closure paths so finished work is easier to merge or abandon
+- preserve or improve the new conservative reintegration review support only when a concrete ambiguity still remains
 - preserve enough durable session history that closed work is still understandable later
 - improve operator inspection only when it directly supports the concurrent workflow or the reintegration milestone
 - harden lifecycle behavior only when a reproduced failure blocks the current loop

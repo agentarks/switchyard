@@ -4,25 +4,23 @@ This is the ordered backlog for the next several sessions. Keep items small enou
 
 ## Now
 
-1. Reintegration decision support
+1. Completed-task review summaries
 
-2. Completed-task review summaries
+2. Session closure and post-closure history
 
-3. Session closure and post-closure history
+3. Additional reintegration hardening only where the new review assessment still creates operator ambiguity
 
 ## Next
 
-4. Additional reintegration hardening only where the current explicit merge/abandon path still creates operator ambiguity
+4. Broader surface area only if a concrete operator workflow now requires it
 
 ## After That
 
-5. Broader surface area only if a concrete operator workflow now requires it
+5. Dashboard or TUI work, if still justified after the CLI reintegration milestone is complete
 
 ## Then
 
-6. Dashboard or TUI work, if still justified after the CLI reintegration milestone is complete
-
-7. Multiple runtimes beyond Codex, if still justified
+6. Multiple runtimes beyond Codex, if still justified
 
 ## Later
 

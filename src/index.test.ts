@@ -341,9 +341,9 @@ test("sy status shows next follow-up actions for concurrent sessions through the
     });
 
     assert.equal(stderr, "");
-    assert.match(stdout, /STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tNEXT\tRECENT/);
-    assert.match(stdout, /running\tsession-cli-active\tagent-cli-active[^\n]*\tactive\twait\t-/);
-    assert.match(stdout, /stopped\tsession-cli-review\tagent-cli-review[^\n]*\tfinished:stopped\treview-merge\t-/);
+    assert.match(stdout, /STATE\tSESSION\tAGENT\tBRANCH\tWORKTREE\tUPDATED\tUNREAD\tCLEANUP\tTASK\tRUN\tREVIEW\tNEXT\tRECENT/);
+    assert.match(stdout, /running\tsession-cli-active\tagent-cli-active[^\n]*\tactive\t-\twait\t-/);
+    assert.match(stdout, /stopped\tsession-cli-review\tagent-cli-review[^\n]*\tfinished:stopped\tneeds-review\treview-merge\t-/);
   } finally {
     if (runtime.pid) {
       stopChildIfAlive(runtime.pid);
@@ -591,11 +591,11 @@ test("sy supports a two-session operator workflow through mail review, merge, an
     assert.equal(initialStatus.stderr, "");
     assert.match(
       initialStatus.stdout,
-      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\tfinished:stopped\tmail\t2026-03-10T13:10:00.000Z mail\.unread unreadCount=1, sender=agent-cli-mail-flow, bodyPreview="Need merge decision\."/
+      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\tfinished:stopped\tneeds-review\tmail\t2026-03-10T13:10:00.000Z mail\.unread unreadCount=1, sender=agent-cli-mail-flow, bodyPreview="Need merge decision\."/
     );
     assert.match(
       initialStatus.stdout,
-      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\tfinished:stopped\treview-merge\t-/
+      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\tfinished:stopped\tneeds-review\treview-merge\t-/
     );
     assert.ok(
       initialStatus.stdout.indexOf("session-cli-mail-flow") < initialStatus.stdout.indexOf("session-cli-merge-flow")
@@ -617,11 +617,11 @@ test("sy supports a two-session operator workflow through mail review, merge, an
     assert.equal(postMailStatus.stderr, "");
     assert.match(
       postMailStatus.stdout,
-      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\t0\tabandon-only:not-merged\tReview the preserved branch after the agent reply\.\tfinished:stopped\treview-merge\t/
+      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\t0\tabandon-only:not-merged\tReview the preserved branch after the agent reply\.\tfinished:stopped\tneeds-review\treview-merge\t/
     );
     assert.match(
       postMailStatus.stdout,
-      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\t0\tabandon-only:not-merged\tPrepare the preserved branch for reintegration\.\tfinished:stopped\treview-merge\t-/
+      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\t0\tabandon-only:not-merged\tPrepare the preserved branch for reintegration\.\tfinished:stopped\tneeds-review\treview-merge\t-/
     );
 
     const mergeResult = await execFileAsync(
@@ -640,11 +640,11 @@ test("sy supports a two-session operator workflow through mail review, merge, an
     assert.equal(postMergeStatus.stderr, "");
     assert.match(
       postMergeStatus.stdout,
-      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\tready:merged\tPrepare the preserved branch for reintegration\.\tfinished:merged\tcleanup\t/
+      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\tready:merged\tPrepare the preserved branch for reintegration\.\tfinished:merged\tready\tcleanup\t/
     );
     assert.match(
       postMergeStatus.stdout,
-      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\tfinished:stopped\treview-merge\t/
+      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\tfinished:stopped\tneeds-review\treview-merge\t/
     );
 
     const cleanupResult = await execFileAsync(
@@ -666,11 +666,11 @@ test("sy supports a two-session operator workflow through mail review, merge, an
     assert.equal(finalStatus.stderr, "");
     assert.match(
       finalStatus.stdout,
-      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\tabandon-only:not-merged\tReview the preserved branch after the agent reply\.\tfinished:stopped\treview-merge\t/
+      /stopped\tsession-cli-mail-flow\tagent-cli-mail-flow[^\n]*\tabandon-only:not-merged\tReview the preserved branch after the agent reply\.\tfinished:stopped\tneeds-review\treview-merge\t/
     );
     assert.match(
       finalStatus.stdout,
-      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\tready:absent\tPrepare the preserved branch for reintegration\.\tfinished:merged\tdone\t/
+      /stopped\tsession-cli-merge-flow\tagent-cli-merge-flow[^\n]*\tready:absent\tPrepare the preserved branch for reintegration\.\tfinished:merged\t-\tdone\t/
     );
   } finally {
     await removeTempDir(repoDir);
