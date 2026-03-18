@@ -120,6 +120,7 @@ const MERGE_STATUS_EVENT_TYPES = [
   "merge.completed"
 ] as const;
 const RUNTIME_PROGRESS_EVENT_TYPE_SET = new Set<string>(RUNTIME_PROGRESS_EVENT_TYPES);
+const MERGE_STATUS_EVENT_TYPE_SET = new Set<string>(MERGE_STATUS_EVENT_TYPES);
 
 export function createStatusCommand(): Command {
   return new Command("status")
@@ -179,12 +180,10 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     [...RUNTIME_PROGRESS_EVENT_TYPES],
     "latest runtime progress events"
   );
-  const latestMergeStatusEvents = await loadLatestEventsBestEffort(
+  const latestMergeStatusEvents = await loadLatestMergeStatusEventsBestEffort(
     config.project.root,
     sessionIds,
-    options.listLatestMergeStatusEvents ?? listLatestEventsBySessionForTypes,
-    [...MERGE_STATUS_EVENT_TYPES],
-    "latest merge status events"
+    options.listLatestMergeStatusEvents ?? listLatestEventsBySessionForTypes
   );
   const latestInboundMail = await loadLatestInboundMailBestEffort(
     config.project.root,
@@ -256,7 +255,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     reconciledEventsBySession,
     unreadOperatorMailSummaries: effectiveUnreadOperatorMailSummaries,
     latestRuntimeProgressEvents: latestRuntimeProgressEvents.available ? latestRuntimeProgressEvents.eventsBySession : undefined,
-    latestMergeStatusEvents: latestMergeStatusEvents.available ? latestMergeStatusEvents.eventsBySession : undefined,
+    latestMergeStatusEvents,
     latestInboundMail: latestInboundMail.available ? latestInboundMail.mailBySession : undefined,
     noVisibleProgressHints,
     now: (options.now ?? (() => new Date().toISOString()))()
@@ -476,6 +475,59 @@ async function loadLatestEventsBestEffort(
       available: false
     };
   }
+}
+
+async function loadLatestMergeStatusEventsBestEffort(
+  projectRoot: string,
+  sessionIds: string[],
+  listLatestMergeStatusEvents: (
+    projectRoot: string,
+    sessionIds: string[],
+    eventTypes: string[]
+  ) => Promise<Map<string, EventRecord>>
+): Promise<Map<string, EventRecord>> {
+  try {
+    return await listLatestMergeStatusEvents(projectRoot, sessionIds, [...MERGE_STATUS_EVENT_TYPES]);
+  } catch (error) {
+    process.stderr.write(`WARN: failed to load latest merge status events: ${formatErrorMessage(error)}\n`);
+    return await loadLatestMergeStatusEventsFromHistoryBestEffort(projectRoot, sessionIds);
+  }
+}
+
+async function loadLatestMergeStatusEventsFromHistoryBestEffort(
+  projectRoot: string,
+  sessionIds: string[]
+): Promise<Map<string, EventRecord>> {
+  const eventsBySession = new Map<string, EventRecord>();
+
+  for (const sessionId of sessionIds) {
+    try {
+      const sessionEvents = await listEvents(projectRoot, { sessionId });
+      const latestMergeStatusEvent = findLatestMergeStatusEvent(sessionEvents);
+
+      if (latestMergeStatusEvent) {
+        eventsBySession.set(sessionId, latestMergeStatusEvent);
+      }
+    } catch (error) {
+      process.stderr.write(
+        `WARN: failed to load merge status history for session '${sessionId}': ${formatErrorMessage(error)}\n`
+      );
+    }
+  }
+
+  return eventsBySession;
+}
+
+function findLatestMergeStatusEvent(events: EventRecord[]): EventRecord | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+
+    if (event && MERGE_STATUS_EVENT_TYPE_SET.has(event.eventType)) {
+      return event;
+    }
+  }
+
+  return undefined;
 }
 
 async function loadLatestInboundMailBestEffort(
