@@ -105,9 +105,11 @@ Current planning state:
 - detached runtime observability through bounded `codex exec --json` launch plus readable structured `sy logs <session>` is now complete
 - natural task completion is now a truthful foreground reconciliation path in `sy status`
 - reintegration decision support is now materially real in `sy status`
+- completed-task review, closure state, and post-closure artifact history are now materially real in selected-session `sy status`
 - fresh temp-repo manual smoke with the real `sy` entrypoint and Codex CLI now also proves the default runtime command plus dirty-worktree cleanup refusal and explicit-abandon cleanup behavior end to end
 - the bounded runtime baseline is now stable enough for the current phase and should not be reopened by default
-- the project should now advance the reintegration/operator-closure milestone through completed-task review summaries, closure flow, post-closure history, and only narrow reintegration hardening where the new review assessment still leaves ambiguity
+- the project should now advance the reintegration/operator-closure milestone through milestone bundles instead of repeated tiny-slice triage
+- the next work should be only narrow reintegration hardening where the new review assessment, exact-session summary, or artifact history still leaves ambiguity
 - treat runtime observability and raw event visibility as supporting detail, not as the primary answer to "how does this session get reviewed and closed?"
 
 ## Current In-Scope Work
@@ -115,7 +117,7 @@ Current planning state:
 These are the right kinds of tasks right now:
 - preserve the bounded Codex exec runtime as the narrow baseline instead of broadening into interactive control
 - preserve writable-by-default bounded Codex exec launches as the narrow baseline unless the operator explicitly overrides sandboxing
-- improve completed-task review and closure paths so finished work is easier to merge or abandon
+- improve remaining reintegration ambiguity so finished work is easier to review, merge, abandon, and understand after closure
 - preserve or improve the new conservative reintegration review support only when a concrete ambiguity still remains
 - preserve enough durable session history that closed work is still understandable later
 - improve operator inspection only when it directly supports the concurrent workflow or the reintegration milestone
@@ -156,7 +158,7 @@ Use this rough project view instead of one flat percentage:
 - run-tracking visibility: now minimally real
 - concurrent multi-session proving workflow: now minimally real
 - detached runtime observability through transcript capture and `sy logs`: now minimally real
-- reintegration/operator closure: active milestone, still intentionally narrow, not yet complete
+- reintegration/operator closure: active milestone, now materially real in status, with only narrow hardening left
 - v0 hardening: exception-only, not the default mode
 - broader long-term vision: intended, but earned in stages rather than copied all at once
 

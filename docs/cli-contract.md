@@ -137,6 +137,8 @@ Current contract:
 - command keeps operator-relevant `stop.completed` cleanup mode in the recent-event summary so later status inspection still shows whether cleanup happened after a confirmed merge or an explicit abandon
 - when the same `sy status` run also records an automatic runtime reconciliation event, command still keeps a latest pre-existing `stop.failed` visible in the current recent summary instead of immediately replacing it with that synthetic runtime event
 - with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, latest launch spec path, unread-mail count, cleanup-readiness label, latest run summary, the derived follow-up signal, and the full recent-event summary
+- with a selector, command also prints a concise `Summary:` line that explains the current review, cleanup, or closed-session state in operator-readable language
+- with a selector, command also prints an `Artifacts:` line that records whether the preserved branch, worktree, transcript log, and task spec are still present, absent, or unknown
 - with a selector, command also prints `Review:` plus `Why:` for inactive sessions where reintegration meaningfully applies and the assessment can be justified conservatively
 - with a selector, command keeps `Review:` and `Why:` omitted for active sessions, already-closed `done` sessions, and sessions where cleanup/readiness data is unavailable
 - with `--task` plus a selector, command also prints the full stored launch instruction from `.switchyard/specs/`

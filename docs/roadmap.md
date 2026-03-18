@@ -55,15 +55,14 @@ The bounded runtime baseline is now stable enough for the current phase.
 What to do next:
 - finish reintegration and operator closure for the current v0 workflow
 - keep runtime work in a supporting role unless a concrete failure disproves the current bounded model
-- choose narrow slices that move the operator from `task finished` to `session closed`
-- treat reintegration decision support as now materially real and focus next on review summaries, closure flow, and post-closure history
+- execute milestone bundles that move the operator from `task finished` to `session closed`
+- treat reintegration decision support, exact-session summaries, and artifact history as now materially real, and focus next only on narrow hardening where ambiguity remains
 
 ## Order After That
 
-1. improve completed-task review summaries and closure paths
-2. preserve enough durable post-closure history that finished sessions stay understandable
-3. add only narrow reintegration hardening where the new review assessment still leaves operator ambiguity
-4. revisit broader runtime breadth or automation only after the reintegration milestone stops being the main constraint
+1. add only narrow reintegration hardening where the new review assessment, summary, or artifact history still leaves operator ambiguity
+2. revisit broader runtime breadth or automation only after the reintegration milestone stops being the main constraint
+3. preserve broader product breadth only where it does not weaken operator readability
 
 ## Explicitly Deferred
 

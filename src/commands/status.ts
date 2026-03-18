@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
-import { relative } from "node:path";
+import { join, relative } from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
 import { Command } from "commander";
@@ -96,6 +96,13 @@ interface StatusRowContext {
   unreadOperatorMailSummary?: UnreadMailSummary;
   inspectHint?: DerivedInspectHint;
   activityAt: string;
+}
+
+interface SelectedSessionArtifacts {
+  branch: "present" | "absent";
+  worktree: "present" | "absent";
+  log: "present" | "absent";
+  spec: "present" | "absent" | "unknown";
 }
 
 const execFileAsync = promisify(execFile);
@@ -268,6 +275,13 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     const rowContext = session ? rowContexts.get(session.id) : undefined;
 
     if (session && rowContext) {
+      const summary = formatSelectedSessionSummary(rowContext);
+      const artifacts = await inspectSelectedSessionArtifacts(
+        config.project.root,
+        session,
+        selectedSessionDetails?.taskHandoff?.taskSpecPath
+      );
+
       process.stdout.write(`Base: ${formatOptionalField(session.baseBranch)}\n`);
       process.stdout.write(`Runtime pid: ${formatOptionalField(session.runtimePid)}\n`);
       process.stdout.write(`Runtime: ${selectedSessionDetails?.taskHandoff?.runtimeCommand ?? "-"}\n`);
@@ -278,6 +292,8 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
       process.stdout.write(`Unread: ${rowContext.unreadCount}\n`);
       process.stdout.write(`Cleanup: ${rowContext.cleanup}\n`);
       process.stdout.write(`Run: ${formatRunSummary(rowContext.latestRun, latestRuns.available)}\n`);
+      process.stdout.write(`Summary: ${summary}\n`);
+      process.stdout.write(`Artifacts: ${formatSelectedSessionArtifacts(artifacts)}\n`);
       if (rowContext.review) {
         process.stdout.write(`Review: ${rowContext.review.label}\n`);
         process.stdout.write(`Why: ${rowContext.review.reason}\n`);
@@ -814,6 +830,82 @@ function deriveReintegrationAssessment(options: {
   return undefined;
 }
 
+function formatSelectedSessionSummary(rowContext: StatusRowContext): string {
+  if (isActiveSessionState(rowContext.session.state)) {
+    return "session still active; wait for completion or inspect logs and mail as needed.";
+  }
+
+  if (rowContext.review?.label === "blocked") {
+    if (rowContext.review.reason === "previous merge attempt failed and reintegration is currently blocked") {
+      return "reintegration is blocked by the previous merge failure.";
+    }
+
+    return "reintegration is currently blocked; inspect the recorded failure context before proceeding.";
+  }
+
+  if (rowContext.cleanup === "ready:absent" || rowContext.followUp === "done") {
+    if (rowContext.latestRun?.outcome === "abandoned") {
+      return "session closed after abandon cleanup; preserved runtime artifacts are already gone.";
+    }
+
+    if (rowContext.latestRun?.outcome === "merged") {
+      return "session closed after merge cleanup; preserved runtime artifacts are already gone.";
+    }
+
+    return "session closed; preserved runtime artifacts are already gone.";
+  }
+
+  if (rowContext.cleanup === "ready:merged") {
+    return "merge integrated; preserved artifacts can be cleaned up when ready.";
+  }
+
+  if (rowContext.latestRun?.outcome === "failed") {
+    return "run failed; inspect preserved artifacts before reintegration.";
+  }
+
+  if (rowContext.latestRun?.outcome === "launch_failed") {
+    return "launch failed; inspect preserved artifacts before retrying reintegration.";
+  }
+
+  if (rowContext.cleanup === "abandon-only:not-merged" && rowContext.latestRun?.outcome === "completed") {
+    return "completed run preserved for operator review before merge.";
+  }
+
+  if (rowContext.cleanup.startsWith("abandon-only:")) {
+    return "preserved artifacts need operator inspection before reintegration.";
+  }
+
+  return "session state is recorded, but no more specific reintegration summary is available yet.";
+}
+
+async function inspectSelectedSessionArtifacts(
+  projectRoot: string,
+  session: SessionRecord,
+  taskSpecPath: string | undefined
+): Promise<SelectedSessionArtifacts> {
+  const [branchExists, worktreeExists, logExists, specExists] = await Promise.all([
+    doesLocalBranchExist(projectRoot, session.branch),
+    pathExists(session.worktreePath),
+    pathExists(getSessionLogPath(projectRoot, session.agentName, session.id).path),
+    typeof taskSpecPath === "string"
+      ? pathExists(join(projectRoot, taskSpecPath))
+      : Promise.resolve(undefined)
+  ]);
+
+  return {
+    branch: branchExists ? "present" : "absent",
+    worktree: worktreeExists ? "present" : "absent",
+    log: logExists ? "present" : "absent",
+    spec: typeof specExists === "boolean"
+      ? (specExists ? "present" : "absent")
+      : "unknown"
+  };
+}
+
+function formatSelectedSessionArtifacts(artifacts: SelectedSessionArtifacts): string {
+  return `branch=${artifacts.branch}, worktree=${artifacts.worktree}, log=${artifacts.log}, spec=${artifacts.spec}`;
+}
+
 const FOLLOW_UP_PRIORITY = {
   mail: 0,
   inspect: 1,
@@ -1234,6 +1326,21 @@ async function isBranchAheadOfBase(worktreePath: string, baseBranch: string, bra
   }
 
   return aheadCount > 0;
+}
+
+async function doesLocalBranchExist(projectRoot: string, branch: string): Promise<boolean> {
+  const normalizedBranch = branch.trim();
+
+  if (normalizedBranch.length === 0) {
+    return false;
+  }
+
+  try {
+    await runGit(projectRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${normalizedBranch}`]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function pathExists(path: string): Promise<boolean> {

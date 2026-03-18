@@ -981,12 +981,26 @@ test("statusCommand shows reintegration review details for an inactive preserved
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-selected-review");
 
+  await git(repoDir, ["branch", "agents/agent-selected-review"]);
+  await mkdir(worktreePath, { recursive: true });
+  await writeFile(getSessionLogPath(repoDir, "agent-selected-review", "session-selected-review").path, "Turn completed.\n", "utf8");
+  await writeTaskSpec({
+    projectRoot: repoDir,
+    sessionId: "session-selected-review",
+    agentName: "agent-selected-review",
+    task: "Review the preserved worktree before merge.",
+    createdAt: "2026-03-10T11:00:00.000Z",
+    branch: "agents/agent-selected-review",
+    baseBranch: "main",
+    worktreePath
+  });
   await createSession(repoDir, {
     id: "session-selected-review",
     agentName: "agent-selected-review",
     branch: "agents/agent-selected-review",
-    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-selected-review"),
+    worktreePath,
     state: "stopped",
     runtimePid: null,
     createdAt: "2026-03-10T11:00:00.000Z",
@@ -1023,8 +1037,87 @@ test("statusCommand shows reintegration review details for an inactive preserved
   }
 
   const output = writes.join("");
+  assert.match(output, /Summary: completed run preserved for operator review before merge\./);
+  assert.match(output, /Artifacts: branch=present, worktree=present, log=present, spec=present/);
   assert.match(output, /Review: needs-review/);
   assert.match(output, /Why: run finished successfully and preserved work still needs operator review/);
+  assert.match(output, /Next: review-merge/);
+});
+
+test("statusCommand keeps the exact-session summary aligned with blocked merge history", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-selected-blocked");
+
+  await git(repoDir, ["branch", "agents/agent-selected-blocked"]);
+  await mkdir(worktreePath, { recursive: true });
+  await writeFile(getSessionLogPath(repoDir, "agent-selected-blocked", "session-selected-blocked").path, "Turn completed.\n", "utf8");
+  await writeTaskSpec({
+    projectRoot: repoDir,
+    sessionId: "session-selected-blocked",
+    agentName: "agent-selected-blocked",
+    task: "Retry the blocked merge after review.",
+    createdAt: "2026-03-10T11:12:00.000Z",
+    branch: "agents/agent-selected-blocked",
+    baseBranch: "main",
+    worktreePath
+  });
+  await createSession(repoDir, {
+    id: "session-selected-blocked",
+    agentName: "agent-selected-blocked",
+    branch: "agents/agent-selected-blocked",
+    worktreePath,
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-10T11:12:00.000Z",
+    updatedAt: "2026-03-10T11:17:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-selected-blocked",
+    sessionId: "session-selected-blocked",
+    agentName: "agent-selected-blocked",
+    taskSummary: "Retry the blocked merge after review.",
+    state: "finished",
+    outcome: "completed",
+    createdAt: "2026-03-10T11:12:00.000Z",
+    updatedAt: "2026-03-10T11:17:00.000Z",
+    finishedAt: "2026-03-10T11:17:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-selected-blocked",
+    agentName: "agent-selected-blocked",
+    eventType: "merge.failed",
+    payload: {
+      reason: "merge_conflict",
+      branch: "agents/agent-selected-blocked",
+      canonicalBranch: "main"
+    },
+    createdAt: "2026-03-10T11:18:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-selected-blocked",
+      isRuntimeAlive: () => false,
+      getCleanupReadiness: async () => "abandon-only:not-merged",
+      now: () => "2026-03-10T11:20:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Summary: reintegration is blocked by the previous merge failure\./);
+  assert.match(output, /Review: blocked/);
+  assert.match(output, /Why: previous merge attempt failed and reintegration is currently blocked/);
   assert.match(output, /Next: review-merge/);
 });
 
@@ -1032,12 +1125,26 @@ test("statusCommand shows ready reintegration details for a cleanup-ready select
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-selected-ready");
 
+  await git(repoDir, ["branch", "agents/agent-selected-ready"]);
+  await mkdir(worktreePath, { recursive: true });
+  await writeFile(getSessionLogPath(repoDir, "agent-selected-ready", "session-selected-ready").path, "Turn completed.\n", "utf8");
+  await writeTaskSpec({
+    projectRoot: repoDir,
+    sessionId: "session-selected-ready",
+    agentName: "agent-selected-ready",
+    task: "Clean up the merged session artifacts.",
+    createdAt: "2026-03-10T11:20:00.000Z",
+    branch: "agents/agent-selected-ready",
+    baseBranch: "main",
+    worktreePath
+  });
   await createSession(repoDir, {
     id: "session-selected-ready",
     agentName: "agent-selected-ready",
     branch: "agents/agent-selected-ready",
-    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-selected-ready"),
+    worktreePath,
     state: "stopped",
     runtimePid: null,
     createdAt: "2026-03-10T11:20:00.000Z",
@@ -1074,9 +1181,72 @@ test("statusCommand shows ready reintegration details for a cleanup-ready select
   }
 
   const output = writes.join("");
+  assert.match(output, /Summary: merge integrated; preserved artifacts can be cleaned up when ready\./);
+  assert.match(output, /Artifacts: branch=present, worktree=present, log=present, spec=present/);
   assert.match(output, /Review: ready/);
   assert.match(output, /Why: merge is already integrated and cleanup is the next valid action/);
   assert.match(output, /Next: cleanup/);
+});
+
+test("statusCommand shows post-closure summary and artifact history for a closed selected session", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  await writeTaskSpec({
+    projectRoot: repoDir,
+    sessionId: "session-selected-closed",
+    agentName: "agent-selected-closed",
+    task: "Close the merged session after validation.",
+    createdAt: "2026-03-10T11:40:00.000Z",
+    branch: "agents/agent-selected-closed",
+    baseBranch: "main",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-selected-closed")
+  });
+  await createSession(repoDir, {
+    id: "session-selected-closed",
+    agentName: "agent-selected-closed",
+    branch: "agents/agent-selected-closed",
+    worktreePath: join(repoDir, ".switchyard", "worktrees", "agent-selected-closed"),
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-10T11:40:00.000Z",
+    updatedAt: "2026-03-10T11:45:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-selected-closed",
+    sessionId: "session-selected-closed",
+    agentName: "agent-selected-closed",
+    taskSummary: "Close the merged session after validation.",
+    state: "finished",
+    outcome: "merged",
+    createdAt: "2026-03-10T11:40:00.000Z",
+    updatedAt: "2026-03-10T11:45:00.000Z",
+    finishedAt: "2026-03-10T11:45:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-selected-closed",
+      isRuntimeAlive: () => false,
+      getCleanupReadiness: async () => "ready:absent",
+      now: () => "2026-03-10T11:50:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Summary: session closed after merge cleanup; preserved runtime artifacts are already gone\./);
+  assert.match(output, /Artifacts: branch=absent, worktree=absent, log=absent, spec=present/);
+  assert.match(output, /Next: done/);
 });
 
 test("statusCommand omits reintegration review details when they do not meaningfully apply", async () => {
