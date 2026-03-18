@@ -29,7 +29,8 @@ That is a product direction, not a license to broaden scope immediately.
 
 The current proving path is still narrower:
 - make the single-repo, single-agent operator loop reliable first
-- add only the smallest next capability that removes a real operator blind spot
+- keep the bounded runtime baseline stable enough for the current phase unless a real failure disproves it
+- drive the current active milestone through several narrow slices instead of reopening the plan after every small gap
 - prefer durable CLI-visible workflow steps over hidden automation
 - earn broader scope instead of copying broader scope prematurely
 
@@ -201,23 +202,26 @@ These are the current project decisions and should be treated as the default unt
 - `sy sling` takes one explicit task instruction via `--task` or `--task-file`, writes `.switchyard/specs/<agent>-<session>.md`, and forwards that task to Codex as the initial prompt
 - session records retain the original canonical branch as `baseBranch` so merge and merged-cleanup decisions do not silently retarget when config drifts later
 - the first merge workflow is manual-first: stop without cleanup, review the preserved branch, use the narrow `sy merge` path or explicit git to merge into the canonical branch, then clean up
+- the current active milestone is reintegration and operator closure: make completed work easier to review, merge, abandon, and understand after closure
 - broader runtime abstraction is deferred until the core lifecycle is real
 - the long-term aim is still to surpass Overstory, but only by stacking proven slices on top of a reliable core loop
 
 ## Open Decisions
 
-The current loop does have one active product decision now:
-- the next named slice should be one small operator-visible blind spot exposed by the now-proved two-session workflow
+The current loop no longer has an open runtime question by default.
 
-No broader runtime or UI decision is open yet beyond that blind-spot slice.
+The active product question now is:
+- which narrow slice most directly advances the reintegration and operator-closure milestone
+
+No broader runtime or UI decision is open unless the current bounded workflow fails in a way that the existing model cannot support.
 
 ## Suggested Order For Our Next Sessions
 
-1. Name one small operator-visible blind spot inside the proved two-session workflow.
-2. Improve diagnostics only where they directly support that named blind spot.
-3. Keep run tracking accurate as the current concurrent workflow stays under use.
-4. Add tests and docs updates that reduce risk in the current operator loop.
-5. Revisit broader scope only after the current loop stops being the main constraint.
+1. Keep the bounded `codex exec --json` runtime as the stable v0 baseline instead of reopening runtime scope by default.
+2. Improve reintegration decision support so operators can tell what is ready, blocked, risky, or needs review after a task finishes.
+3. Improve completed-task review and closure so finished work can be merged or abandoned with less ambiguity.
+4. Preserve enough post-closure history that operators can still understand what happened after cleanup.
+5. Revisit broader scope only after the reintegration milestone stops being the main constraint.
 
 ## Success Criteria
 

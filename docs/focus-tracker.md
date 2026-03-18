@@ -10,6 +10,9 @@ Canonical implementation-slice counts now live in [docs/slice-ledger.md](slice-l
 
 The current target is a reliable single-repo, single-agent operator loop with durable state, enough CLI inspection to understand what happened, and a narrow reintegration path that stays operator-visible.
 
+The current active milestone inside that target is:
+- reintegration and operator closure
+
 This is the proving path for the broader north star:
 - one operator can delegate work to several coding agents in one repository without losing track of task ownership, current state, communication, or reintegration status
 
@@ -101,18 +104,19 @@ Current planning state:
 - detached runtime observability through bounded `codex exec --json` launch plus readable structured `sy logs <session>` is now complete
 - natural task completion is now a truthful foreground reconciliation path in `sy status`
 - fresh temp-repo manual smoke with the real `sy` entrypoint and Codex CLI now also proves the default runtime command plus dirty-worktree cleanup refusal and explicit-abandon cleanup behavior end to end
-- the next slice should stay narrower than live attach or tmux and should be named only after the next operator-visible gap is reproduced
-- treat raw event visibility as supporting detail, not as the primary answer to "what happened to this task?"
+- the bounded runtime baseline is now stable enough for the current phase and should not be reopened by default
+- the project should now advance the reintegration/operator-closure milestone through several narrow slices
+- treat runtime observability and raw event visibility as supporting detail, not as the primary answer to "how does this session get reviewed and closed?"
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
 - preserve the bounded Codex exec runtime as the narrow baseline instead of broadening into interactive control
 - preserve writable-by-default bounded Codex exec launches as the narrow baseline unless the operator explicitly overrides sandboxing
-- improve operator diagnostics through narrow readable Codex JSONL rendering where the raw transcript path proved insufficient
-- keep task ownership visible in the all-session view so concurrent sessions do not require immediate drilldown
-- keep latest run state and terminal outcome trustworthy as concurrent sessions overlap
-- improve operator inspection only when it directly supports the concurrent workflow
+- improve reintegration decision support after a task finishes
+- improve completed-task review and closure paths so finished work is easier to merge or abandon
+- preserve enough durable session history that closed work is still understandable later
+- improve operator inspection only when it directly supports the concurrent workflow or the reintegration milestone
 - harden lifecycle behavior only when a reproduced failure blocks the current loop
 - add tests that reduce risk in the core operator loop
 - update docs when project state or scope changes
@@ -150,8 +154,8 @@ Use this rough project view instead of one flat percentage:
 - run-tracking visibility: now minimally real
 - concurrent multi-session proving workflow: now minimally real
 - detached runtime observability through transcript capture and `sy logs`: now minimally real
+- reintegration/operator closure: active milestone, still intentionally narrow, not yet complete
 - v0 hardening: exception-only, not the default mode
-- merge/reintegration workflow: minimally real, still intentionally narrow
 - broader long-term vision: intended, but earned in stages rather than copied all at once
 
 ## Exit Rule For A Session
