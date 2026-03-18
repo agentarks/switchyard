@@ -72,7 +72,16 @@ Add a regression that keeps one session active and verifies:
 - the active row renders `-` in `REVIEW`
 - `NEXT` stays on the existing active-session value such as `wait` or `mail`
 
-- [ ] **Step 4: Add the blocked and risky table tests**
+- [ ] **Step 4: Add the already-closed omission test**
+
+Add a regression for a session whose cleanup readiness is already `ready:absent` and whose current `NEXT` value is therefore `done`.
+
+Assert that:
+- the row renders `-` in `REVIEW`
+- the existing `NEXT` value stays `done`
+- the slice does not surface a reintegration assessment once closure is already complete
+
+- [ ] **Step 5: Add the blocked and risky table tests**
 
 Add two focused regressions:
 
@@ -90,7 +99,7 @@ test("statusCommand marks a preserved session risky when it finished in a warnin
 });
 ```
 
-- [ ] **Step 5: Run the targeted status tests to verify they fail**
+- [ ] **Step 6: Run the targeted status tests to verify they fail**
 
 Run:
 
@@ -102,7 +111,7 @@ Expected:
 - FAIL because the `REVIEW` column and assessment logic do not exist yet
 - the new failures point at the added table expectations rather than unrelated setup mistakes
 
-- [ ] **Step 6: Commit the failing all-session coverage**
+- [ ] **Step 7: Commit the failing all-session coverage**
 
 ```bash
 git add src/commands/status.test.ts
@@ -139,14 +148,23 @@ Add a selected-session regression that keeps the session active and asserts:
 - no `Why:` line is printed
 - the existing `Next:` line still appears unchanged
 
-- [ ] **Step 4: Add the assessment-unavailable safety test**
+- [ ] **Step 4: Add the already-closed omission test for selected status**
+
+Add a selected-session regression for a session whose cleanup readiness is `ready:absent` and whose current `Next:` line is `done`.
+
+Assert that:
+- no `Review:` line is printed
+- no `Why:` line is printed
+- the existing `Next: done` line still appears unchanged
+
+- [ ] **Step 5: Add the assessment-unavailable safety test**
 
 Add a regression that forces cleanup-readiness evaluation to return `?` or otherwise prevents a conservative assessment, then assert:
 - the all-session row renders `-` in `REVIEW`
 - the selected-session output does not invent a `Review:` or `Why:` block
 - the existing `Cleanup`, `Next`, and `Recent` output still render
 
-- [ ] **Step 5: Run the targeted tests again to verify the selected-session cases fail**
+- [ ] **Step 6: Run the targeted tests again to verify the selected-session cases fail**
 
 Run:
 
@@ -158,7 +176,7 @@ Expected:
 - FAIL on the new review-block expectations
 - existing `Next:` and `Recent:` assertions still pass until the review block is added
 
-- [ ] **Step 6: Commit the failing selected-session coverage**
+- [ ] **Step 7: Commit the failing selected-session coverage**
 
 ```bash
 git add src/commands/status.test.ts
@@ -209,21 +227,24 @@ Keep it pure and base it only on already-derived status inputs. Do not add a new
 Implement the helper with this order:
 
 1. return `undefined` for active sessions
-2. return `undefined` when supporting data is too incomplete to justify a conservative answer
-3. return `blocked` for known hard blockers, such as:
+2. return `undefined` for sessions where reintegration no longer meaningfully applies, such as:
+   - `cleanup === "ready:absent"`
+   - any row whose current `followUp` is already `done`
+3. return `undefined` when supporting data is too incomplete to justify a conservative answer
+4. return `blocked` for known hard blockers, such as:
    - recent `merge.failed`
    - cleanup labels like `abandon-only:branch-missing`, `abandon-only:legacy`, `abandon-only:no-branch`, `abandon-only:worktree-inspection-failed`, or `abandon-only:worktree-missing`
-4. return `ready` only for closure-ready states already justified by the current manual-first workflow, such as:
+5. return `ready` only for closure-ready states already justified by the current manual-first workflow, such as:
    - `cleanup === "ready:merged"`
-   - `cleanup === "ready:absent"` when the session is already fully closed
-5. return `risky` for warning states that still need cautious inspection, such as:
+6. return `risky` for warning states that still need cautious inspection, such as:
    - latest run outcome `failed` or `launch_failed`
    - cleanup label `abandon-only:worktree-dirty`
-6. return `needs-review` for the ordinary finished-but-unmerged preserved-session case, including:
+7. return `needs-review` for the ordinary finished-but-unmerged preserved-session case, including:
    - `cleanup === "abandon-only:not-merged"`
    - otherwise-successful preserved work that still needs manual review
 
 Keep `ready` narrow and conservative. Ordinary completed-but-unmerged sessions must stay `needs-review`.
+Already-closed `done` rows must not gain a reintegration review label.
 
 - [ ] **Step 4: Generate short deterministic reason strings**
 
@@ -371,8 +392,8 @@ So they no longer describe reintegration decision support as the next undone sli
 - [ ] **Step 4: Record the completed slice in the ledger**
 
 Update `docs/slice-ledger.md` by:
-- increasing the headline total from `15` to `16`
-- adding a new `S16` row for `reintegration-decision-support`
+- increasing the headline total by one from whatever value the ledger has when the implementation lands
+- adding the next sequential row for `reintegration-decision-support`
 - linking this plan, the merged design spec, and the implementation PR once it exists
 
 - [ ] **Step 5: Commit the doc updates**
@@ -418,20 +439,35 @@ Expected:
 - PASS
 - if unrelated pre-existing failures remain, capture them explicitly before claiming the slice complete
 
-- [ ] **Step 3: Verify the new contract wording mechanically**
+- [ ] **Step 3: Verify the milestone docs moved on from this slice**
 
 Run:
 
 ```bash
-rg -n 'REVIEW|needs-review|Review:|Why:' docs/cli-contract.md docs/current-state.md docs/next-steps.md docs/backlog.md docs/focus-tracker.md docs/roadmap.md docs/slice-ledger.md
+rg -n '^1\. Completed-task review summaries|^2\. Session closure and post-closure history' docs/backlog.md
+rg -n 'completed-task review summaries|session closure and post-closure history' docs/next-steps.md docs/focus-tracker.md docs/roadmap.md
 ```
 
 Expected:
-- contract and state docs mention the new review assessment intentionally
-- planning docs no longer treat reintegration decision support as the next undone slice
-- the ledger contains the new `S16` row
+- `docs/backlog.md` now promotes the next categories after this slice to the top of `Now`
+- the other milestone docs now point at completed-task review and closure/history as the near-term follow-up
 
-- [ ] **Step 4: Review the final diff**
+- [ ] **Step 4: Verify the new status contract and ledger mechanically**
+
+Run:
+
+```bash
+rg -n 'REVIEW|needs-review|Review:|Why:' docs/cli-contract.md docs/current-state.md
+rg -n 'reintegration-decision-support' docs/slice-ledger.md
+git diff -- docs/slice-ledger.md
+```
+
+Expected:
+- contract and current-state docs mention the new review assessment intentionally
+- the ledger contains one new `reintegration-decision-support` row
+- the ledger diff shows the headline total changed and one new sequential row was added relative to the pre-edit state
+
+- [ ] **Step 5: Review the final diff**
 
 Run:
 
@@ -443,7 +479,7 @@ Expected:
 - status implementation, status tests, and the intended docs only
 - no unrelated source files changed
 
-- [ ] **Step 5: Commit the verification-ready final state**
+- [ ] **Step 6: Commit the verification-ready final state**
 
 ```bash
 git add src/commands/status.ts src/commands/status.test.ts docs/cli-contract.md docs/current-state.md docs/next-steps.md docs/backlog.md docs/focus-tracker.md docs/roadmap.md docs/slice-ledger.md
