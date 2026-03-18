@@ -222,7 +222,7 @@ Important risks to design around:
 
 ## Recommended Implementation Strategy
 
-Build vertical slices, not all subsystems at once:
+Build milestone bundles around the operator workflow, not all subsystems at once:
 
 1. config + init
 2. session DB + status

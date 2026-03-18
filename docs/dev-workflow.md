@@ -4,7 +4,7 @@ This file is the recommended owner workflow for a normal Switchyard coding sessi
 
 ## Start Of Session
 
-1. Read:
+1. At the start of a milestone bundle, or when scope changes, read:
    - `docs/current-state.md`
    - `docs/next-steps.md`
    - `docs/backlog.md`
@@ -18,20 +18,23 @@ This file is the recommended owner workflow for a normal Switchyard coding sessi
    - `npm install` if dependencies changed
    - `npm run check`
 
-If `npm run check` does not pass at session start, fix or understand that first before expanding scope.
+4. Write or load one active execution checklist for the milestone bundle.
+
+If `npm run check` does not pass at milestone start, fix or understand that first before expanding scope.
 
 ## During The Session
 
 Use this order:
-1. make the smallest change that advances the current slice
+1. make the next planned change that advances the active milestone bundle
 2. add or update tests
-3. run the relevant checks
-4. update docs if the project state changed
+3. run the relevant checks at bundle checkpoints
+4. update docs when project state or workflow meaning changes
 
 Default rule:
 - if you fix a bug, add a regression test
 - if you change behavior, update the CLI contract or current-state docs
 - if you make a durable technical choice, update or add an ADR
+- do not stop to re-triage the next tiny task when the active milestone bundle is already defined
 
 ## End Of Session
 
@@ -39,8 +42,8 @@ Before you consider the session done:
 1. run `npm run check`
 2. review `git diff`
 3. update the docs that changed in meaning
-4. confirm the next recommended task still makes sense
-5. send a PR for the completed feature slice
+4. confirm the current milestone bundle is complete or name the remaining checklist items
+5. send a PR for the completed milestone bundle
 6. include example output in the PR description for any operator-facing behavior or CLI output you changed
 
 ## If You Only Have 30-60 Minutes
@@ -51,7 +54,7 @@ Prefer one of these:
 - replace one placeholder behavior with a minimal real behavior
 - update one decision doc after a real implementation choice
 
-Do not start a broad new subsystem unless you can finish a vertical slice of it.
+Do not start a broad new subsystem unless you can keep it inside the active milestone bundle.
 
 ## Scope Control
 

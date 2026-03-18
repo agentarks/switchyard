@@ -8,7 +8,7 @@ Use these rules when deciding whether to add or defer something:
 - borrow mechanics from Overstory, not product breadth
 - prefer explicit local state over hidden automation
 - keep the MVP focused on `init`, `sling`, `status`, `mail`, and `stop`
-- build vertical slices that become operator-usable early
+- build milestone-bundled changes that become operator-usable early
 - add regression tests for git, worktree, and path edge cases as soon as they appear
 
 ## Development Commands
@@ -27,6 +27,7 @@ If a change affects CLI behavior, run `npm run check` before closing the session
 - Prefer stable Node APIs in core paths. Experimental APIs need a strong reason and should be isolated.
 - Keep CLI commands operator-first: explicit inputs, explicit outputs, explicit failure modes.
 - When fixing a bug, add or update a regression test in the same session if possible.
+- Once the active milestone is clear, batch adjacent in-scope work instead of reopening "what is the next slice?" before every change.
 
 ## Source Layout Direction
 
@@ -58,8 +59,9 @@ When the project state changes materially, update these files:
 ## Pull Request Expectations
 
 - keep PRs milestone-scoped
-- prefer one vertical slice per PR
-- after implementing a feature slice, send a PR instead of batching unrelated follow-up work locally
+- prefer one reviewable milestone bundle per PR, not one tiny slice per PR
+- batch adjacent in-scope follow-up work when it shares the same milestone, files, and operator workflow
+- do not batch unrelated work that changes the milestone or broadens scope
 - include example output in every PR for the operator-facing behavior you changed, especially for CLI output
 - call out any new assumptions about git, tmux, SQLite, or Codex runtime behavior
 - include file references and concrete behavior changes in review summaries

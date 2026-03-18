@@ -1,26 +1,22 @@
 # Backlog
 
-This is the ordered backlog for the next several sessions. Keep items small enough to finish in one focused pass.
+This is the ordered backlog for the next several sessions. Execute it as milestone bundles, not one tiny slice per PR.
 
 ## Now
 
-1. Completed-task review summaries
-
-2. Session closure and post-closure history
-
-3. Additional reintegration hardening only where the new review assessment still creates operator ambiguity
+1. Additional reintegration hardening only where the new review assessment, summary, or artifact history still creates operator ambiguity
 
 ## Next
 
-4. Broader surface area only if a concrete operator workflow now requires it
+2. Broader surface area only if a concrete operator workflow now requires it
 
 ## After That
 
-5. Dashboard or TUI work, if still justified after the CLI reintegration milestone is complete
+3. Dashboard or TUI work, if still justified after the CLI reintegration milestone is complete
 
 ## Then
 
-6. Multiple runtimes beyond Codex, if still justified
+4. Multiple runtimes beyond Codex, if still justified
 
 ## Later
 

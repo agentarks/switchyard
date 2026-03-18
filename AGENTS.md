@@ -15,7 +15,8 @@ The current target is a reliable single-agent operator loop:
 - `sy mail check`
 - `sy mail list`
 
-Favor small vertical slices that make this loop more reliable or easier to understand.
+Favor milestone-bundled work that makes this loop more reliable or easier to understand.
+Batch adjacent in-scope changes when they share code, tests, and operator workflow meaning.
 
 ## Source Of Truth
 
@@ -46,15 +47,16 @@ Defer unless explicitly requested:
 ## Working Rules
 
 - Keep CLI behavior operator-first: explicit inputs, explicit outputs, explicit failure modes.
-- Prefer narrow, reviewable changes over speculative abstractions.
+- Prefer coherent milestone-bundled changes over speculative abstractions.
+- Do not re-triage the next tiny slice once the active milestone bundle is already clear.
 - If you change behavior, add or update tests in the same session when practical.
 - If you change CLI behavior or output, update the relevant docs.
-- Run `npm run check` before closing a feature slice when behavior changed.
+- Run `npm run check` before closing a milestone bundle when behavior changed.
 
 ## Pull Request Rules
 
-- After implementing each feature slice, send a PR instead of leaving the work only local.
-- Keep PRs milestone-scoped and prefer one vertical slice per PR.
+- After implementing each milestone bundle, send a PR instead of leaving the work only local.
+- Keep PRs milestone-scoped and batch adjacent in-scope work into one reviewable PR when it advances the same operator workflow step.
 - Every PR that changes operator-facing behavior must include example output in the PR description.
 - Call out concrete behavior changes, file references, assumptions, and any remaining risks.
 
@@ -62,6 +64,7 @@ Defer unless explicitly requested:
 
 When uncertain:
 - choose the smaller change
+- choose the smaller coherent bundle when several adjacent tasks belong together
 - choose the more operator-readable output
 - choose the path that improves the current repo-local lifecycle
 - defer broader systems until the docs explicitly move the scope

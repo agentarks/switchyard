@@ -83,6 +83,8 @@ This repository now has a minimal but real operator loop for one repo-local Code
 - status output that now also surfaces one derived next follow-up signal per session so concurrent delegated work stays actionable without decoding unread-mail, run, and cleanup columns by hand
 - status output that now also surfaces a conservative reintegration review assessment per inactive session in a `REVIEW` column, using `ready`, `needs-review`, `blocked`, `risky`, or `-`
 - exact-session status output now also surfaces `Review:` plus `Why:` lines for inactive sessions when reintegration meaningfully applies, while keeping the manual-first `Next:` vocabulary unchanged
+- exact-session status output now also surfaces a concise `Summary:` line for preserved review, cleanup-ready, and already-closed sessions
+- exact-session status output now also surfaces an `Artifacts:` line that preserves post-closure history by telling the operator whether the branch, worktree, transcript log, and task spec still exist
 - status output that now also orders all-session rows by current follow-up priority before recency so concurrent mail, inspection, and reintegration work surfaces ahead of passive wait states
 - status output that now also treats the `UPDATED` column and same-bucket freshness ordering as the latest operator-visible activity time, so newer merge, mail, and runtime signals do not stay hidden behind stale session-row timestamps
 - status output now also derives a passive stalled-session hint from runtime-side progress and inbound non-operator mail without mutating durable session state
@@ -119,8 +121,10 @@ Current planning note:
 - the bounded `codex exec --json` runtime slice is now complete in the current operator loop, with `workspace-write` as the default launch sandbox
 - natural task completion is now a foreground reconciliation responsibility of `sy status`, while explicit cancellation stays owned by `sy stop`
 - reintegration decision support is now materially real in `sy status` through compact all-session review visibility plus selected-session `Review` and `Why` explanations
+- completed-task review, closure state, and post-closure artifact history are now materially real in selected-session `sy status` through exact-session `Summary:` plus `Artifacts:` output
 - the bounded runtime baseline is now stable enough for the current phase and should not be reopened by default
-- the current planning frame is reintegration and operator closure, so the next slices should focus on completed-task review summaries, session closure, post-closure history, and only narrow reintegration hardening where the new assessment still leaves ambiguity
+- the project should now execute remaining reintegration work as milestone bundles instead of repeated tiny-slice triage
+- the next follow-up should be only narrow reintegration hardening where the new exact-session summary or review assessment still leaves operator ambiguity
 - fresh manual smoke validation in a new temp repo with the real `sy` entrypoint and Codex CLI confirmed the default `Runtime: codex exec --json --sandbox workspace-write` launch output, active `Run: active` plus `Cleanup: stop-then:merged` status, natural completion reconciliation to `State: stopped` with `Run: finished:completed` and `Cleanup: abandon-only:worktree-dirty`, fail-closed dirty-worktree cleanup refusal without `--abandon`, and successful explicit-abandon cleanup; the Codex transcript also showed repeated `refresh_token_reused` auth errors, but the task still completed and Switchyard's lifecycle semantics held
 
 ## What Does Not Exist Yet
@@ -164,7 +168,7 @@ Current planning note:
 - `sy status [session]`
   - loads config and session state
   - optionally resolves one session by id or normalized agent name and renders only that session
-  - when a selector is present, prints a small detail block ahead of the one-row table so operators can inspect stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, launch spec path, unread-mail count, cleanup-readiness label, latest run summary, one derived next follow-up signal, and the full recent-event summary without reading the database
+  - when a selector is present, prints a small detail block ahead of the one-row table so operators can inspect stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, launch spec path, unread-mail count, cleanup-readiness label, latest run summary, one derived next follow-up signal, one concise reintegration/closure `Summary:`, one artifact-presence `Artifacts:` line, and the full recent-event summary without reading the database
   - when reintegration meaningfully applies for an inactive selected session, that detail block also prints `Review:` plus `Why:` ahead of `Next:`
   - supports `--task` with an exact selector to print the full stored launch instruction from `.switchyard/specs/`
   - fails explicitly when `--task` is used without an exact selector or when the stored task text is unavailable
