@@ -34,34 +34,35 @@ That means "start smaller" is a sequencing choice, not the end state.
 
 ## Near-Term Rule
 
-The next sessions should optimize for a single reliable operator workflow:
+The next sessions should optimize for a single reliable operator workflow that now runs through reintegration and closure:
 1. initialize a repo
 2. spawn one Codex agent in a worktree
 3. track it durably
 4. inspect status
 5. inspect recent events
-6. stop it cleanly
-7. exchange one durable mail message
+6. review what a finished task produced
+7. merge or abandon it cleanly
+8. retain enough history to understand the session after closure
 
 If a change does not move that workflow forward or reduce meaningful risk inside it, it is probably too early.
 
 That rule exists to build a stronger base for later breadth, not to permanently cap the product at one agent forever.
 
-## Recommended Next Slice
+## Current Milestone
 
-The run-tracking slice and the first concurrent proving workflow are now in place.
+The bounded runtime baseline is now stable enough for the current phase.
 
 What to do next:
-- implement the newly named detached-runtime observability slice
-- keep it narrow: durable raw transcript capture plus `sy logs <session>`
-- avoid broadening immediately into live attach, tmux, or transcript parsing
+- finish reintegration and operator closure for the current v0 workflow
+- keep runtime work in a supporting role unless a concrete failure disproves the current bounded model
+- choose narrow slices that move the operator from `task finished` to `session closed`
 
 ## Order After That
 
-1. improve diagnostics only if operator workflows require them
-2. widen the multi-agent workflow only after a concrete blind spot proves the current slice is no longer enough
-3. add broader runtime breadth only if the current Codex-first loop stops being the right constraint
-4. revisit automation only after the operator can clearly understand and recover the explicit workflow
+1. improve reintegration decision support
+2. improve completed-task review summaries and closure paths
+3. preserve enough durable post-closure history that finished sessions stay understandable
+4. revisit broader runtime breadth or automation only after the reintegration milestone stops being the main constraint
 
 ## Explicitly Deferred
 

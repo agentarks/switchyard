@@ -116,7 +116,8 @@ This repository now has a minimal but real operator loop for one repo-local Code
 Current planning note:
 - the bounded `codex exec --json` runtime slice is now complete in the current operator loop, with `workspace-write` as the default launch sandbox
 - natural task completion is now a foreground reconciliation responsibility of `sy status`, while explicit cancellation stays owned by `sy stop`
-- the next slice should be chosen from the next concrete operator-visible blind spot instead of broadening runtime scope by default
+- the bounded runtime baseline is now stable enough for the current phase and should not be reopened by default
+- the current planning frame is reintegration and operator closure, so the next slices should make finished work easier to review, merge, abandon, and understand after closure
 - fresh manual smoke validation in a new temp repo with the real `sy` entrypoint and Codex CLI confirmed the default `Runtime: codex exec --json --sandbox workspace-write` launch output, active `Run: active` plus `Cleanup: stop-then:merged` status, natural completion reconciliation to `State: stopped` with `Run: finished:completed` and `Cleanup: abandon-only:worktree-dirty`, fail-closed dirty-worktree cleanup refusal without `--abandon`, and successful explicit-abandon cleanup; the Codex transcript also showed repeated `refresh_token_reused` auth errors, but the task still completed and Switchyard's lifecycle semantics held
 
 ## What Does Not Exist Yet
@@ -288,9 +289,9 @@ The first concurrent proving workflow is now minimally real:
 - treat both the run-tracking slice and the first concurrent proving slice as complete
 
 The recommended next task is:
-- choose the next small operator-visible blind spot from the proved concurrent workflow
-- keep the runtime baseline narrow and resist broadening into attach or tmux-backed control without a reproduced need
-- update scope again only when a concrete gap changes the operator workflow meaningfully
+- advance the reintegration and operator-closure milestone with one narrow slice
+- keep the runtime baseline narrow and resist broadening into attach or tmux-backed control unless a real failure disproves the current bounded model
+- prefer slices that make finished work easier to review, merge, abandon, or understand after closure
 
 ## How To Use This File
 
@@ -298,6 +299,6 @@ Update this document whenever one of these changes:
 - a placeholder command becomes real
 - a new subsystem starts owning persistent state
 - an important architectural assumption is changed
-- the recommended next task changes
+- the active milestone or recommended next task changes
 
 For scope control across sessions, keep `docs/focus-tracker.md` aligned with the real implementation state.
