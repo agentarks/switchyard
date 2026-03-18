@@ -67,6 +67,7 @@ Recommended values:
 
 This assessment should stay compact enough that the all-session table remains readable.
 It is a routing signal, not a narrative explanation.
+Active sessions should not render this assessment in the all-session table.
 
 ### Exact-session `sy status <session>`
 
@@ -78,9 +79,20 @@ The exact-session output should gain a review block that answers:
 Recommended shape:
 - `Review: ready|needs-review|blocked|risky`
 - `Why: ...`
-- `Next: merge|inspect|resolve|abandon|wait`
+- `Next: <existing sy status follow-up>`
+
+The `Next` line must reuse the existing `sy status` follow-up vocabulary and ordering semantics:
+- `mail`
+- `inspect`
+- `review-merge`
+- `cleanup`
+- `wait`
+- `done`
+
+This slice may add a new reintegration assessment, but it should not invent a second next-action vocabulary.
 
 This should sit alongside the current exact-session status detail rather than replacing existing lifecycle, run, or recent-event information.
+If the session is still active, the exact-session output should omit the review block entirely rather than render a not-applicable variant.
 
 ## Assessment Semantics
 
@@ -92,12 +104,12 @@ Use when Switchyard can already see enough evidence that the session is closure-
 
 Examples:
 - session is inactive
-- latest run finished successfully
+- preserved work has already reached the closure-ready point in the current manual-first flow, such as cleanup being the next valid action
 - no known merge or cleanup blocker is present
 - no higher-priority unresolved follow-up remains
 
 This should still be conservative.
-If the system cannot justify `ready` clearly, prefer `needs-review`.
+Ordinary completed-but-unmerged sessions should not be labeled `ready`; they should remain `needs-review` until the operator has reviewed them or the current explicit workflow can justify the next closure step clearly.
 
 ### `needs-review`
 
@@ -149,13 +161,16 @@ Apply these rules:
 
 1. Active sessions are not reintegration-ready
 - if the session is still running or starting, the reintegration answer should not imply merge readiness
-- the exact next action should remain `wait`, `mail`, or `inspect` according to existing status logic
+- the exact next action should remain the existing `sy status` follow-up according to current status logic
+- the all-session view should omit the reintegration assessment for active sessions
+- the exact-session view should omit the review block for active sessions
 
 2. Known hard blockers win
 - if current status logic already knows reintegration or cleanup is blocked, the review assessment should be `blocked`
 
 3. Conservative review beats optimistic readiness
-- when a session finished successfully but no hard blocker is known, prefer `needs-review` unless the existing workflow can justify `ready` clearly
+- when a session finished successfully but no hard blocker is known, prefer `needs-review`
+- only assign `ready` when the current manual-first workflow can already justify the next closure step clearly, such as cleanup-ready post-merge state
 
 4. The new review assessment should not erase existing lifecycle detail
 - the review block augments status output
@@ -194,9 +209,10 @@ Implementation guidance:
 Add focused coverage for:
 - all-session status renders the compact reintegration assessment for completed/preserved sessions
 - exact-session status renders the richer review block
-- active sessions do not get misleading reintegration-ready assessments
+- active sessions omit the assessment and review block entirely while keeping current follow-up behavior
 - known blockers map to `blocked`
-- normal finished sessions without blockers map conservatively to `needs-review` unless the chosen rule justifies `ready`
+- ordinary finished-but-unmerged sessions map conservatively to `needs-review`
+- cleanup-ready or otherwise closure-ready sessions map to `ready` only when the current manual-first workflow already justifies that answer
 - existing merge/cleanup failure context is reflected in the review block
 - the table remains readable and the new output does not displace higher-value lifecycle information
 
