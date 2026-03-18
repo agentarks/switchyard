@@ -835,6 +835,14 @@ function formatSelectedSessionSummary(rowContext: StatusRowContext): string {
     return "session still active; wait for completion or inspect logs and mail as needed.";
   }
 
+  if (rowContext.review?.label === "blocked") {
+    if (rowContext.review.reason === "previous merge attempt failed and reintegration is currently blocked") {
+      return "reintegration is blocked by the previous merge failure.";
+    }
+
+    return "reintegration is currently blocked; inspect the recorded failure context before proceeding.";
+  }
+
   if (rowContext.cleanup === "ready:absent" || rowContext.followUp === "done") {
     if (rowContext.latestRun?.outcome === "abandoned") {
       return "session closed after abandon cleanup; preserved runtime artifacts are already gone.";

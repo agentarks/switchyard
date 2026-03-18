@@ -1044,6 +1044,83 @@ test("statusCommand shows reintegration review details for an inactive preserved
   assert.match(output, /Next: review-merge/);
 });
 
+test("statusCommand keeps the exact-session summary aligned with blocked merge history", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const worktreePath = join(repoDir, ".switchyard", "worktrees", "agent-selected-blocked");
+
+  await git(repoDir, ["branch", "agents/agent-selected-blocked"]);
+  await mkdir(worktreePath, { recursive: true });
+  await writeFile(getSessionLogPath(repoDir, "agent-selected-blocked", "session-selected-blocked").path, "Turn completed.\n", "utf8");
+  await writeTaskSpec({
+    projectRoot: repoDir,
+    sessionId: "session-selected-blocked",
+    agentName: "agent-selected-blocked",
+    task: "Retry the blocked merge after review.",
+    createdAt: "2026-03-10T11:12:00.000Z",
+    branch: "agents/agent-selected-blocked",
+    baseBranch: "main",
+    worktreePath
+  });
+  await createSession(repoDir, {
+    id: "session-selected-blocked",
+    agentName: "agent-selected-blocked",
+    branch: "agents/agent-selected-blocked",
+    worktreePath,
+    state: "stopped",
+    runtimePid: null,
+    createdAt: "2026-03-10T11:12:00.000Z",
+    updatedAt: "2026-03-10T11:17:00.000Z"
+  });
+  await createRun(repoDir, {
+    id: "run-selected-blocked",
+    sessionId: "session-selected-blocked",
+    agentName: "agent-selected-blocked",
+    taskSummary: "Retry the blocked merge after review.",
+    state: "finished",
+    outcome: "completed",
+    createdAt: "2026-03-10T11:12:00.000Z",
+    updatedAt: "2026-03-10T11:17:00.000Z",
+    finishedAt: "2026-03-10T11:17:00.000Z"
+  });
+  await createEvent(repoDir, {
+    sessionId: "session-selected-blocked",
+    agentName: "agent-selected-blocked",
+    eventType: "merge.failed",
+    payload: {
+      reason: "merge_conflict",
+      branch: "agents/agent-selected-blocked",
+      canonicalBranch: "main"
+    },
+    createdAt: "2026-03-10T11:18:00.000Z"
+  });
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await statusCommand({
+      startDir: repoDir,
+      selector: "session-selected-blocked",
+      isRuntimeAlive: () => false,
+      getCleanupReadiness: async () => "abandon-only:not-merged",
+      now: () => "2026-03-10T11:20:00.000Z"
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+
+  const output = writes.join("");
+  assert.match(output, /Summary: reintegration is blocked by the previous merge failure\./);
+  assert.match(output, /Review: blocked/);
+  assert.match(output, /Why: previous merge attempt failed and reintegration is currently blocked/);
+  assert.match(output, /Next: review-merge/);
+});
+
 test("statusCommand shows ready reintegration details for a cleanup-ready selected session", async () => {
   const repoDir = await createInitializedRepo();
   const writes: string[] = [];

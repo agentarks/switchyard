@@ -298,9 +298,9 @@ The first concurrent proving workflow is now minimally real:
 - treat both the run-tracking slice and the first concurrent proving slice as complete
 
 The recommended next task is:
-- advance the reintegration and operator-closure milestone with one narrow slice
+- advance the reintegration and operator-closure milestone with the next coherent milestone bundle
 - keep the runtime baseline narrow and resist broadening into attach or tmux-backed control unless a real failure disproves the current bounded model
-- prefer slices that make finished work easier to review, merge, abandon, or understand after closure
+- prefer bundles that make finished work easier to review, merge, abandon, or understand after closure
 
 ## How To Use This File
 
