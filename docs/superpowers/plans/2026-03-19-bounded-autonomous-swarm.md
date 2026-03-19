@@ -10,11 +10,17 @@
 
 ---
 
+## Status
+
+Contingent future-state plan only.
+
+This document does not change the repo's current source of truth by itself. Until a separate direction-adoption PR lands and updates `AGENTS.md`, `PLAN.md`, and the planning docs, the active milestone remains the current reintegration/operator-closure work. Do not treat this file as the repo's new execution guide until Chunk 1 has landed as its own adopted bundle.
+
 This spec is larger than one normal PR. Execute it as the chunk sequence below, with one reviewable milestone bundle per chunk. Do not skip Chunk 1: the current repo docs still define a narrower single-agent/manual-first loop, so implementation should not outrun the source of truth.
 
 ## Chunk 1: Direction And Policy Reset
 
-### Task 1: Adopt the bounded-swarm direction in the source-of-truth docs
+### Task 1: Land the source-of-truth adoption bundle before activating this plan
 
 **Files:**
 - Modify: `AGENTS.md`
@@ -33,6 +39,7 @@ This spec is larger than one normal PR. Execute it as the chunk sequence below, 
 - [ ] **Step 1: Rewrite the project direction before touching runtime behavior**
 
 Update the source-of-truth docs so they consistently say:
+- until this adoption bundle lands, the current repo milestone remains reintegration/operator closure and this plan stays contingent rather than active
 - `sy sling` now means “start one bounded orchestration run,” not “launch one detached worker”
 - the near-term target is bounded autonomous swarm execution, not the reintegration-only hardening loop
 - `lead`, `scout`, `builder`, and `reviewer` are first-class roles
@@ -78,6 +85,7 @@ Cover at least:
 - creating one `lead` session linked to that run
 - storing child task records with parent/child relationships and file scopes
 - storing artifact references for prompt/spec, logs, branches, worktrees, and verification output
+- storing enough host checkpoint/lease state to resume an interrupted orchestration host without re-dispatching completed work
 - parsing and defaulting new config fields such as concurrency cap and merge policy
 - bootstrapping any new `.switchyard/` directories needed for objective specs or agent result envelopes
 
@@ -135,6 +143,7 @@ Create a new orchestration store module that persists:
 - top-level runs
 - task graph rows
 - artifact references
+- host checkpoint or lease metadata required for resume/recovery
 
 Keep `sessions.db` as the per-agent runtime table, but migrate it to carry:
 - `run_id`
@@ -261,6 +270,7 @@ Cover at least:
 - builder file scopes must not overlap
 - concurrency is capped by config
 - completed child results advance the task graph and persist run-scoped events
+- if the orchestration host dies after dispatch, the run can be resumed from durable state without re-running already-finished specialists
 - `sy stop <run-or-lead>` stops the full run and marks unfinished tasks truthfully
 
 - [ ] **Step 2: Run the targeted tests to verify they fail**
@@ -274,6 +284,7 @@ Expected: FAIL because there is no orchestration host or run-scoped stop/dispatc
 **Files:**
 - Create: `src/orchestration/host.ts`
 - Create: `src/orchestration/policy.ts`
+- Create: `src/orchestration/recovery.ts`
 - Create: `src/orchestration/result.ts`
 - Modify: `src/commands/sling.ts`
 - Modify: `src/commands/stop.ts`
@@ -292,6 +303,7 @@ The host should:
 - persist accepted tasks before spawning specialists
 - launch specialists only after their task rows, file scopes, and artifact paths are durable
 - reconcile child completion/failure back into the run state
+- persist enough host progress to resume an interrupted run from durable state
 
 - [ ] **Step 2: Make events and mail run-aware**
 
@@ -307,7 +319,15 @@ interface CreateEventInput {
 
 Do the same for mail, so agent-to-agent and operator-to-agent traffic can be rendered by run later without lossy joins.
 
-- [ ] **Step 3: Implement run-level stop semantics**
+- [ ] **Step 3: Implement the recovery and resume contract**
+
+Add one explicit resume path, for example `sy sling --resume <run-id>`, that:
+- reloads the durable run, task graph, artifact references, and live child-session state
+- resumes only unfinished orchestration work
+- re-enters composition, verification, or closure from the last durable checkpoint
+- fails explicitly when the stored state is insufficient to resume truthfully
+
+- [ ] **Step 4: Implement run-level stop semantics**
 
 `sy stop` should stop:
 - the whole run when the selector resolves to a run id or the lead session
@@ -315,7 +335,7 @@ Do the same for mail, so agent-to-agent and operator-to-agent traffic can be ren
 
 Persist truthful task/run outcomes instead of collapsing every interruption into one generic failure.
 
-- [ ] **Step 4: Run the targeted tests to verify they pass**
+- [ ] **Step 5: Run the targeted tests to verify they pass**
 
 Run: `npm test -- src/orchestration/host.test.ts src/commands/stop.test.ts src/events/store.test.ts src/mail/store.test.ts`
 
@@ -394,9 +414,80 @@ Run: `npm test -- src/orchestration/compose.test.ts src/orchestration/verify.tes
 
 Expected: PASS with truthful merge-ready, blocked, failed, and auto-merged outcomes.
 
-## Chunk 6: Operator Surfaces And End-To-End Proof
+## Chunk 6: Closure, Cleanup, And Post-Closure History
 
-### Task 10: Add failing tests for run-centric status, events, logs, and mail views
+### Task 10: Add failing tests for swarm cleanup, abandon, and post-closure history
+
+**Files:**
+- Create: `src/orchestration/cleanup.test.ts`
+- Modify: `src/commands/stop.test.ts`
+- Modify: `src/commands/status.test.ts`
+- Modify: `src/commands/merge.test.ts`
+- Test: `src/orchestration/cleanup.test.ts`
+- Test: `src/commands/stop.test.ts`
+- Test: `src/commands/status.test.ts`
+
+- [ ] **Step 1: Write failing tests for the new closure lifecycle**
+
+Cover at least:
+- safe cleanup of specialist worktrees after `merged` runs
+- safe cleanup of the lead integration worktree only after merge or explicit abandon
+- explicit `--cleanup --abandon` handling for unresolved swarm runs
+- partial cleanup failure visibility when one artifact is already missing or removal fails
+- exact-session and exact-run status retaining understandable post-closure artifact history after cleanup
+
+- [ ] **Step 2: Run the targeted tests to verify they fail**
+
+Run: `npm test -- src/orchestration/cleanup.test.ts src/commands/stop.test.ts src/commands/status.test.ts src/commands/merge.test.ts`
+
+Expected: FAIL because the swarm plan currently has no defined cleanup or post-closure contract for lead and specialist artifacts.
+
+### Task 11: Implement swarm closure, cleanup, and retained artifact history
+
+**Files:**
+- Create: `src/orchestration/cleanup.ts`
+- Modify: `src/commands/merge.ts`
+- Modify: `src/commands/status.ts`
+- Modify: `src/commands/stop.ts`
+- Modify: `src/orchestration/host.ts`
+- Modify: `src/orchestration/types.ts`
+- Modify: `src/sessions/cleanup.ts`
+- Test: `src/orchestration/cleanup.test.ts`
+- Test: `src/commands/status.test.ts`
+
+- [ ] **Step 1: Define the swarm closure rules explicitly**
+
+Specify which artifacts are:
+- preserved until merge or abandon
+- removable only after safe merge cleanup
+- retained as history even after physical cleanup, for example logs, spec paths, verification records, and artifact-presence summaries
+
+- [ ] **Step 2: Implement explicit cleanup and abandon behavior**
+
+Extend the current cleanup model so it can handle:
+- specialist worktrees and branches
+- the lead integration branch/worktree
+- durable artifact references for merged, abandoned, blocked, and failed runs
+
+The cleanup path must fail closed when it cannot confirm the safety of removing preserved swarm artifacts.
+
+- [ ] **Step 3: Keep post-closure inspection truthful**
+
+After cleanup, `sy status` should still explain:
+- what the run produced
+- whether it was merged or abandoned
+- which artifacts remain present versus only durably referenced
+- why cleanup failed when it did not complete cleanly
+
+- [ ] **Step 4: Run the targeted tests to verify they pass**
+
+Run: `npm test -- src/orchestration/cleanup.test.ts src/commands/stop.test.ts src/commands/status.test.ts src/commands/merge.test.ts`
+
+Expected: PASS with merged, abandoned, blocked, and partially cleaned-up swarm runs staying operator-readable after closure.
+
+## Chunk 7: Operator Surfaces And End-To-End Proof
+
+### Task 12: Add failing tests for run-centric status, events, logs, and mail views
 
 **Files:**
 - Modify: `src/commands/status.test.ts`
@@ -424,7 +515,7 @@ Run: `npm test -- src/commands/status.test.ts src/commands/events.test.ts src/co
 
 Expected: FAIL because the CLI still assumes one session is the primary unit of work.
 
-### Task 11: Implement the run-centric operator surfaces and finalize docs
+### Task 13: Implement the run-centric operator surfaces and finalize docs
 
 **Files:**
 - Modify: `src/commands/events.ts`
@@ -460,14 +551,16 @@ Allow the operator to start from the run, then drill into one lead or specialist
 
 - [ ] **Step 3: Update the contract and current-state docs to match the real CLI**
 
-Document only behavior that actually shipped in the code from Chunks 2 through 6. Do not leave the docs at the proposal level once the behavior is implemented.
+Document only behavior that actually shipped in the code from Chunks 2 through 7. Do not leave the docs at the proposal level once the behavior is implemented.
 
-### Task 12: Prove the bounded swarm workflow end to end
+### Task 14: Prove the bounded swarm workflow end to end
 
 **Files:**
+- Verify: `src/orchestration/cleanup.ts`
 - Verify: `src/orchestration/store.ts`
 - Verify: `src/orchestration/launcher.ts`
 - Verify: `src/orchestration/host.ts`
+- Verify: `src/orchestration/recovery.ts`
 - Verify: `src/orchestration/compose.ts`
 - Verify: `src/orchestration/verify.ts`
 - Verify: `src/commands/sling.ts`
