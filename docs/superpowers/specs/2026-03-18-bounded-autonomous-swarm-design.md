@@ -1,8 +1,14 @@
 # Bounded Autonomous Swarm Design
 
+## Status
+
+Proposal only.
+
+This document proposes a near-term reset. It does not replace the repo's current source-of-truth on its own. Until `AGENTS.md`, `PLAN.md`, and merge-policy docs are updated, the currently accepted project direction remains the narrower single-agent loop plus manual-first merge contract.
+
 ## Summary
 
-Switchyard should stop optimizing its near-term product around a narrow single-agent operator loop and instead target workflow parity with Overstory through a simpler bounded autonomous swarm.
+This proposal argues that Switchyard should stop optimizing its near-term product around a narrow single-agent operator loop and instead target workflow parity with Overstory through a simpler bounded autonomous swarm.
 
 The product target is not command-surface parity with Overstory. The target is workflow parity:
 - the operator gives one task
@@ -12,7 +18,7 @@ The product target is not command-surface parity with Overstory. The target is w
 - the system merges automatically when required checks pass
 - the operator can inspect what happened if the run fails or blocks
 
-The first version should achieve that outcome with a bounded orchestration session rather than an always-on coordinator process.
+The proposed first version would achieve that outcome with a bounded orchestration session rather than an always-on coordinator process.
 
 ## Problem
 
@@ -25,7 +31,7 @@ This creates three concrete problems:
 
 ## Product Goal
 
-The near-term product goal is:
+The proposed near-term product goal is:
 
 > build a custom orchestration system that matches Overstory's workflow outcome while simplifying internals where possible
 
@@ -69,7 +75,7 @@ This approach is better than a persistent coordinator for v1 because it:
 
 ## Workflow
 
-The v1 autonomous swarm workflow should be:
+The proposed v1 autonomous swarm workflow should be:
 
 1. operator runs `sy sling --task ...`
 2. Switchyard creates a top-level orchestration run
@@ -79,17 +85,34 @@ The v1 autonomous swarm workflow should be:
 6. the `lead` decomposes work into bounded subtasks with explicit file ownership
 7. the `lead` spawns `builder` agents for those subtasks
 8. completed builder work is validated by `reviewer` agents when policy requires it
-9. the `lead` evaluates whether the full objective satisfies verification policy
-10. if all required checks pass, Switchyard merges automatically
+9. the `lead` evaluates whether the composed result satisfies verification policy
+10. if all required checks pass on the integration branch, Switchyard merges automatically
 11. the run closes as `merged`, `blocked`, or `failed`
 
 The operator should not need to intervene during the normal successful path.
+
+## Composition Model
+
+Builder output needs an explicit composition step before final verification and merge.
+
+The proposed composition model is:
+
+1. each `builder` works in its own isolated branch and worktree
+2. the `lead` owns a separate integration branch and integration worktree for the overall objective
+3. accepted builder outputs are composed onto the lead-owned integration branch in a deterministic order
+4. `reviewer` agents may validate either:
+   - a builder branch against its scoped subtask, or
+   - the integrated result on the lead-owned integration branch when cross-subtask interaction matters
+5. final required verification commands run on the lead-owned integration branch, not on disconnected builder branches
+6. only after the integration branch passes verification may the system merge into the canonical branch
+
+This gives the system one explicit place to evaluate the full result while preserving isolated builder worktrees.
 
 ## Agent Roles
 
 ### Lead
 
-The `lead` owns the objective.
+The `lead` owns the objective and the integration branch for the run.
 
 Responsibilities:
 - assess task complexity
@@ -97,6 +120,7 @@ Responsibilities:
 - define subtasks and file boundaries
 - spawn specialists
 - collect results
+- compose accepted builder outputs onto the integration branch
 - decide when verification is complete
 - trigger automatic merge when policy allows it
 
@@ -167,16 +191,16 @@ The design should still preserve a future path to deeper delegation by keeping t
 
 ## Verification And Merge
 
-Automatic merge is required in the successful path, but only after explicit verification policy passes.
+Automatic merge is part of the proposed v1 success path, but adopting it would require an explicit source-of-truth update because the repo currently accepts a manual-first merge contract.
 
 The verification policy should support at least:
-- required command checks for the affected repo, such as tests or typecheck
+- required command checks for the affected repo, such as tests or typecheck, run on the lead-owned integration branch
 - no unresolved builder/reviewer failures
 - no unresolved file-scope conflicts
 - final lead confirmation that the objective is satisfied
 
-Merge policy for v1:
-- if all required verification passes, merge automatically
+Proposed merge policy for v1:
+- if all required verification passes on the integration branch, merge automatically
 - if verification fails, do not merge
 - if results conflict or remain ambiguous, close the run as `blocked`
 
@@ -233,6 +257,8 @@ Fields should include:
 - current lifecycle state
 - final outcome
 - merge state
+- integration branch
+- integration worktree
 - timestamps
 
 ### Agents
@@ -276,6 +302,7 @@ References to important outputs such as:
 - logs
 - branches
 - worktrees
+- integration-branch verification results
 - verification results
 
 ## Future Upgrade Path
@@ -340,6 +367,7 @@ Automatic merge without strong verification will create silent bad outcomes.
 
 Mitigation:
 - merge only after explicit verification policy passes
+- perform final verification on the integration branch
 - prefer blocked outcomes to unsafe merge
 
 ## Testing Strategy
@@ -359,18 +387,22 @@ This redesign is successful when Switchyard can demonstrate:
 - the operator gives one task
 - the swarm completes it without operator intervention during the run
 - specialist roles are visibly real, not just renamed generic workers
-- the system merges automatically after passing verification
+- the system can either:
+  - merge automatically after passing verification if the repo formally adopts that policy, or
+  - stop cleanly at a merge-ready integration result until that policy changes
 - the operator can inspect blocked or failed runs afterward
 
-## Decision
+## Proposal
 
-Switchyard should reset its near-term direction toward Overstory-style workflow parity through a simplified bounded autonomous swarm.
+This document proposes resetting Switchyard's near-term direction toward Overstory-style workflow parity through a simplified bounded autonomous swarm.
 
-The system should:
+If adopted, the system should:
 - preserve a small CLI surface
 - change `sy sling` into a bounded orchestration entrypoint
 - introduce `lead`, `scout`, `builder`, and `reviewer` roles
 - keep merge under lead ownership in v1
 - enforce bounded delegation and explicit file scopes
-- merge automatically after verification passes
+- use a lead-owned integration branch for final composition and verification
+- explicitly supersede the current manual-first merge policy before enabling automatic merge
+- merge automatically only after integration-branch verification passes
 - reserve a clean path to a future persistent coordinator host
