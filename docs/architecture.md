@@ -39,9 +39,11 @@ Adopted target layout:
   config.yaml
   sessions.db
   runs.db
+  # legacy per-session run summaries during the transition
   events.db
   mail.db
   orchestration.db
+  # top-level swarm runs, tasks, artifacts, and host recovery state
   worktrees/
   logs/
   specs/
@@ -51,6 +53,9 @@ Adopted target layout:
 
 Notes:
 - SQLite stores stay repo-local.
+- `orchestration.db` is the adopted store for top-level swarm runs, task graphs, artifact references, and host recovery state.
+- `runs.db` remains the current legacy per-session run-summary store during the rollout bridge, so the existing single-agent status surfaces keep working while orchestration storage lands.
+- later implementation work may retire or repurpose `runs.db`, but Chunk 2 should not leave the boundary implicit.
 - worktrees stay under `.switchyard/worktrees/`.
 - objective specs, per-agent handoffs, logs, and result envelopes should all have deterministic paths.
 - current implementation still reflects an earlier subset of this layout; later chunks should extend it without breaking the durable paths already in use.
@@ -87,6 +92,10 @@ Responsible for:
 - task graph rows
 - artifact references
 - host recovery checkpoints or leases
+
+Boundary:
+- `orchestration.db` owns swarm-level truth
+- `runs.db` is not the top-level swarm-run store in the adopted design
 
 ### Session Store
 

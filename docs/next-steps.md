@@ -7,7 +7,7 @@ Canonical implementation history now lives in [docs/slice-ledger.md](slice-ledge
 ## Current Milestone
 
 The active milestone is:
-- bounded autonomous swarm foundations
+- durable orchestration state for bounded swarm runs
 
 The source-of-truth reset is now complete.
 

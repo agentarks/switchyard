@@ -11,7 +11,7 @@ Canonical implementation history now lives in [docs/slice-ledger.md](slice-ledge
 The current target is a reliable bounded autonomous swarm loop for one repository at a time.
 
 The current active milestone inside that target is:
-- bounded autonomous swarm foundations
+- durable orchestration state for bounded swarm runs
 
 The intended operator-visible outcome is:
 - one operator can start one bounded objective with `sy sling`
@@ -49,6 +49,7 @@ Current planning state:
 - bounded autonomous swarm v1 is now the adopted source-of-truth direction
 - the implementation is still the earlier bounded single-agent loop
 - the bounded runtime baseline should stay fixed unless a concrete failure disproves it
+- the active milestone is durable orchestration state, not broad swarm-foundation work in general
 - the next bundle is durable orchestration state, not automatic merge or broader runtime work
 - the accepted rollout gate is `manual-ready`
 - `auto-after-verify` is deferred until a later explicit policy adoption

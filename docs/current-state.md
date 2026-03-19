@@ -98,6 +98,9 @@ That is still the truthful implementation state, but it is now a rollout bridge 
 
 The direction-adoption bundle is now the accepted source of truth.
 
+The active milestone is now:
+- durable orchestration state for bounded swarm runs
+
 The recommended next task is:
 - start the durable orchestration state bundle
 - add failing tests for top-level runs, task graphs, artifact references, role metadata, and orchestration config/bootstrap behavior

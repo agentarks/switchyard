@@ -16,7 +16,7 @@ The product target is not command-surface parity with Overstory. The target is w
 - the system plans and decomposes the work
 - specialist agents execute without operator involvement during the run
 - the system verifies the result
-- the system merges automatically when required checks pass
+- historical proposal note: this document originally assumed automatic merge here, but ADR 0005 superseded that rollout policy with `manual-ready` first
 - the operator can inspect what happened if the run fails or blocks
 
 The proposed first version would achieve that outcome with a bounded orchestration session rather than an always-on coordinator process.
@@ -42,7 +42,7 @@ That means the system must support this workflow:
 3. specialist agents handle exploration, implementation, and review
 4. the system coordinates those agents through durable state
 5. the system runs required verification
-6. the system merges automatically when verification passes
+6. historical proposal note: this document originally assumed automatic merge when verification passed, but ADR 0005 now requires the initial rollout to stop at `merge_ready`
 7. the run closes with a clear final state and inspectable history
 
 ## Non-Goal
@@ -87,8 +87,8 @@ The proposed v1 autonomous swarm workflow should be:
 7. the `lead` spawns `builder` agents for those subtasks
 8. completed builder work is validated by `reviewer` agents when policy requires it
 9. the `lead` evaluates whether the composed result satisfies verification policy
-10. if all required checks pass on the integration branch, Switchyard merges automatically
-11. the run closes as `merged`, `blocked`, or `failed`
+10. superseded policy note: this step originally proposed automatic merge, but the adopted rollout now stops at verified `merge_ready` first
+11. the run closes as `merge_ready`, `merged`, `blocked`, or `failed` depending on policy and outcome
 
 The operator should not need to intervene during the normal successful path.
 
@@ -193,7 +193,10 @@ The design should still preserve a future path to deeper delegation by keeping t
 
 ## Verification And Merge
 
-Automatic merge is part of the proposed v1 success path, but adopting it would require an explicit source-of-truth update because the repo currently accepts a manual-first merge contract.
+Superseded policy note:
+- this section originally proposed automatic merge as part of v1
+- ADR 0005 replaced that rollout with `manual-ready` first
+- read the rest of this section as historical design background, not as the active merge policy
 
 The verification policy should support at least:
 - required command checks for the affected repo, such as tests or typecheck, run on the lead-owned integration branch
@@ -201,12 +204,16 @@ The verification policy should support at least:
 - no unresolved file-scope conflicts
 - final lead confirmation that the objective is satisfied
 
-Proposed merge policy for v1:
+Original proposed merge policy for v1:
 - if all required verification passes on the integration branch, merge automatically
 - if verification fails, do not merge
 - if results conflict or remain ambiguous, close the run as `blocked`
 
-The system must prefer a truthful blocked or failed result over optimistic automatic merge.
+Adopted rollout replacement:
+- if all required verification passes on the integration branch, stop at verified `merge_ready`
+- merge automatically only if a later explicit policy adoption enables `auto-after-verify`
+
+The system must prefer a truthful blocked or failed result over optimistic merge.
 
 ## Command Surface
 
