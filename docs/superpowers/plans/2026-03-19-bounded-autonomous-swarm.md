@@ -287,6 +287,7 @@ Expected: FAIL because there is no orchestration host or run-scoped stop/dispatc
 - Create: `src/orchestration/recovery.ts`
 - Create: `src/orchestration/result.ts`
 - Modify: `src/commands/sling.ts`
+- Modify: `src/commands/sling.test.ts`
 - Modify: `src/commands/stop.ts`
 - Modify: `src/events/store.ts`
 - Modify: `src/events/types.ts`
@@ -337,9 +338,9 @@ Persist truthful task/run outcomes instead of collapsing every interruption into
 
 - [ ] **Step 5: Run the targeted tests to verify they pass**
 
-Run: `npm test -- src/orchestration/host.test.ts src/commands/stop.test.ts src/events/store.test.ts src/mail/store.test.ts`
+Run: `npm test -- src/orchestration/host.test.ts src/commands/sling.test.ts src/commands/stop.test.ts src/events/store.test.ts src/mail/store.test.ts`
 
-Expected: PASS with bounded lead-only delegation, durable run-aware events/mail, and correct stop behavior.
+Expected: PASS with bounded lead-only delegation, durable run-aware events/mail, correct stop behavior, and CLI coverage for the `sy sling --resume <run-id>` contract.
 
 ## Chunk 5: Composition, Verification, And Merge Policy
 
@@ -576,13 +577,15 @@ Document only behavior that actually shipped in the code from Chunks 2 through 7
 
 - [ ] **Step 1: Run the bounded-swarm focused test set**
 
-Run: `npm test -- src/orchestration/store.test.ts src/orchestration/launcher.test.ts src/orchestration/host.test.ts src/orchestration/compose.test.ts src/orchestration/verify.test.ts src/commands/sling.test.ts src/commands/status.test.ts src/commands/events.test.ts src/commands/logs.test.ts src/commands/mail.test.ts src/commands/stop.test.ts src/commands/merge.test.ts`
+Run: `npm test -- src/orchestration/store.test.ts src/orchestration/launcher.test.ts src/orchestration/host.test.ts src/orchestration/compose.test.ts src/orchestration/verify.test.ts src/orchestration/cleanup.test.ts src/commands/sling.test.ts src/commands/status.test.ts src/commands/events.test.ts src/commands/logs.test.ts src/commands/mail.test.ts src/commands/stop.test.ts src/commands/merge.test.ts src/commands/session-selector.test.ts`
 
 Expected: PASS with end-to-end coverage for:
 - one simple successful objective
 - one multi-builder objective
 - one verification failure
 - one blocked/conflicted run
+- cleanup and post-closure behavior for swarm artifacts
+- exact selector disambiguation across run and session follow-up paths
 
 - [ ] **Step 2: Run the full project check**
 
