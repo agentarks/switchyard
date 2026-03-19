@@ -99,12 +99,13 @@ The proposed composition model is:
 
 1. each `builder` works in its own isolated branch and worktree
 2. the `lead` owns a separate integration branch and integration worktree for the overall objective
-3. accepted builder outputs are composed onto the lead-owned integration branch in a deterministic order
-4. `reviewer` agents may validate either:
+3. the run stores the canonical merge target branch durably when the run starts, so later config drift does not retarget reintegration
+4. accepted builder outputs are composed onto the lead-owned integration branch in a deterministic order
+5. `reviewer` agents may validate either:
    - a builder branch against its scoped subtask, or
    - the integrated result on the lead-owned integration branch when cross-subtask interaction matters
-5. final required verification commands run on the lead-owned integration branch, not on disconnected builder branches
-6. only after the integration branch passes verification may the system merge into the canonical branch
+6. final required verification commands run on the lead-owned integration branch, not on disconnected builder branches
+7. only after the integration branch passes verification may the system merge into the stored canonical target branch
 
 This gives the system one explicit place to evaluate the full result while preserving isolated builder worktrees.
 
@@ -257,6 +258,7 @@ Fields should include:
 - current lifecycle state
 - final outcome
 - merge state
+- target branch
 - integration branch
 - integration worktree
 - timestamps
