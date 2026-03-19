@@ -2,9 +2,10 @@
 
 ## Status
 
-Proposal only.
+Historical proposal that informed the adopted bounded autonomous swarm direction.
 
-This document proposes a near-term reset. It does not replace the repo's current source-of-truth on its own. Until `AGENTS.md`, `PLAN.md`, and merge-policy docs are updated, the currently accepted project direction remains the narrower single-agent loop plus manual-first merge contract.
+The source-of-truth adoption landed on 2026-03-19 through `AGENTS.md`, `PLAN.md`, the planning docs, and [docs/decisions/0005-bounded-autonomous-swarm-v1.md](../../decisions/0005-bounded-autonomous-swarm-v1.md).
+Read this file as design background, not as the active policy gate.
 
 ## Summary
 

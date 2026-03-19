@@ -1,110 +1,108 @@
 # Milestones
 
-## M0: Planning Approved
+## Completed Foundations
+
+### M0: Planning Approved
 
 Deliverables:
 - `PLAN.md`
 - `docs/architecture.md`
-- `docs/milestones.md`
+- baseline milestone and scope docs
 
-Resolved planning decisions:
-- SQLite uses `node:sqlite` behind narrow store modules for the current slices
-- v0 runtime control stays pid-backed; tmux is deferred unless operator workflows require it
-- mail is part of the early operator loop MVP
-
-## M1: Project Scaffold
-
-Deliverables:
-- package metadata
-- TypeScript config
-- CLI entrypoint
-- base source tree
-- shared types and errors
-
-Definition of done:
-- project installs
-- CLI runs
-- empty commands can be invoked
-
-## M2: Repo Bootstrap
+### M1: Repo Bootstrap
 
 Deliverables:
 - `sy init`
-- `.switchyard/` layout
-- config loader with defaults
-- repo root detection
+- `.switchyard/` bootstrap
+- config loading and repo-root detection
 
-Definition of done:
-- any git repo can be initialized for Switchyard
-
-## M3: Session Persistence
+### M2: Bounded Single-Agent Foundations
 
 Deliverables:
-- SQLite session store
-- run store
-- status querying
-
-Definition of done:
-- sessions can be stored and listed reliably
-
-## M4: Agent Spawn
-
-Deliverables:
-- worktree manager
-- pid-backed detached runtime spawn
-- runtime adapter skeleton
-- `sy sling`
-
-Definition of done:
-- one agent can be launched into an isolated worktree and tracked
-
-## M5: Lifecycle Control
-
-Deliverables:
+- bounded `sy sling`
+- session and run persistence
+- `sy status`
 - `sy stop`
-- liveness checks
-- cleanup behavior
+- `sy logs`
 
-Definition of done:
-- agents can be terminated cleanly and state stays consistent
-
-## M6: Messaging
+### M3: Reintegration Foundations
 
 Deliverables:
-- mail store
-- `sy mail send`
-- `sy mail check`
-- `sy mail list`
-- message formatting
+- `sy merge`
+- durable events and mail
+- review and cleanup support
+- exact-session inspection improvements
 
-Definition of done:
-- operator and agents can exchange durable lightweight messages
+## Active Rollout
 
-## M7: Observability
+### M4: Direction Adoption
 
 Deliverables:
-- event store
-- inspect/status improvements
-- better error surfaces
+- bounded autonomous swarm direction in source-of-truth docs
+- explicit merge-policy rollout gate
+- decision record for swarm v1 policy
 
 Definition of done:
-- common failures can be diagnosed from CLI output and stored events
+- the docs consistently define bounded orchestration as the active target while still describing current implementation gaps honestly
 
-## M8: Merge Workflow
+### M5: Durable Orchestration State
 
 Deliverables:
-- merge queue
-- controlled merge command
-- conflict reporting
+- orchestration runs
+- task graph records
+- artifact references
+- session role metadata
+- orchestration config/bootstrap defaults
 
 Definition of done:
-- multiple work streams can be reintegrated deliberately
+- the repo can persist a truthful bounded swarm run before specialist launch
+
+### M6: Objective Specs And Specialist Launch
+
+Deliverables:
+- objective specs
+- role-aware handoff specs
+- lead launch
+- structured result envelopes
+
+Definition of done:
+- `sy sling` starts one run and one `lead` with durable launch artifacts
+
+### M7: Lead Host, Recovery, And Stop Policy
+
+Deliverables:
+- bounded lead-only delegation
+- resume support
+- run-scoped stop semantics
+
+Definition of done:
+- runs can be resumed and stopped truthfully without replaying completed work
+
+### M8: Composition, Verification, And Merge Gate
+
+Deliverables:
+- deterministic integration-branch composition
+- verification on the integration worktree
+- `manual-ready` `merge_ready` flow
+
+Definition of done:
+- successful runs reach verified `merge_ready` without automatic final merge
+
+### M9: Closure And Run-Centric Operator Surfaces
+
+Deliverables:
+- run-centric status, events, logs, and mail
+- swarm cleanup and retained history
+
+Definition of done:
+- operators can understand and close a bounded swarm run end to end
 
 ## Deferred
 
-Not required for the first build:
+Not required for the current rollout:
+- `auto-after-verify` final merge
 - watchdog automation
 - AI merge resolution
-- web dashboard
-- multi-repo orchestration
-- broad runtime matrix
+- web dashboard or TUI
+- multiple runtimes beyond Codex
+- unbounded delegation trees

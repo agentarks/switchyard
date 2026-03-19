@@ -1,85 +1,46 @@
 # Merge And Reintegration Workflow
 
-This document defines the first explicit merge contract for the current Switchyard operator loop.
+This document defines the adopted merge policy for bounded autonomous swarm v1 and the rollout bridge from the current implementation.
 
-## Current Contract
+## Adopted Policy
 
-For the current v0 loop, reintegration is still manual-first even though `sy merge` now exists:
-- Switchyard owns session lookup, status, events, stop, and optional artifact cleanup.
-- Switchyard also owns the narrow preflighted merge entrypoint.
-- Git still owns the actual content review, conflict handling, and merge mechanics.
-- The preserved `agents/*` branch is the merge input.
-- The configured canonical branch in `.switchyard/config.yaml` is the merge target.
-- Each session also retains the canonical branch it was created from as `baseBranch` so later recovery can detect config drift explicitly.
+Switchyard now adopts this merge policy:
+- bounded orchestration is the near-term product target
+- the `lead` owns the integration branch and integration worktree for a run
+- accepted specialist output composes onto that integration branch in deterministic order
+- required verification runs on that integration worktree
+- the initial rollout policy is `manual-ready`
+- successful swarm runs stop at a verified `merge_ready` result
+- `auto-after-verify` is not active until the repo adopts it explicitly later
 
-## Operator Workflow
+## Why The Gate Stays Manual First For Now
 
-1. Reach a stable session state.
-   - Run `sy status`.
-   - Use the printed session id when you want later `events`, `mail`, `stop`, or `merge` commands to target one exact preserved session.
-   - If the session is still `starting` or `running`, run `sy stop <session>`.
-   - `sy stop` now also echoes the exact session id in its handled output, so you do not need a separate `sy status` lookup before later follow-up commands.
-   - If you include `--cleanup` too early, Switchyard still stops the active session first and then preserves the work unless cleanup is confirmed safe or you passed explicit `--abandon`.
-   - Do not pass `--cleanup` before you have either merged or deliberately abandoned the work.
+- the product direction has moved to bounded orchestration, but the runtime and operator surfaces still need to earn the right to merge automatically
+- `manual-ready` keeps the final merge decision operator-visible while the orchestration model matures
+- the gate preserves a clear upgrade path to `auto-after-verify` later without pretending that policy is already accepted
 
-2. Review the preserved branch and worktree.
-   - Use `sy events <session>` if you need lifecycle context.
-   - Use `sy mail list <session>` when you want the mailbox history without changing read state.
-   - Use `sy mail list <session> --unread` when you want only unread mail without consuming it.
-   - Use `sy mail check <session>` only when you intentionally want to consume unread mail; it marks the returned messages as read.
-   - Mail inspection output now also echoes the resolved session id and frames each message body as an explicit `Body:` block, so mailbox review does not force a separate `sy status` lookup and stays readable when messages span multiple lines.
-   - Inspect the agent worktree and branch with normal git commands.
-   - Run the project checks you expect before reintegration.
+## Target Swarm Workflow
 
-3. Reintegrate from the canonical branch in the main repository.
-   - Prefer `sy merge <session>` once review is complete.
-   - The command checks that the session is no longer active, refuses legacy rows that do not have stored `baseBranch` metadata, verifies the preserved branch still exists, refuses to silently retarget a session whose stored `baseBranch` no longer matches `.switchyard/config.yaml`, verifies that the preserved worktree path still resolves to the expected git worktree root, requires both the preserved agent worktree and the repo-root worktree to be clean, switches to the intended canonical branch, and then runs the explicit git merge.
-   - `sy merge` now also echoes the resolved session id in its handled output, including merge-conflict and other session-scoped failure paths, so the next `events`, `status`, `mail`, or cleanup command does not require a separate lookup.
-   - The equivalent git path remains:
+1. Start one run with `sy sling --task ...`.
+2. Let the `lead` plan, dispatch bounded specialists, and compose accepted work onto the integration branch.
+3. Verify the integrated result on the lead-owned integration worktree.
+4. Stop at `merge_ready` under the default `manual-ready` policy.
+5. Perform the final merge explicitly with `sy merge <run>` or normal git once the operator is satisfied.
+6. Clean up preserved artifacts only after merge or explicit abandon.
 
-```bash
-git switch <canonical-branch>
-git merge --no-ff agents/<agent-name>
-```
+## Current Implementation Bridge
 
-4. Resolve the outcome explicitly.
-   - If the merge succeeds, validate the merged result with the checks you normally trust on the canonical branch.
-   - If the merge conflicts, `sy merge` surfaces the conflicting paths so you can inspect them immediately. Resolve the conflict manually or abort with git. Switchyard does not resolve conflicts or abort for you.
-   - If you decide not to keep the work, treat that as an explicit abandon decision.
+The code in the repo today still uses the earlier per-session merge path:
+- `sy merge <session>` merges a preserved session branch into the configured canonical branch
+- `sy stop <session> --cleanup` removes preserved artifacts only after a safe merge or explicit abandon
+- conflict resolution, post-merge validation, and cleanup remain explicit operator steps
 
-5. Clean up only after the outcome is known.
-   - `sy status` now shows a cleanup-readiness label for each session, using the same merged-cleanup rules as `sy stop --cleanup`. Active sessions show the post-stop result as `stop-then:*`.
-   - After a successful merge, remove the preserved branch and worktree with `sy stop <session> --cleanup`.
-   - After an explicit abandon decision, discard the preserved branch and worktree with `sy stop <session> --cleanup --abandon`.
-
-## Why This Is Manual First
-
-- The current operator loop already has durable branch, worktree, session, and event state.
-- The stored `baseBranch` keeps the merge target explicit even if config changes after launch.
-- The command is intentionally narrow because the missing piece was product policy, not raw git reachability.
-- Keeping merge review and conflict handling explicit avoids hiding important operator choices behind an immature command.
-- The default `sy stop` behavior preserves the worktree specifically so review and reintegration can happen after the runtime stops.
+That bridge remains truthful until the lead-owned integration workflow lands, but it is no longer the long-term contract.
 
 ## What This Does Not Try To Solve Yet
 
+- automatic final merge by default
 - merge queues
-- background reintegration
 - AI-assisted conflict resolution
-- automatic cleanup after merge
-- broader multi-agent branch coordination
-
-## Current Implementation Notes
-
-The current `sy merge <session>` path:
-- checks that the session is no longer active
-- resolves the session to its preserved branch
-- checks the session's stored `baseBranch` before using the configured canonical branch
-- verifies that the preserved worktree path is still the expected git worktree
-- refuses dirty preserved worktrees so uncommitted agent changes are not stranded before cleanup
-- validates that the canonical branch worktree is usable
-- reports the conflicted paths when `git merge` stops in a conflict state
-- records a no-op `merge.skipped` event when the branch is already integrated
-- runs the same explicit merge contract from this document
-
-It does not replace operator review, manual conflict resolution, post-merge validation, or explicit cleanup.
-The corresponding cleanup path is also intentionally narrow: plain `--cleanup` is safe cleanup after merge only when Switchyard has stored `baseBranch` metadata for that session, while `--cleanup --abandon` is explicit discard.
+- background reintegration daemons
+- broader multi-runtime merge coordination

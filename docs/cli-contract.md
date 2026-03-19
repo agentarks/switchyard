@@ -1,15 +1,19 @@
 # CLI Contract
 
-This file defines the expected user-facing behavior of the early Switchyard CLI. It is the contract future sessions should preserve unless there is a deliberate product decision to change it.
+This file defines the adopted user-facing behavior for Switchyard as it moves to bounded autonomous swarm v1.
+
+The current implementation still reflects an earlier bounded single-agent loop in several places. When that happens, treat this file as the product contract the code should move toward, and use [docs/current-state.md](current-state.md) to understand the current gap honestly.
 
 ## Global Rules
 
 - The CLI name is `sy`.
-- Commands should work when invoked from the repository root, a nested subdirectory, or a git worktree unless the command explicitly requires otherwise.
+- Commands should work from the repository root, a nested directory, or a git worktree unless a command explicitly requires otherwise.
 - Failures should be explicit and operator-readable.
-- JSON output can wait until the underlying command behavior is stable.
-- Placeholder commands may accept future-looking arguments, but they should fail only when behavior is actually unsupported, not because the parser shape is too narrow.
-- Merge stays manual-first even with `sy merge`: the command should only preflight and run the explicit git merge path, while review, conflict resolution, validation, and cleanup stay operator-visible.
+- `sy sling` means "start one bounded orchestration run" for one objective.
+- Runs are bounded: one `lead` may dispatch `scout`, `builder`, and `reviewer` specialists, and only the `lead` may do so.
+- The `lead` owns the integration branch, integration worktree, and composition step.
+- The default merge policy is `manual-ready`.
+- `auto-after-verify` must not become the default or the implicit fallback path without a later explicit policy adoption.
 
 ## `sy init`
 
@@ -18,265 +22,110 @@ Purpose:
 
 Expected behavior:
 - resolve the canonical repository root, even when invoked from a nested directory or worktree
-- write all bootstrap artifacts under that resolved canonical repo root rather than the invocation directory
-- detect a project name from the repo directory unless `--name` is provided
-- detect the canonical branch from `origin/HEAD` when available
+- write bootstrap artifacts under that canonical repo root
+- create and maintain the durable `.switchyard/` layout needed for orchestration runs
 - keep bootstrap successful even when the chosen canonical branch does not point to a commit yet
-- warn explicitly when the chosen canonical branch does not point to a commit yet, and tell the operator to create an initial commit before running `sy sling`
-- create `.switchyard/`
-- create `.switchyard/worktrees/`, `.switchyard/logs/`, `.switchyard/agents/`, and `.switchyard/specs/`
-- write `.switchyard/config.yaml`
-- write `.switchyard/.gitignore`
-- write `.switchyard/README.md`
-- create placeholder database files without noisy runtime warnings
+- warn explicitly when the chosen canonical branch does not point to a commit yet before a later `sy sling`
 
-Flags:
-- `--force`
-  - overwrite the existing config and regenerate the bootstrap layout
-- `--name <name>`
-  - override the detected project name
-- `--canonical-branch <branch>`
-  - override the detected canonical branch
+## `sy sling`
 
-Failure rules:
-- outside a git repository, return a config-style error
-- if `.switchyard/config.yaml` already exists and `--force` is not set, return an init-style error
+Purpose:
+- start one bounded orchestration run from one explicit objective
 
-## `sy sling [args...]`
+Adopted contract:
+- accept one objective via `--task <instruction>` or `--task-file <path>`
+- create one top-level run record
+- create one `lead` session linked to that run
+- create the lead-owned integration branch and integration worktree
+- write one durable objective spec
+- write one lead handoff spec and deterministic result-envelope path
+- launch one bounded lead runtime through the configured runtime adapter
+- default the run merge policy to `manual-ready`
+- record durable launch and failure events that preserve role, objective, spec, and artifact metadata
 
-Current contract:
-- command requires one `<agent>` argument, exactly one explicit task source via `--task <instruction>` or `--task-file <path>`, and may accept additional positional runtime args
-- command loads config from the canonical repo root
-- command creates one deterministic branch and worktree under `.switchyard/worktrees/`
-- command writes one durable task handoff file under `.switchyard/specs/`
-- command derives one deterministic detached log path under `.switchyard/logs/<agent>-<session>.log`
-- command passes the explicit task text to Codex as the initial prompt, whether it came from the CLI flag or a task file
-- command starts one detached `codex exec --json` process from that worktree, defaulting to `--sandbox workspace-write` unless the operator already passed an explicit sandbox or automation mode
-- detached launch redirects stdout and stderr directly to the session log path instead of wrapping through `script`
-- command fails explicitly before worktree creation when the configured canonical branch does not resolve to a commit yet, instead of surfacing raw `git worktree` invalid-reference output
-- command persists one `starting` session record in `sessions.db`, including the original canonical branch as session `baseBranch`
-- command creates one durable run record in `runs.db` for that launched task
-- command records `sling.spawned` when the runtime pid exists, including `taskSummary`, `taskSpecPath`, and `logPath`
-- command records `sling.completed` after the initial launch window succeeds, including the same task handoff metadata plus `logPath` and `readyAfterMs`
-- command moves that run record to `active` after the launch window succeeds
-- if Codex exits during the launch window, command records `sling.failed` with the launch error and preserves task handoff metadata when available, including `logPath`
-- if launch fails after the run record exists, command marks that run as `finished:launch_failed`
-- command prints the durable session id, launch state, created branch, base branch, task summary, task spec path, log path, worktree path, runtime command line, and initial readiness delay
+Rollout note:
+- until the orchestration launcher lands, the implementation still accepts an `<agent>` positional argument and launches one detached worker session
+- that implementation gap should be removed by the swarm-launch bundle rather than preserved as the long-term contract
 
-Future target:
-- add richer runtime metadata only if operator workflows require more than bounded task execution plus readable structured logs
+## `sy status`
 
-## `sy logs <session>`
+Purpose:
+- render the most actionable operator view of a run or exact agent session
 
-Current contract:
-- command resolves one session by id or normalized agent name
-- command accepts an exact session id before agent-name normalization, even when that selector is not a valid normalized agent name
-- command rejects selectors that match one session by id and a different session by normalized agent name
-- command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
-- command derives the log path from the resolved agent name and session id instead of relying on separate durable metadata
-- command prints a short heading with the resolved agent name, session id, and log path
-- by default, command renders the last 200 log lines as readable structured output when they parse as Codex JSONL
-- with `--all`, command renders the full log file
-- command renders assistant messages plainly, command execution start/completion lines concisely, command output as readable blocks, and final turn completion or failure lines when present
-- command preserves malformed or partial lines as raw output instead of crashing
-- command still strips the leading BSD `script` control-character prefix from displayed output when that legacy wrapper artifact is present
-- command exits cleanly when stdout closes early in a downstream pipe instead of surfacing an unhandled broken-pipe error
-- when the selected session exists but the log file does not, command prints an explicit operator-facing message that includes the resolved session id and expected log path
-- command fails explicitly when the selector does not resolve or the log file cannot be read for a reason other than being absent
+Adopted contract:
+- the default view is run-centric
+- all-run status should show objective summary, lead state, specialist progress, verification state, and merge state
+- exact-run status should show task graph progress plus lead and specialist rows
+- exact lead or specialist inspection should stay available when the operator needs session-level detail
+- status should preserve explicit next-step guidance and artifact presence after closure
 
-## `sy status [session]`
+## `sy events`
 
-Current contract:
-- command accepts one optional session id or agent name selector
-- command accepts `--task` only alongside an exact selector and uses it to print the full stored launch instruction
-- command loads `.switchyard/config.yaml` from the canonical repo root
-- command reads durable session state from `sessions.db`
-- without a selector, command reads and renders all recorded sessions ordered by operator follow-up priority first and then by the freshest operator-visible activity inside each follow-up bucket
-- with a selector, command resolves one session by id or normalized agent name and renders only that session
-- command accepts an exact session id before agent-name normalization, even when that selector is not a valid normalized agent name
-- command rejects selectors that match one session by id and a different session by normalized agent name
-- command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
-- command promotes `starting` sessions to `running` when the first pid liveness check succeeds
-- command reconciles dead bounded-task sessions to `stopped` with a successful `runtime.completed` event when the session log shows `turn.completed`
-- command reconciles dead bounded-task sessions to `failed` with a `runtime.failed` event when the session log shows `turn.failed` or a terminal top-level error
-- command marks early-dead `starting` sessions without a terminal completion marker as `failed`
-- command marks obviously stale pid-backed `running` sessions without a terminal completion marker as `failed`
-- on Unix-like platforms, command treats zombie runtime pids as stale dead sessions and records `process_state_zombie` in the reconciliation reason
-- command records durable runtime reconciliation events when it changes session state
-- with a selector, command only reconciles that targeted session before rendering
-- command prefers the freshly reconciled lifecycle event in the current table output even if event persistence fails
-- command includes the durable session id in the main status table so later commands can target an exact session
-- command includes one best-effort unread-mail count per session from `mail.db`
-- if unread mail counts cannot be loaded, command still renders status and prints `?` in the unread column instead of failing
-- command includes one cleanup-readiness label per session based on the same merged-cleanup rules enforced by `sy stop --cleanup`, including refusing merged-safe cleanup when a preserved worktree still has uncommitted non-Switchyard entries or when that dirtiness check cannot be completed safely
-- command includes one best-effort latest-run task summary per session from `runs.db`
-- command includes one best-effort latest-run state summary per session from `runs.db`
-- command includes one conservative reintegration assessment per inactive session in a `REVIEW` column, using `ready`, `needs-review`, `blocked`, `risky`, or `-`
-- command uses the newest durable event or unread inbound operator mail timestamp for the `UPDATED` column when that activity is newer than the stored `sessions.db` row timestamp
-- command also derives a passive stalled-session hint for active sessions when the latest agent/runtime-side activity is older than the stalled threshold, without mutating durable session state
-- command also derives a more specific passive `runtime.no_visible_progress` hint for active sessions when five minutes have passed since the first runtime-ready signal and there is still no inbound non-operator mail, no uncommitted worktree change, and no commit divergence ahead of the stored `baseBranch`
-- command includes one derived best-effort follow-up signal per session so concurrent sessions stay readable as `mail`, `wait`, `review-merge`, `cleanup`, `inspect`, or `done`
-- active sessions render `-` in `REVIEW` and keep their existing `NEXT` behavior
-- when unread mailbox items addressed to `operator` exist for a session, command prioritizes `mail` over the more generic lifecycle follow-up hint
-- when a session matches the no-visible-progress rule and no higher-priority unread inbound operator mail exists, command surfaces `inspect` as the follow-up hint instead of `wait`
-- inbound non-operator mail, even if it has already been read, suppresses the no-visible-progress hint
-- when unread mailbox items addressed to `operator` exist for a session, command also surfaces a synthesized `mail.unread` recent summary from the newest unread inbound message instead of leaving `RECENT` focused on a less actionable lifecycle event
-- command keeps the stalled idle clock separate from `UPDATED`, so newer operator-visible diagnostics can stay in the `UPDATED` column without resetting passive stalled detection
-- when both passive inspect hints would apply, command prefers `runtime.no_visible_progress` and renders only that suffix
-- when a stalled-session hint exists, command appends `runtime.stalled idleFor=...` to the chosen `RECENT` summary instead of replacing a higher-value concrete summary such as `mail.unread`, `stop.failed`, or `merge.failed`
-- when a no-visible-progress hint exists, command appends `runtime.no_visible_progress age=...` to the chosen `RECENT` summary instead of replacing a higher-value concrete summary
-- operator-only activity such as `mail.sent`, `mail.checked`, and `mail.listed` does not reset the stalled idle clock
-- if run summaries cannot be loaded, command still renders status and prints `?` in both the task and run columns instead of failing
-- active sessions show the post-stop cleanup result with a `stop-then:` prefix instead of hiding whether cleanup would be merged-safe or abandon-only
-- command surfaces partial preserved-artifact loss in that cleanup-readiness label when the branch still exists but the preserved worktree is already missing
-- with an exact selector, command also prints the deterministic log path for that session
-- command keeps that missing-worktree case distinct in recent stop-event history instead of collapsing it into the harmless already-absent case
-- if cleanup readiness cannot be evaluated for a session, command still renders status and prints `?` in the cleanup column instead of failing
-- command keeps operator-relevant `merge.failed` context in the recent-event summary, including branch-drift targets, preserved-worktree paths, and git error text when those details exist
-- command keeps operator-relevant `stop.failed` context in the recent-event summary, including shutdown failure reason, runtime pid, and error text when those details exist
-- command keeps operator-relevant `stop.completed` cleanup mode in the recent-event summary so later status inspection still shows whether cleanup happened after a confirmed merge or an explicit abandon
-- when the same `sy status` run also records an automatic runtime reconciliation event, command still keeps a latest pre-existing `stop.failed` visible in the current recent summary instead of immediately replacing it with that synthetic runtime event
-- with a selector, command prints a short detail block ahead of the one-row table that surfaces the stored `baseBranch`, current `runtimePid`, latest stored launch command, creation time, latest launch task summary, latest launch spec path, unread-mail count, cleanup-readiness label, latest run summary, the derived follow-up signal, and the full recent-event summary
-- with a selector, command also prints a concise `Summary:` line that explains the current review, cleanup, or closed-session state in operator-readable language
-- with a selector, command also prints an `Artifacts:` line that records whether the preserved branch, worktree, transcript log, and task spec are still present, absent, or unknown
-- with a selector, command also prints `Review:` plus `Why:` for inactive sessions where reintegration meaningfully applies and the assessment can be justified conservatively
-- with a selector, command keeps `Review:` and `Why:` omitted for active sessions, already-closed `done` sessions, and sessions where cleanup/readiness data is unavailable
-- with `--task` plus a selector, command also prints the full stored launch instruction from `.switchyard/specs/`
-- command rejects `--task` without an exact selector
-- command fails explicitly when `--task` is requested but the stored task text cannot be read
-- when no sessions exist, print `No Switchyard sessions recorded yet.`
-- when sessions exist, print a concise tab-separated table with the most actionable follow-up rows first and the freshest operator-visible activity first within the same follow-up bucket, including `TASK`, `RUN`, `REVIEW`, and `NEXT` columns
-- within the `mail` follow-up bucket, order rows by the newest unread inbound mail before falling back to the derived activity timestamp and then session recency
-- the current follow-up ordering is operator-first: `mail`, `inspect`, `review-merge`, `cleanup`, `wait`, `done`, then `-`
-- the `NEXT` column keeps that existing vocabulary even when `REVIEW` is present
+Purpose:
+- show the durable orchestration timeline
 
-Future target:
-- show concise operator-friendly status for active and recent sessions
+Adopted contract:
+- the primary timeline is run-centric across the lead and specialists
+- exact session inspection remains available when the operator intentionally drills into one lead or specialist
+- selector failures must stay explicit and avoid accidental ambiguity
 
-## `sy events [session]`
+## `sy logs`
 
-Current contract:
-- command exists and accepts one optional session id or agent name selector
-- command accepts `--limit <count>` to control the size of the recent-event window
-- without a selector, command reads the recent durable event timeline from `events.db`
-- with a selector, command resolves one session, one orphaned session-id event stream, or one orphaned agent-name event stream when no tracked session row remains
-- launch events from `sy sling` carry task handoff metadata such as `taskSummary` and `taskSpecPath`
-- command rejects selectors that could refer to different session-id, agent-name, or orphaned-event targets
-- command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
-- command rejects orphaned agent-name selectors that would combine events from multiple session ids and requires an exact session id instead
-- command rejects non-positive or non-integer `--limit` values with an explicit events-style error
-- when no events exist globally, print `No Switchyard events recorded yet.`
-- when a selected tracked session has no events yet, print the resolved session id in that empty-state output
-- when events exist, print a concise tab-separated table ordered chronologically across the recent window
+Purpose:
+- inspect bounded runtime output for a lead or specialist session
 
-Future target:
-- add richer inspection output only if the narrow event timeline proves insufficient
-- avoid broad filtering until operator workflows demand it
+Adopted contract:
+- logs should resolve a run's lead or one exact specialist session
+- logs should preserve readable structured rendering over the bounded runtime transcript
+- missing-log behavior must stay explicit and operator-readable
 
-## `sy stop <session>`
+## `sy stop`
 
-Current contract:
-- command resolves one session by id or normalized agent name
-- command rejects selectors that match one session by id and a different session by normalized agent name
-- command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
-- command cancels one active pid-backed bounded task cleanly
-- on Unix-like platforms, command treats zombie runtime pids as already not running instead of timing out against an unreapable stale pid
-- command updates durable session state in `sessions.db`
-- command prints the durable session id in handled operator-facing success paths so later `events`, `merge`, or cleanup commands can target the preserved session directly
-- command also prints the resolved durable session id before failing when a repeated stop targets an already inactive session
-- command preserves the worktree by default so the operator can still review or merge the branch later
-- command preserves the log file by default so the operator can inspect detached runtime output after stop
-- when the runtime is already gone and the log shows natural task completion, command reports that finished task truthfully instead of pretending it stopped a live runtime
-- command still stops an active session even when a requested cleanup cannot proceed safely
-- if runtime shutdown fails before state changes, command leaves the session active and records a durable `stop.failed` event with the failure reason and error text
-- if cleanup artifact removal fails after the stop state is already known, command still prints the resolved session id and handled stop summary before exiting nonzero
-- command removes the worktree, branch, and log file when `--cleanup` is passed only if the preserved branch is confirmed merged into the session's stored `baseBranch` and the preserved worktree has no uncommitted non-Switchyard entries
-- command fails closed when it cannot inspect a preserved worktree for merged-cleanup safety, instead of silently treating that cleanup as merged-safe
-- command refuses plain merged-cleanup for legacy rows that do not have stored `baseBranch` metadata
-- command requires `--cleanup --abandon` to discard work that is not confirmed merged
-- command rejects `--abandon` unless `--cleanup` is also set
-- command reports already-absent artifacts as already absent instead of reporting a removal that did not happen
-- an already-missing log file does not block an otherwise-safe cleanup path
-- command refuses plain cleanup when the preserved branch still exists but the preserved worktree path is already missing, and tells the operator to restore it manually or use explicit abandon
-- command records that missing-worktree refusal distinctly from the fully-absent branch-plus-worktree case in durable `stop.completed` history
-- command records a durable `stop.completed` event with cleanup failure details when cleanup is blocked or artifact removal fails after the stop state is already known
-- when the latest run record exists, command updates it to a terminal outcome such as `completed`, `stopped`, `failed`, `merged`, or `abandoned` when the task outcome becomes clear
+Purpose:
+- stop one bounded orchestration run or one explicitly targeted specialist
 
-Future target:
-- revisit alternate runtime control only if the pid-based path proves too narrow in real operator workflows
-- refine stale-runtime handling further only if a real operator workflow reproduces pid reuse or another false-positive liveness case
+Adopted contract:
+- if the selector resolves to a run id or the lead session, stop the whole run
+- if the selector resolves to a specialist session id, stop only that specialist
+- preserve truthful run and task outcomes
+- keep cleanup separate from stop unless it is explicitly requested and safe
+- fail closed when cleanup safety cannot be established
 
-## `sy merge <session>`
+## `sy merge`
 
-Current contract:
-- command resolves one session by id or normalized agent name
-- command rejects selectors that match one session by id and a different session by normalized agent name
-- command rejects selectors that match multiple sessions by normalized agent name and requires an exact session id instead
-- command refuses active sessions and only merges preserved work
-- command refuses legacy rows that do not have stored `baseBranch` metadata
-- command refuses to silently retarget preserved work when the session `baseBranch` differs from the current configured canonical branch
-- command verifies that the preserved worktree path still resolves to the expected git worktree root
-- command refuses dirty preserved worktrees so uncommitted agent changes are resolved before merge or cleanup
-- command reports the blocking git status entries when the preserved worktree is dirty
-- command refuses to start when the canonical repo-root worktree already has an in-progress merge and points the operator to resolve it or run `git merge --abort`
-- command requires the canonical repo-root worktree to be clean before it switches branches
-- command reports the blocking git status entries when the repo root is dirty
-- command verifies the preserved local branch still exists
-- command switches the repo root to the configured canonical branch when needed
-- command runs `git merge --no-ff <agent-branch>` from the repo root
-- command prints the resolved durable session id in operator-facing handled output, including merge-conflict and other session-scoped failure paths, so later follow-up commands can reuse the exact preserved session
-- command records durable merge events for success, already-integrated no-op merges, session-scoped preflight refusals, and git-stopped conflict states
-- on success and already-integrated no-op merges, command updates the latest run outcome to `merged` when that run exists
-- command leaves conflict resolution, validation, and cleanup explicit for the operator
+Purpose:
+- close a verified run by merging the lead-owned integration branch
 
-Future target:
-- improve cleanup ergonomics only if the first merge path exposes a real operator risk
-- broaden merge automation only if the explicit operator-visible path proves insufficient
+Adopted contract:
+- `manual-ready` is the initial rollout policy
+- under `manual-ready`, Switchyard stops after verified integration at `merge_ready`
+- `sy merge` or explicit git then performs the final merge of the integration branch into the target branch
+- under a later adopted `auto-after-verify` policy, Switchyard may perform that final merge automatically only after required checks pass
+- Switchyard must not silently fall through from `manual-ready` to `auto-after-verify`
 
 ## Merge And Reintegration
 
-Current contract:
-- operators should stop sessions without `--cleanup` before reintegration
-- operators should review the preserved `agents/*` branch and worktree with normal git and project checks
-- operators may run `sy merge <session>` to execute the documented repo-root merge path
-- each preserved session retains its original target branch as `baseBranch`, and Switchyard refuses to silently retarget it if `.switchyard/config.yaml` now points somewhere else
-- operators may still use normal git directly when they intentionally want the manual path
-- operators should run `sy stop <session> --cleanup` only after a successful merge
-- operators should run `sy stop <session> --cleanup --abandon` only after an explicit abandon decision
+Adopted contract:
+- the `lead` owns the integration branch and integration worktree
+- accepted builder outputs compose onto that integration branch in deterministic order
+- required verification runs there, not on disconnected builder branches
+- the initial rollout stops at a verified `merge_ready` result
+- the operator keeps the final merge decision until a later explicit policy flip says otherwise
 
-Future target:
-- broaden mail semantics only if operator usage justifies it
+Implementation note:
+- the current code still exposes a preserved-session merge path
+- that remains the truthful implementation state today, but it is no longer the long-term product contract
 
 ## `sy mail`
 
-Current contract:
-- command has `send`, `check`, and `list` subcommands
-- `sy mail send <session> [body]` resolves one session by id or normalized agent name
-- `sy mail send <session> --body-file <path>` reads the exact message body from a file relative to the invocation directory
-- `sy mail send` requires exactly one body source: positional `<body>` or `--body-file <path>`
-- mail commands accept an exact session id even when that selector would not be a valid normalized agent name
-- mail commands reject selectors that match multiple sessions by normalized agent name and require an exact session id instead
-- `sy mail send` writes one durable record into `mail.db`
-- `sy mail send` preserves the exact provided body text while still rejecting whitespace-only input
-- `sy mail send` fails explicitly when the requested body file cannot be read
-- `sy mail send` prints the resolved session id and generated mail id in operator-facing output
-- `sy mail check <session>` reads unread mail for one resolved session
-- `sy mail check` prints the resolved session id in operator-facing output, including the empty-unread case
-- `sy mail check` prints each returned message body as an explicit `Body:` block
-- `sy mail check` marks returned messages as read
-- `sy mail list <session>` reads the full mailbox for one resolved session
-- `sy mail list <session> --unread` reads only unread mail for one resolved session
-- `sy mail list` prints the resolved session id in operator-facing output, including empty mailbox views
-- `sy mail list` prints each returned message body as an explicit `Body:` block
-- `sy mail list` does not change read state
-- `sy mail list --unread` does not change read state
-- mail commands reject selectors that match one session by id and a different session by normalized agent name
+Purpose:
+- support small, durable communication without losing run context
 
-Future target:
-- support simple durable operator/agent messaging
-- keep the early surface intentionally small
-- broaden beyond the current send/check/list/`list --unread` split only when operator usage justifies it
+Adopted contract:
+- mail remains intentionally small
+- the system should support run-aware communication while preserving exact session-level inspection when needed
+- operator-visible output should keep exact run or session resolution explicit
 
 ## Priority Order
 
-When the contract and implementation diverge, prefer fixing the implementation if the contract still matches the project goal. If the product direction changes, update this file in the same session.
+When the contract and implementation diverge, prefer fixing the implementation if this file still matches the intended product direction. If the product direction changes, update this file in the same session.
