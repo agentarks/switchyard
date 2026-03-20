@@ -57,7 +57,8 @@ const CREATE_ARTIFACTS_TABLE_SQL = `
     session_id TEXT,
     kind TEXT NOT NULL,
     path TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (run_id, task_id) REFERENCES orchestration_tasks (run_id, id)
   )
 `;
 
@@ -350,12 +351,14 @@ function ensureOrchestrationSchema(db: DatabaseSync): void {
   db.exec(CREATE_RUNS_TABLE_SQL);
   ensureTasksTableSchema(db);
   db.exec(CREATE_TASKS_RUN_INDEX_SQL);
-  db.exec(CREATE_ARTIFACTS_TABLE_SQL);
+  ensureArtifactsTableSchema(db);
   db.exec(CREATE_ARTIFACTS_RUN_INDEX_SQL);
   ensureHostCheckpointsTableSchema(db);
 }
 
 function ensureTasksTableSchema(db: DatabaseSync): void {
+  recoverInterruptedMigration(db, "orchestration_tasks");
+
   if (!tableExists(db, "orchestration_tasks")) {
     db.exec(CREATE_TASKS_TABLE_SQL);
     return;
@@ -365,19 +368,49 @@ function ensureTasksTableSchema(db: DatabaseSync): void {
     return;
   }
 
-  db.exec("ALTER TABLE orchestration_tasks RENAME TO orchestration_tasks_legacy");
-  db.exec(CREATE_TASKS_TABLE_SQL);
-  db.exec(`
-    INSERT INTO orchestration_tasks (
-      run_id, id, parent_task_id, role, title, file_scope_json, state, assigned_session_id, created_at, updated_at
-    )
-    SELECT run_id, id, parent_task_id, role, title, file_scope_json, state, assigned_session_id, created_at, updated_at
-    FROM orchestration_tasks_legacy
-  `);
-  db.exec("DROP TABLE orchestration_tasks_legacy");
+  rebuildTable(
+    db,
+    "orchestration_tasks",
+    CREATE_TASKS_TABLE_SQL,
+    `
+      INSERT INTO orchestration_tasks (
+        run_id, id, parent_task_id, role, title, file_scope_json, state, assigned_session_id, created_at, updated_at
+      )
+      SELECT run_id, id, parent_task_id, role, title, file_scope_json, state, assigned_session_id, created_at, updated_at
+      FROM orchestration_tasks_legacy
+    `
+  );
+}
+
+function ensureArtifactsTableSchema(db: DatabaseSync): void {
+  recoverInterruptedMigration(db, "orchestration_artifacts");
+
+  if (!tableExists(db, "orchestration_artifacts")) {
+    db.exec(CREATE_ARTIFACTS_TABLE_SQL);
+    return;
+  }
+
+  if (hasRunScopedArtifactSchema(db)) {
+    return;
+  }
+
+  rebuildTable(
+    db,
+    "orchestration_artifacts",
+    CREATE_ARTIFACTS_TABLE_SQL,
+    `
+      INSERT INTO orchestration_artifacts (
+        id, run_id, task_id, session_id, kind, path, created_at
+      )
+      SELECT id, run_id, task_id, session_id, kind, path, created_at
+      FROM orchestration_artifacts_legacy
+    `
+  );
 }
 
 function ensureHostCheckpointsTableSchema(db: DatabaseSync): void {
+  recoverInterruptedMigration(db, "orchestration_host_checkpoints");
+
   if (!tableExists(db, "orchestration_host_checkpoints")) {
     db.exec(CREATE_HOST_CHECKPOINTS_TABLE_SQL);
     return;
@@ -387,16 +420,18 @@ function ensureHostCheckpointsTableSchema(db: DatabaseSync): void {
     return;
   }
 
-  db.exec("ALTER TABLE orchestration_host_checkpoints RENAME TO orchestration_host_checkpoints_legacy");
-  db.exec(CREATE_HOST_CHECKPOINTS_TABLE_SQL);
-  db.exec(`
-    INSERT INTO orchestration_host_checkpoints (
-      run_id, lease_owner, lease_expires_at, checkpoint_task_id, completed_session_ids_json, updated_at
-    )
-    SELECT run_id, lease_owner, lease_expires_at, checkpoint_task_id, completed_session_ids_json, updated_at
-    FROM orchestration_host_checkpoints_legacy
-  `);
-  db.exec("DROP TABLE orchestration_host_checkpoints_legacy");
+  rebuildTable(
+    db,
+    "orchestration_host_checkpoints",
+    CREATE_HOST_CHECKPOINTS_TABLE_SQL,
+    `
+      INSERT INTO orchestration_host_checkpoints (
+        run_id, lease_owner, lease_expires_at, checkpoint_task_id, completed_session_ids_json, updated_at
+      )
+      SELECT run_id, lease_owner, lease_expires_at, checkpoint_task_id, completed_session_ids_json, updated_at
+      FROM orchestration_host_checkpoints_legacy
+    `
+  );
 }
 
 function tableExists(db: DatabaseSync, tableName: string): boolean {
@@ -407,6 +442,49 @@ function tableExists(db: DatabaseSync, tableName: string): boolean {
   `).get(tableName) as { name: string } | undefined;
 
   return row !== undefined;
+}
+
+function recoverInterruptedMigration(db: DatabaseSync, tableName: string): void {
+  const legacyTableName = `${tableName}_legacy`;
+
+  if (!tableExists(db, legacyTableName)) {
+    return;
+  }
+
+  if (!tableExists(db, tableName)) {
+    db.exec(`ALTER TABLE ${legacyTableName} RENAME TO ${tableName}`);
+    return;
+  }
+
+  if (countRows(db, tableName) === 0) {
+    db.exec(`DROP TABLE ${tableName}`);
+    db.exec(`ALTER TABLE ${legacyTableName} RENAME TO ${tableName}`);
+    return;
+  }
+
+  throw new Error(`Interrupted migration detected for ${tableName}; refusing to choose between live and legacy rows.`);
+}
+
+function rebuildTable(db: DatabaseSync, tableName: string, createTableSql: string, copySql: string): void {
+  const legacyTableName = `${tableName}_legacy`;
+
+  db.exec("BEGIN IMMEDIATE");
+
+  try {
+    db.exec(`ALTER TABLE ${tableName} RENAME TO ${legacyTableName}`);
+    db.exec(createTableSql);
+    db.exec(copySql);
+    db.exec(`DROP TABLE ${legacyTableName}`);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+function countRows(db: DatabaseSync, tableName: string): number {
+  const row = db.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get() as { count: number };
+  return row.count;
 }
 
 function hasRunScopedTaskSchema(db: DatabaseSync): boolean {
@@ -439,6 +517,29 @@ function hasRunScopedTaskSchema(db: DatabaseSync): boolean {
     );
 
   return hasCompositePrimaryKey && hasRunScopedParentForeignKey;
+}
+
+function hasRunScopedArtifactSchema(db: DatabaseSync): boolean {
+  const foreignKeys = db.prepare("PRAGMA foreign_key_list(orchestration_artifacts)").all() as Array<{
+    from: string;
+    to: string;
+    table: string;
+  }>;
+
+  return (
+    foreignKeys.some(
+      (foreignKey) =>
+        foreignKey.table === "orchestration_tasks" &&
+        foreignKey.from === "run_id" &&
+        foreignKey.to === "run_id"
+    ) &&
+    foreignKeys.some(
+      (foreignKey) =>
+        foreignKey.table === "orchestration_tasks" &&
+        foreignKey.from === "task_id" &&
+        foreignKey.to === "id"
+    )
+  );
 }
 
 function hasRunScopedCheckpointSchema(db: DatabaseSync): boolean {

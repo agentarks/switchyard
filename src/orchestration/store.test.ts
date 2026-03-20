@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
+import { importSqlite } from "../storage/sqlite.js";
 import { createTempGitRepo, removeTempDir } from "../test-helpers/git.js";
 import {
   createArtifactRecord,
@@ -267,6 +268,255 @@ test("host checkpoints reject checkpoint task ids that are not owned by the same
         }),
       /constraint/i
     );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("artifacts reject task ids that are missing or owned by another run", async () => {
+  const repoDir = await createTempGitRepo("switchyard-orchestration-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createOrchestrationRun(repoDir, {
+      id: "run-001",
+      objective: "First run",
+      targetBranch: "main",
+      integrationBranch: "runs/run-001/lead",
+      integrationWorktreePath: join(repoDir, ".switchyard", "worktrees", "run-001-lead"),
+      mergePolicy: "manual-ready",
+      state: "planning"
+    });
+    await createOrchestrationRun(repoDir, {
+      id: "run-002",
+      objective: "Second run",
+      targetBranch: "main",
+      integrationBranch: "runs/run-002/lead",
+      integrationWorktreePath: join(repoDir, ".switchyard", "worktrees", "run-002-lead"),
+      mergePolicy: "manual-ready",
+      state: "planning"
+    });
+
+    await createTaskRecord(repoDir, {
+      id: "task-run-1-only",
+      runId: "run-001",
+      role: "lead",
+      title: "Run one root",
+      state: "planned"
+    });
+
+    await assert.rejects(
+      () =>
+        createArtifactRecord(repoDir, {
+          id: "artifact-missing-task",
+          runId: "run-001",
+          taskId: "missing-task",
+          kind: "objective_spec",
+          path: ".switchyard/objectives/missing.md"
+        }),
+      /constraint/i
+    );
+
+    await assert.rejects(
+      () =>
+        createArtifactRecord(repoDir, {
+          id: "artifact-cross-run-task",
+          runId: "run-002",
+          taskId: "task-run-1-only",
+          kind: "verification_output",
+          path: ".switchyard/agent-results/cross-run.json"
+        }),
+      /constraint/i
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("task migration fails closed and preserves legacy data when invalid rows cannot be upgraded", async () => {
+  const repoDir = await createTempGitRepo("switchyard-orchestration-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+    const { DatabaseSync } = await importSqlite();
+    const db = new DatabaseSync(join(repoDir, ".switchyard", "orchestration.db"));
+
+    try {
+      db.exec(`
+        CREATE TABLE orchestration_tasks (
+          id TEXT PRIMARY KEY,
+          run_id TEXT NOT NULL,
+          parent_task_id TEXT,
+          role TEXT NOT NULL,
+          title TEXT NOT NULL,
+          file_scope_json TEXT NOT NULL,
+          state TEXT NOT NULL,
+          assigned_session_id TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`
+        CREATE TABLE orchestration_host_checkpoints (
+          run_id TEXT PRIMARY KEY,
+          lease_owner TEXT,
+          lease_expires_at TEXT,
+          checkpoint_task_id TEXT,
+          completed_session_ids_json TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.prepare(`
+        INSERT INTO orchestration_tasks (
+          id, run_id, parent_task_id, role, title, file_scope_json, state, assigned_session_id, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "task-root",
+        "run-001",
+        null,
+        "lead",
+        "Run one root",
+        "[]",
+        "planned",
+        null,
+        "2026-03-19T14:00:00.000Z",
+        "2026-03-19T14:00:00.000Z"
+      );
+      db.prepare(`
+        INSERT INTO orchestration_tasks (
+          id, run_id, parent_task_id, role, title, file_scope_json, state, assigned_session_id, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "task-cross-run-child",
+        "run-002",
+        "task-root",
+        "builder",
+        "Invalid cross-run child",
+        "[]",
+        "planned",
+        null,
+        "2026-03-19T14:01:00.000Z",
+        "2026-03-19T14:01:00.000Z"
+      );
+    } finally {
+      db.close();
+    }
+
+    await assert.rejects(() => initializeOrchestrationStore(repoDir), /constraint/i);
+
+    const reopened = new (await importSqlite()).DatabaseSync(join(repoDir, ".switchyard", "orchestration.db"));
+
+    try {
+      const taskCount = reopened.prepare("SELECT COUNT(*) AS count FROM orchestration_tasks").get() as { count: number };
+      const legacyTable = reopened
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'orchestration_tasks_legacy'")
+        .get() as { name: string } | undefined;
+
+      assert.equal(taskCount.count, 2);
+      assert.equal(legacyTable, undefined);
+    } finally {
+      reopened.close();
+    }
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("task migration does not ignore stranded legacy rows from an interrupted prior upgrade", async () => {
+  const repoDir = await createTempGitRepo("switchyard-orchestration-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+    const { DatabaseSync } = await importSqlite();
+    const db = new DatabaseSync(join(repoDir, ".switchyard", "orchestration.db"));
+
+    try {
+      db.exec(`
+        CREATE TABLE orchestration_tasks (
+          run_id TEXT NOT NULL,
+          id TEXT NOT NULL,
+          parent_task_id TEXT,
+          role TEXT NOT NULL,
+          title TEXT NOT NULL,
+          file_scope_json TEXT NOT NULL,
+          state TEXT NOT NULL,
+          assigned_session_id TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (run_id, id),
+          FOREIGN KEY (run_id, parent_task_id) REFERENCES orchestration_tasks (run_id, id)
+        )
+      `);
+      db.exec(`
+        CREATE TABLE orchestration_tasks_legacy (
+          id TEXT PRIMARY KEY,
+          run_id TEXT NOT NULL,
+          parent_task_id TEXT,
+          role TEXT NOT NULL,
+          title TEXT NOT NULL,
+          file_scope_json TEXT NOT NULL,
+          state TEXT NOT NULL,
+          assigned_session_id TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.prepare(`
+        INSERT INTO orchestration_tasks_legacy (
+          id, run_id, parent_task_id, role, title, file_scope_json, state, assigned_session_id, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "task-root",
+        "run-001",
+        null,
+        "lead",
+        "Run one root",
+        "[]",
+        "planned",
+        null,
+        "2026-03-19T14:00:00.000Z",
+        "2026-03-19T14:00:00.000Z"
+      );
+      db.prepare(`
+        INSERT INTO orchestration_tasks_legacy (
+          id, run_id, parent_task_id, role, title, file_scope_json, state, assigned_session_id, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "task-cross-run-child",
+        "run-002",
+        "task-root",
+        "builder",
+        "Invalid cross-run child",
+        "[]",
+        "planned",
+        null,
+        "2026-03-19T14:01:00.000Z",
+        "2026-03-19T14:01:00.000Z"
+      );
+    } finally {
+      db.close();
+    }
+
+    await assert.rejects(() => initializeOrchestrationStore(repoDir), /constraint/i);
+
+    const reopened = new (await importSqlite()).DatabaseSync(join(repoDir, ".switchyard", "orchestration.db"));
+
+    try {
+      const taskCount = reopened.prepare("SELECT COUNT(*) AS count FROM orchestration_tasks").get() as { count: number };
+      const legacyTable = reopened
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'orchestration_tasks_legacy'")
+        .get() as { name: string } | undefined;
+
+      assert.equal(taskCount.count, 2);
+      assert.equal(legacyTable, undefined);
+    } finally {
+      reopened.close();
+    }
   } finally {
     await removeTempDir(repoDir);
   }
