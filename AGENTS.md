@@ -9,6 +9,7 @@ The current target is a reliable bounded autonomous swarm loop:
 - `sy sling`
 - `sy status`
 - `sy events`
+- `sy logs`
 - `sy stop`
 - `sy merge`
 - `sy mail send`

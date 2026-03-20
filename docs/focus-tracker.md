@@ -28,6 +28,7 @@ That means the project should reliably support:
 - `sy sling`
 - `sy status`
 - `sy events`
+- `sy logs`
 - `sy stop`
 - `sy merge`
 - `sy mail send`
