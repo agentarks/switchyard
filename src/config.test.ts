@@ -54,6 +54,89 @@ test("loadConfig normalizes project.root to the canonical repo root", async () =
 
     const loaded = await loadConfig(repoDir);
     assert.equal(loaded.project.root, repoDir);
+    assert.equal(loaded.orchestration.maxConcurrentSpecialists, 3);
+    assert.equal(loaded.orchestration.reviewPolicy, "required");
+    assert.equal(loaded.orchestration.mergePolicy, "manual-ready");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("loadConfig backfills orchestration defaults for legacy config files", async () => {
+  const repoDir = await createTempGitRepo("switchyard-config-test-");
+
+  try {
+    await mkdir(join(repoDir, ".switchyard"), { recursive: true });
+    await writeFile(
+      join(repoDir, ".switchyard", "config.yaml"),
+      stringify({
+        project: {
+          name: "switchyard",
+          root: "/tmp/old-location",
+          canonicalBranch: "main"
+        },
+        runtime: {
+          default: "codex",
+          useTmux: true
+        },
+        worktrees: {
+          baseDir: ".switchyard/worktrees"
+        }
+      }),
+      "utf8"
+    );
+
+    const loaded = await loadConfig(repoDir);
+    assert.deepEqual(loaded.orchestration, {
+      maxConcurrentSpecialists: 3,
+      reviewPolicy: "required",
+      mergePolicy: "manual-ready"
+    });
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("buildDefaultConfig includes orchestration defaults", () => {
+  const config = buildDefaultConfig("/tmp/repo", "switchyard", "main");
+
+  assert.deepEqual(config.orchestration, {
+    maxConcurrentSpecialists: 3,
+    reviewPolicy: "required",
+    mergePolicy: "manual-ready"
+  });
+});
+
+test("loadConfig preserves explicit orchestration settings", async () => {
+  const repoDir = await createTempGitRepo("switchyard-config-test-");
+
+  try {
+    const config = buildDefaultConfig(repoDir, "switchyard", "main");
+    config.orchestration.maxConcurrentSpecialists = 5;
+    config.orchestration.reviewPolicy = "optional";
+    config.orchestration.mergePolicy = "auto-after-verify";
+    await mkdir(join(repoDir, ".switchyard"), { recursive: true });
+    await writeFile(join(repoDir, ".switchyard", "config.yaml"), stringify(config), "utf8");
+
+    const loaded = await loadConfig(repoDir);
+    assert.equal(loaded.orchestration.maxConcurrentSpecialists, 5);
+    assert.equal(loaded.orchestration.reviewPolicy, "optional");
+    assert.equal(loaded.orchestration.mergePolicy, "auto-after-verify");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("loadConfig rejects a non-positive orchestration concurrency cap", async () => {
+  const repoDir = await createTempGitRepo("switchyard-config-test-");
+
+  try {
+    const config = buildDefaultConfig(repoDir, "switchyard", "main");
+    config.orchestration.maxConcurrentSpecialists = 0;
+    await mkdir(join(repoDir, ".switchyard"), { recursive: true });
+    await writeFile(join(repoDir, ".switchyard", "config.yaml"), stringify(config), "utf8");
+
+    await assert.rejects(() => loadConfig(repoDir), /Invalid \.switchyard\/config\.yaml shape\./);
   } finally {
     await removeTempDir(repoDir);
   }

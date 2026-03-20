@@ -7,55 +7,53 @@ Canonical implementation history now lives in [docs/slice-ledger.md](slice-ledge
 ## Current Milestone
 
 The active milestone is:
-- durable orchestration state for bounded swarm runs
+- objective specs and role-aware specialist launch
 
-The source-of-truth reset is now complete.
+The durable orchestration state bundle is now landed at the storage/config/bootstrap layer.
 
-That means the next active bundle should make it possible to persist one bounded orchestration run truthfully before specialist launch or merge automation exists.
+That means the next active bundle should make `sy sling` start one durable orchestration run plus one `lead` contract, instead of stopping at the new storage layer.
 
 ## Why This Milestone
 
-The repo already has the narrow bounded Codex foundation in place:
+The repo now has the durable state foundation the swarm direction needed:
 - bounded `codex exec --json` launch in `sy sling`
 - durable sessions, runs, events, mail, logs, merge, and cleanup
-- readable structured `sy logs <session>`
-- truthful natural completion in `sy status`
-- proof that two delegated sessions can be followed through the current per-session workflow
+- orchestration runs, task graphs, artifact references, and host checkpoints in `orchestration.db`
+- role-aware session linkage plus orchestration config/bootstrap defaults
 
-What it does not have yet is the top-level orchestration model that the new direction depends on:
-- no run-scoped task graph
-- no lead/specialist role metadata
-- no orchestration artifact references
-- no host recovery or resume checkpoint
+What it does not have yet is the launcher contract that would use that durable model truthfully:
+- `sy sling` still launches one detached worker session directly
+- the current production path does not yet create orchestration run, task, artifact, or host-checkpoint rows
+- no objective spec or per-agent handoff spec is written for a run
+- no structured result-envelope path is reserved for the future lead or specialists
 
-That makes durable orchestration state the next smallest coherent bundle.
+That makes objective specs and role-aware launch the next smallest coherent bundle.
 
 ## Active Bundle
 
-1. Add durable orchestration state first.
-- top-level runs
-- task graph rows
-- artifact references
-- host recovery metadata
+1. Make `sy sling` create one orchestration run and one `lead` session together.
+- objective spec
+- lead handoff spec
+- reserved result-envelope path
 
 2. Extend the current foundations without reopening the runtime baseline.
 - keep the bounded Codex runtime path
 - keep the current repo-local worktree model
-- add role and run linkage instead of inventing a second lifecycle system
+- reuse the new orchestration store and session metadata instead of inventing a second lifecycle system
 
 3. Preserve the rollout gate.
 - default merge policy remains `manual-ready`
 - do not implement `auto-after-verify` in this bundle
 
 The current bundle is:
-- orchestration store, session role metadata, and config/bootstrap extensions from Chunk 2 of the bounded autonomous swarm plan
+- objective specs, structured result envelopes, and role-aware launch from Chunk 3 of the bounded autonomous swarm plan
 
 ## Next Bundle Categories
 
 After this bundle, the next implementation work should come from one of these categories:
-- objective specs and role-aware launcher contracts
 - bounded lead host, resume, and stop semantics
 - integration composition and verification that stop at `merge_ready`
+- run-aware mail, events, and status surfaces that keep the transition readable
 
 These are milestone categories, not a license to broaden scope. Choose the next coherent bundle that makes the bounded swarm model materially real.
 

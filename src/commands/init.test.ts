@@ -47,6 +47,11 @@ test("sy init bootstraps the repo root when invoked from a nested directory", as
       },
       worktrees: {
         baseDir: ".switchyard/worktrees"
+      },
+      orchestration: {
+        maxConcurrentSpecialists: 3,
+        reviewPolicy: "required",
+        mergePolicy: "manual-ready"
       }
     });
 
@@ -57,7 +62,10 @@ test("sy init bootstraps the repo root when invoked from a nested directory", as
       ".switchyard/logs",
       ".switchyard/agents",
       ".switchyard/specs",
+      ".switchyard/objectives",
+      ".switchyard/agent-results",
       ".switchyard/sessions.db",
+      ".switchyard/orchestration.db",
       ".switchyard/mail.db",
       ".switchyard/events.db"
     ]) {
@@ -100,6 +108,11 @@ test("sy init warns when the chosen canonical branch does not point to a commit 
       },
       worktrees: {
         baseDir: ".switchyard/worktrees"
+      },
+      orchestration: {
+        maxConcurrentSpecialists: 3,
+        reviewPolicy: "required",
+        mergePolicy: "manual-ready"
       }
     });
   } finally {
