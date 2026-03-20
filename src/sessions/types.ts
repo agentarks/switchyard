@@ -1,7 +1,13 @@
+import type { AgentRole } from "../orchestration/types.js";
+
 export type SessionState = "starting" | "running" | "stopped" | "failed";
 
 export interface SessionRecord {
   id: string;
+  runId?: string | null;
+  role?: AgentRole | null;
+  parentSessionId?: string | null;
+  objectiveTaskId?: string | null;
   agentName: string;
   branch: string;
   baseBranch: string | null;
@@ -14,6 +20,10 @@ export interface SessionRecord {
 
 export interface CreateSessionInput {
   id: string;
+  runId?: string | null;
+  role?: AgentRole | null;
+  parentSessionId?: string | null;
+  objectiveTaskId?: string | null;
   agentName: string;
   branch: string;
   baseBranch?: string | null;

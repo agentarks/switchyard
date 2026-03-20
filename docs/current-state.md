@@ -11,21 +11,24 @@ That direction means:
 - the initial rollout gate is `manual-ready`
 - `auto-after-verify` is deferred until a later explicit policy adoption
 
-The implementation has not reached that contract yet.
+The implementation has not reached that contract yet, but it has now crossed the first real orchestration boundary.
 
-What exists today is still the earlier bounded single-agent Codex loop:
-- one detached `codex exec --json` task per launched session
-- durable session, run, event, and mail storage
-- exact session inspection through status, events, logs, merge, stop, and mail
-- narrow reintegration support through preserved session branches and explicit cleanup
+What exists today is:
+- the earlier bounded single-agent Codex loop for launch, session inspection, merge, and cleanup
+- a new top-level orchestration store for runs, task graphs, artifact references, and host checkpoints
+- session metadata that can link lead and specialist records back to one orchestration run
+- orchestration config/bootstrap defaults for merge policy, specialist concurrency, objective specs, and agent result envelopes
 
-That foundation is materially real and is the base the swarm rollout should build on next.
+That means the durable swarm state layer is now materially real as a storage/config/bootstrap foundation, while launch and operator surfaces still reflect the earlier single-session workflow.
 
 ## What Exists
 
 - `sy init`, `sy sling`, `sy status`, `sy events`, `sy logs`, `sy stop`, `sy merge`, and `sy mail` are implemented
 - the bounded Codex runtime path is real and defaults launch to `--sandbox workspace-write` unless the operator overrides it
-- `.switchyard/` bootstrap, durable logs, task specs, worktrees, sessions, runs, events, and mail are real
+- `.switchyard/` bootstrap, durable logs, task specs, worktrees, sessions, runs, events, mail, objectives, agent result envelopes, and orchestration state are real
+- `.switchyard/orchestration.db` now persists top-level orchestration runs, task graphs, artifact references, and host recovery checkpoints
+- sessions now persist run linkage, role metadata, parent-session linkage, and objective-task linkage
+- default config now carries orchestration policy for specialist concurrency, review policy, and merge policy
 - exact session-id visibility is present across the core operator commands
 - exact-session `sy status` inspection now includes launch/task context, review hints, summary text, artifact presence, and recent-event context
 - all-session `sy status` includes task ownership, run summaries, unread-mail counts, cleanup readiness, conservative review hints, and next-step guidance
@@ -37,8 +40,6 @@ That foundation is materially real and is the base the swarm rollout should buil
 
 ## What Does Not Exist Yet
 
-- a top-level orchestration store for bounded swarm runs
-- run-scoped task graphs, artifact references, and host recovery checkpoints
 - role-aware `lead` or specialist launch contracts
 - run-level stop and resume semantics
 - lead-owned integration composition and verification
@@ -71,7 +72,13 @@ Today the implementation still behaves like the earlier bounded single-agent loo
 - `sy mail send|check|list`
   - provides durable exact-session mailbox inspection and messaging
 
-The adopted product contract for those commands is now broader than the implementation. See [docs/cli-contract.md](cli-contract.md) for the direction the next bundles should implement.
+Behind that unchanged operator surface, the durable orchestration layer now exists:
+- `orchestration.db` stores top-level run, task, artifact, and host-checkpoint truth
+- `sessions.db` can link per-agent records into one bounded swarm run
+- `config.yaml` now includes orchestration policy defaults
+- current production launch still does not create orchestration rows yet; Chunk 3 is the bundle that wires `sy sling` into that durable model
+
+The adopted product contract for those commands is still broader than the implementation. See [docs/cli-contract.md](cli-contract.md) for the direction the next bundles should implement.
 
 ## Current Merge Workflow
 
@@ -87,8 +94,7 @@ That is still the truthful implementation state, but it is now a rollout bridge 
 
 ## Current Risks
 
-- the adopted source-of-truth now points at bounded orchestration, but the code still implements the earlier single-agent model
-- the current run model is intentionally narrow and does not yet represent orchestration runs, task graphs, or artifact references
+- the adopted source-of-truth now points at bounded orchestration, but launch and operator surfaces still implement the earlier single-agent model
 - session-centric operator surfaces will become confusing once the swarm rollout starts unless run-centric views land early
 - the current merge and cleanup paths are still anchored to preserved session branches, not a lead-owned integration branch
 - `node:sqlite` is still experimental in Node 25, so the storage choice may need revision if core API churn becomes painful
@@ -98,15 +104,14 @@ That is still the truthful implementation state, but it is now a rollout bridge 
 
 The direction-adoption bundle is now the accepted source of truth.
 
-The active milestone is now:
-- durable orchestration state for bounded swarm runs
+The durable orchestration state bundle has now landed.
 
 The recommended next task is:
-- start the durable orchestration state bundle
-- add failing tests for top-level runs, task graphs, artifact references, role metadata, and orchestration config/bootstrap behavior
-- implement the orchestration store and the minimal session/config/bootstrap changes needed to persist that model truthfully
+- start the objective-spec and role-aware launch bundle
+- make `sy sling` create one orchestration run plus one `lead` session instead of launching one detached worker directly
+- write durable objective and per-agent handoff specs plus reserved result-envelope paths under `.switchyard/`
 
-Do not skip straight to automatic merge or broad runtime expansion. The next value is making the top-level bounded swarm state durable first.
+Do not skip straight to automatic merge or broad runtime expansion. The next value is making the launcher and agent contracts match the durable swarm state that now exists.
 
 ## How To Use This File
 

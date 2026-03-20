@@ -1,3 +1,5 @@
+import type { ReviewPolicy, RunMergePolicy } from "./orchestration/types.js";
+
 export interface SwitchyardConfig {
   project: {
     name: string;
@@ -10,5 +12,10 @@ export interface SwitchyardConfig {
   };
   worktrees: {
     baseDir: string;
+  };
+  orchestration: {
+    maxConcurrentSpecialists: number;
+    reviewPolicy: ReviewPolicy;
+    mergePolicy: RunMergePolicy;
   };
 }

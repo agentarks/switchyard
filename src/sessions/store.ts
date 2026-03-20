@@ -6,6 +6,10 @@ import type { CreateSessionInput, SessionRecord, UpdateSessionStateInput } from 
 const CREATE_SESSIONS_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
+    run_id TEXT,
+    role TEXT,
+    parent_session_id TEXT,
+    objective_task_id TEXT,
     agent_name TEXT NOT NULL,
     branch TEXT NOT NULL,
     base_branch TEXT,
@@ -19,6 +23,10 @@ const CREATE_SESSIONS_TABLE_SQL = `
 
 interface SessionRow {
   id: string;
+  run_id: string | null;
+  role: SessionRecord["role"];
+  parent_session_id: string | null;
+  objective_task_id: string | null;
   agent_name: string;
   branch: string;
   base_branch: string | null;
@@ -38,7 +46,7 @@ export async function initializeSessionStore(projectRoot: string): Promise<void>
 export async function listSessions(projectRoot: string): Promise<SessionRecord[]> {
   return await withSessionDatabase(projectRoot, (db) => {
     const rows = db.prepare(`
-      SELECT id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
+      SELECT id, run_id, role, parent_session_id, objective_task_id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
       FROM sessions
       ORDER BY updated_at DESC, created_at DESC, id ASC
     `).all() as unknown as SessionRow[];
@@ -50,15 +58,25 @@ export async function listSessions(projectRoot: string): Promise<SessionRecord[]
 export async function createSession(projectRoot: string, input: CreateSessionInput): Promise<SessionRecord> {
   const createdAt = input.createdAt ?? new Date().toISOString();
   const updatedAt = input.updatedAt ?? createdAt;
+  const runId = input.runId ?? null;
+  const role = input.role ?? null;
+  const parentSessionId = input.parentSessionId ?? null;
+  const objectiveTaskId = input.objectiveTaskId ?? null;
   const baseBranch = input.baseBranch ?? null;
   const runtimePid = input.runtimePid ?? null;
 
   await withSessionDatabase(projectRoot, (db) => {
     db.prepare(`
-      INSERT INTO sessions (id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sessions (
+        id, run_id, role, parent_session_id, objective_task_id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.id,
+      runId,
+      role,
+      parentSessionId,
+      objectiveTaskId,
       input.agentName,
       input.branch,
       baseBranch,
@@ -72,6 +90,10 @@ export async function createSession(projectRoot: string, input: CreateSessionInp
 
   return {
     id: input.id,
+    runId,
+    role,
+    parentSessionId,
+    objectiveTaskId,
     agentName: input.agentName,
     branch: input.branch,
     baseBranch,
@@ -86,7 +108,7 @@ export async function createSession(projectRoot: string, input: CreateSessionInp
 export async function getSessionById(projectRoot: string, id: string): Promise<SessionRecord | undefined> {
   return await withSessionDatabase(projectRoot, (db) => {
     const row = db.prepare(`
-      SELECT id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
+      SELECT id, run_id, role, parent_session_id, objective_task_id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
       FROM sessions
       WHERE id = ?
     `).get(id) as unknown as SessionRow | undefined;
@@ -98,7 +120,7 @@ export async function getSessionById(projectRoot: string, id: string): Promise<S
 export async function findLatestSessionByAgent(projectRoot: string, agentName: string): Promise<SessionRecord | undefined> {
   return await withSessionDatabase(projectRoot, (db) => {
     const row = db.prepare(`
-      SELECT id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
+      SELECT id, run_id, role, parent_session_id, objective_task_id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
       FROM sessions
       WHERE agent_name = ?
       ORDER BY updated_at DESC, created_at DESC, id ASC
@@ -112,7 +134,7 @@ export async function findLatestSessionByAgent(projectRoot: string, agentName: s
 export async function listSessionsByAgent(projectRoot: string, agentName: string): Promise<SessionRecord[]> {
   return await withSessionDatabase(projectRoot, (db) => {
     const rows = db.prepare(`
-      SELECT id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
+      SELECT id, run_id, role, parent_session_id, objective_task_id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at
       FROM sessions
       WHERE agent_name = ?
       ORDER BY updated_at DESC, created_at DESC, id ASC
@@ -173,11 +195,31 @@ function ensureSessionsSchema(db: DatabaseSync): void {
   if (!columnNames.has("runtime_pid")) {
     db.exec("ALTER TABLE sessions ADD COLUMN runtime_pid INTEGER");
   }
+
+  if (!columnNames.has("run_id")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN run_id TEXT");
+  }
+
+  if (!columnNames.has("role")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN role TEXT");
+  }
+
+  if (!columnNames.has("parent_session_id")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN parent_session_id TEXT");
+  }
+
+  if (!columnNames.has("objective_task_id")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN objective_task_id TEXT");
+  }
 }
 
 function mapSessionRow(row: SessionRow): SessionRecord {
   return {
     id: row.id,
+    runId: row.run_id,
+    role: row.role,
+    parentSessionId: row.parent_session_id,
+    objectiveTaskId: row.objective_task_id,
     agentName: row.agent_name,
     branch: row.branch,
     baseBranch: row.base_branch,

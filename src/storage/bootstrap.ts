@@ -16,9 +16,10 @@ Tracked files:
 
 Ignored files:
 - SQLite databases
+- objective specs and agent result envelopes
 - logs
 - worktrees
-- run markers
+- run markers and generated artifacts
 
 Database schema is created lazily by the store layer when each database is first opened.
 `;
@@ -30,12 +31,15 @@ export async function bootstrapSwitchyardLayout(projectRoot: string): Promise<vo
   await mkdir(join(switchyardDir, "logs"), { recursive: true });
   await mkdir(join(switchyardDir, "agents"), { recursive: true });
   await mkdir(join(switchyardDir, "specs"), { recursive: true });
+  await mkdir(join(switchyardDir, "objectives"), { recursive: true });
+  await mkdir(join(switchyardDir, "agent-results"), { recursive: true });
 
   await writeFile(join(switchyardDir, ".gitignore"), SWITCHYARD_GITIGNORE, "utf8");
   await writeFile(join(switchyardDir, "README.md"), SWITCHYARD_README, "utf8");
 
   await ensureFile(join(switchyardDir, "sessions.db"));
   await ensureFile(join(switchyardDir, "runs.db"));
+  await ensureFile(join(switchyardDir, "orchestration.db"));
   await ensureFile(join(switchyardDir, "mail.db"));
   await ensureFile(join(switchyardDir, "events.db"));
 }

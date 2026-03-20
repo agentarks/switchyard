@@ -3,12 +3,16 @@ import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { parse, stringify } from "yaml";
 import { ConfigError } from "./errors.js";
+import type { ReviewPolicy, RunMergePolicy } from "./orchestration/types.js";
 import type { SwitchyardConfig } from "./types.js";
 
 export const SWITCHYARD_DIR = ".switchyard";
 export const CONFIG_FILE = "config.yaml";
 
 export const DEFAULT_RUNTIME = "codex";
+export const DEFAULT_MAX_CONCURRENT_SPECIALISTS = 3;
+export const DEFAULT_REVIEW_POLICY: ReviewPolicy = "required";
+export const DEFAULT_MERGE_POLICY: RunMergePolicy = "manual-ready";
 
 export function buildDefaultConfig(projectRoot: string, projectName: string, canonicalBranch: string): SwitchyardConfig {
   return {
@@ -23,6 +27,11 @@ export function buildDefaultConfig(projectRoot: string, projectName: string, can
     },
     worktrees: {
       baseDir: ".switchyard/worktrees"
+    },
+    orchestration: {
+      maxConcurrentSpecialists: DEFAULT_MAX_CONCURRENT_SPECIALISTS,
+      reviewPolicy: DEFAULT_REVIEW_POLICY,
+      mergePolicy: DEFAULT_MERGE_POLICY
     }
   };
 }
@@ -106,11 +115,25 @@ export async function loadConfig(startDir = process.cwd()): Promise<SwitchyardCo
     throw new ConfigError(`Invalid ${SWITCHYARD_DIR}/${CONFIG_FILE} shape.`);
   }
 
+  const config = parsed;
+  const orchestration: Record<string, unknown> = isRecord(config.orchestration)
+    ? config.orchestration
+    : {};
+
   return {
     ...parsed,
     project: {
       ...parsed.project,
       root: projectRoot
+    },
+    orchestration: {
+      maxConcurrentSpecialists:
+        isPositiveInteger(orchestration.maxConcurrentSpecialists)
+          ? orchestration.maxConcurrentSpecialists
+          : DEFAULT_MAX_CONCURRENT_SPECIALISTS,
+      reviewPolicy:
+        orchestration.reviewPolicy === "optional" ? "optional" : DEFAULT_REVIEW_POLICY,
+      mergePolicy: DEFAULT_MERGE_POLICY
     }
   };
 }
@@ -145,9 +168,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value > 0;
+}
+
 function isSwitchyardConfig(value: unknown): value is SwitchyardConfig {
   if (!isRecord(value)) return false;
   if (!isRecord(value.project) || !isRecord(value.runtime) || !isRecord(value.worktrees)) return false;
+  const orchestration = value.orchestration;
+  const hasValidOrchestration =
+    orchestration === undefined ||
+    (isRecord(orchestration) &&
+      (orchestration.maxConcurrentSpecialists === undefined ||
+        isPositiveInteger(orchestration.maxConcurrentSpecialists)) &&
+      (orchestration.reviewPolicy === undefined ||
+        orchestration.reviewPolicy === "required" ||
+        orchestration.reviewPolicy === "optional") &&
+      (orchestration.mergePolicy === undefined ||
+        orchestration.mergePolicy === "manual-ready"));
 
   return (
     typeof value.project.name === "string" &&
@@ -155,6 +193,7 @@ function isSwitchyardConfig(value: unknown): value is SwitchyardConfig {
     typeof value.project.canonicalBranch === "string" &&
     typeof value.runtime.default === "string" &&
     typeof value.runtime.useTmux === "boolean" &&
-    typeof value.worktrees.baseDir === "string"
+    typeof value.worktrees.baseDir === "string" &&
+    hasValidOrchestration
   );
 }

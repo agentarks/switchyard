@@ -94,6 +94,10 @@ test("listSessions returns inserted sessions ordered by most recent update", asy
     assert.equal(sessions[1]?.id, "agent-one");
     assert.deepEqual(sessions[0], {
       id: "agent-two",
+      runId: null,
+      role: null,
+      parentSessionId: null,
+      objectiveTaskId: null,
       agentName: "agent-two",
       branch: "agents/agent-two",
       baseBranch: null,
@@ -151,6 +155,108 @@ test("listSessions upgrades older session rows without base_branch metadata", as
     assert.equal(sessions.length, 1);
     assert.equal(sessions[0]?.id, "legacy-agent");
     assert.equal(sessions[0]?.baseBranch, null);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("createSession stores orchestration role and linkage metadata", async () => {
+  const repoDir = await createTempGitRepo("switchyard-session-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createSession(repoDir, {
+      id: "lead-session",
+      runId: "run-001",
+      role: "lead",
+      objectiveTaskId: "task-root",
+      agentName: "lead",
+      branch: "runs/run-001/lead",
+      baseBranch: "main",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "run-001-lead"),
+      state: "running",
+      runtimePid: 4321,
+      createdAt: "2026-03-19T15:00:00.000Z",
+      updatedAt: "2026-03-19T15:00:00.000Z"
+    });
+    await createSession(repoDir, {
+      id: "builder-session",
+      runId: "run-001",
+      role: "builder",
+      parentSessionId: "lead-session",
+      objectiveTaskId: "task-build-store",
+      agentName: "builder-store",
+      branch: "runs/run-001/builder-store",
+      baseBranch: "runs/run-001/lead",
+      worktreePath: join(repoDir, ".switchyard", "worktrees", "run-001-builder-store"),
+      state: "starting",
+      createdAt: "2026-03-19T15:01:00.000Z",
+      updatedAt: "2026-03-19T15:01:00.000Z"
+    });
+
+    const sessions = await listSessions(repoDir);
+
+    assert.equal(sessions.length, 2);
+    assert.equal(sessions[0]?.id, "builder-session");
+    assert.equal(sessions[0]?.runId, "run-001");
+    assert.equal(sessions[0]?.role, "builder");
+    assert.equal(sessions[0]?.parentSessionId, "lead-session");
+    assert.equal(sessions[0]?.objectiveTaskId, "task-build-store");
+    assert.equal(sessions[1]?.role, "lead");
+    assert.equal(sessions[1]?.parentSessionId, null);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("listSessions upgrades older rows without orchestration linkage metadata", async () => {
+  const repoDir = await createTempGitRepo("switchyard-session-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+    const { DatabaseSync } = await importSqlite();
+    const db = new DatabaseSync(join(repoDir, ".switchyard", "sessions.db"));
+
+    try {
+      db.exec(`
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          agent_name TEXT NOT NULL,
+          branch TEXT NOT NULL,
+          base_branch TEXT,
+          worktree_path TEXT NOT NULL,
+          state TEXT NOT NULL,
+          runtime_pid INTEGER,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.prepare(`
+        INSERT INTO sessions (id, agent_name, branch, base_branch, worktree_path, state, runtime_pid, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "legacy-agent",
+        "legacy-agent",
+        "agents/legacy-agent",
+        "main",
+        join(repoDir, ".switchyard", "worktrees", "legacy-agent"),
+        "running",
+        111,
+        "2026-03-19T15:10:00.000Z",
+        "2026-03-19T15:11:00.000Z"
+      );
+    } finally {
+      db.close();
+    }
+
+    const sessions = await listSessions(repoDir);
+
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0]?.runId, null);
+    assert.equal(sessions[0]?.role, null);
+    assert.equal(sessions[0]?.parentSessionId, null);
+    assert.equal(sessions[0]?.objectiveTaskId, null);
   } finally {
     await removeTempDir(repoDir);
   }
