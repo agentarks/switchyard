@@ -4,16 +4,35 @@
 
 Switchyard is a CLI-first, Codex-first orchestration tool for one repository at a time.
 
-The current target is a reliable single-agent operator loop:
+The current target is a reliable bounded autonomous swarm loop:
 - `sy init`
 - `sy sling`
 - `sy status`
 - `sy events`
+- `sy logs`
 - `sy stop`
 - `sy merge`
 - `sy mail send`
 - `sy mail check`
 - `sy mail list`
+
+In this direction, `sy sling` means "start one bounded orchestration run" for one operator objective, not "launch one detached worker and stop there."
+
+The near-term product target is bounded autonomous swarm execution with explicit:
+- `lead`
+- `scout`
+- `builder`
+- `reviewer`
+
+The `lead` owns:
+- the integration branch
+- the integration worktree
+- composition of accepted specialist work
+
+The rollout gate for v1 is:
+- ship `manual-ready` first
+- stop the first swarm implementation at a verified `merge_ready` result
+- do not enable `auto-after-verify` until the repo adopts that policy explicitly in a later decision
 
 Favor milestone-bundled work that makes this loop more reliable or easier to understand.
 Batch adjacent in-scope changes when they share code, tests, and operator workflow meaning.
@@ -33,16 +52,18 @@ Update docs when project state or workflow meaning changes.
 ## Scope Rules
 
 In-scope work:
-- tighter lifecycle behavior in the core operator loop
-- clearer status and event inspection
-- durable state, tests, and docs that reduce operator risk
+- tighter lifecycle behavior in the bounded orchestration loop
+- clearer run and session status, event, and log inspection
+- durable state, task/artifact records, tests, and docs that reduce operator risk
+- role-aware orchestration boundaries that keep delegation explicit and bounded
 
 Defer unless explicitly requested:
 - multiple runtimes beyond Codex
 - dashboard or TUI work
 - watchdog daemons or supervisors
 - broad analytics or filtering
-- merge automation before the merge workflow exists
+- unbounded delegation trees
+- `auto-after-verify` merge until the repo explicitly adopts that policy
 
 ## Working Rules
 

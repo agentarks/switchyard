@@ -12,11 +12,11 @@
 
 ## Status
 
-Contingent future-state plan only.
+Active multi-bundle implementation plan.
 
-This document does not change the repo's current source of truth by itself. Until a separate direction-adoption PR lands and updates `AGENTS.md`, `PLAN.md`, and the planning docs, the active milestone remains the current reintegration/operator-closure work. Do not treat this file as the repo's new execution guide until Chunk 1 has landed as its own adopted bundle.
+Chunk 1 landed on 2026-03-19 through the source-of-truth adoption bundle in `AGENTS.md`, `PLAN.md`, and the planning docs, plus ADR 0005.
 
-This spec is larger than one normal PR. Execute it as the chunk sequence below, with one reviewable milestone bundle per chunk. Do not skip Chunk 1: the current repo docs still define a narrower single-agent/manual-first loop, so implementation should not outrun the source of truth.
+This spec is larger than one normal PR. Execute it as the chunk sequence below, with one reviewable milestone bundle per chunk.
 
 ## Chunk 1: Direction And Policy Reset
 
@@ -36,7 +36,7 @@ This spec is larger than one normal PR. Execute it as the chunk sequence below, 
 - Modify: `docs/roadmap.md`
 - Create: `docs/decisions/0005-bounded-autonomous-swarm-v1.md`
 
-- [ ] **Step 1: Rewrite the project direction before touching runtime behavior**
+- [x] **Step 1: Rewrite the project direction before touching runtime behavior**
 
 Update the source-of-truth docs so they consistently say:
 - until this adoption bundle lands, the current repo milestone remains reintegration/operator closure and this plan stays contingent rather than active
@@ -46,7 +46,7 @@ Update the source-of-truth docs so they consistently say:
 - the lead owns the integration branch and composition step
 - automatic merge is allowed only after an explicit policy adoption; until then, the first swarm bundle stops at a verified `merge_ready` result
 
-- [ ] **Step 2: Add one explicit decision record for rollout policy**
+- [x] **Step 2: Add one explicit decision record for rollout policy**
 
 Write `docs/decisions/0005-bounded-autonomous-swarm-v1.md` with the concrete rollout rule:
 
@@ -58,7 +58,7 @@ Decision:
 - allow `auto-after-verify` only after a later explicit policy flip
 ```
 
-- [ ] **Step 3: Review the wording for contradictions**
+- [x] **Step 3: Review the wording for contradictions**
 
 Run: `rg -n "single-agent|manual-first|reintegration and operator closure|bounded Codex runtime is now stable enough|auto-after-verify|merge_ready" AGENTS.md PLAN.md docs`
 

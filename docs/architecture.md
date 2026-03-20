@@ -4,51 +4,61 @@
 
 Switchyard should be a local orchestration system for one repository at a time.
 
-Main responsibilities:
-- spawn coding agents in isolated worktrees
-- track their lifecycle in durable state
-- route lightweight messages between agents and operator
-- expose status and inspection views
-- provide a controlled merge path later
+Its adopted near-term shape is a bounded autonomous swarm:
+- one top-level orchestration run per operator objective
+- one `lead` session that owns planning, integration, and closure
+- optional `scout`, `builder`, and `reviewer` specialist sessions under that lead
+- explicit task scopes, artifact paths, and merge policy
 
 ## Design Priorities
 
 1. Local-first operation
 2. Simple failure domains
 3. Deterministic filesystem layout
-4. Runtime abstraction without premature generalization
-5. Human operator stays in control
+4. Durable orchestration state before convenience automation
+5. Human operator stays in control of the final merge policy
 
-## Proposed Runtime Model
+## Runtime Model
 
-Define a small runtime interface that covers:
-- instruction file path
+Switchyard should keep one narrow runtime adapter boundary that covers:
+- handoff spec path
+- result-envelope path
 - spawn command and working directory
 - detached-process metadata for lifecycle control
-- readiness detection
-- optional transcript discovery/parsing later if operator workflows require it
+- readiness and completion detection
 
-This keeps runtime-specific behavior out of orchestration code.
+The bounded Codex `exec --json` path remains the baseline runtime implementation.
+The orchestration redesign should parameterize that path by role and contract rather than inventing a second runtime model.
 
-## Proposed Filesystem Layout
+## Filesystem Layout
+
+Adopted target layout:
 
 ```text
 .switchyard/
   config.yaml
   sessions.db
-  mail.db
+  runs.db
+  # legacy per-session run summaries during the transition
   events.db
-  current-run.txt
+  mail.db
+  orchestration.db
+  # top-level swarm runs, tasks, artifacts, and host recovery state
   worktrees/
   logs/
-  agents/
   specs/
+  objectives/
+  agent-results/
 ```
 
 Notes:
-- SQLite stores should be local to the repo.
-- worktrees should live under `.switchyard/worktrees/`.
-- log paths should be stable and agent-scoped.
+- SQLite stores stay repo-local.
+- `orchestration.db` is the adopted store for top-level swarm runs, task graphs, artifact references, and host recovery state.
+- `runs.db` remains the current legacy per-session run-summary store during the rollout bridge, so the existing single-agent status surfaces keep working while orchestration storage lands.
+- later implementation work may retire or repurpose `runs.db`, but Chunk 2 should not leave the boundary implicit.
+- worktrees stay under `.switchyard/worktrees/`.
+- objective specs, per-agent handoffs, logs, and result envelopes should all have deterministic paths.
+- current implementation still reflects an earlier subset of this layout; later chunks should extend it without breaking the durable paths already in use.
 
 ## Core Components
 
@@ -57,178 +67,160 @@ Notes:
 Responsible for:
 - parsing commands and flags
 - loading config
-- routing to subsystem functions
-- formatting human and JSON output
-
-Planned early commands:
-- `sy init`
-- `sy sling`
-- `sy status`
-- `sy stop`
-- `sy mail`
+- routing to orchestration and store modules
+- formatting operator-facing output
 
 ### Config Layer
 
 Responsible for:
 - finding the project root
 - loading `.switchyard/config.yaml`
-- validating required fields
-- providing defaults
+- validating policy defaults such as concurrency and merge policy
+- providing durable path defaults
 
 ### Worktree Manager
 
 Responsible for:
-- creating worktrees
+- creating lead and specialist worktrees
 - naming branches deterministically
-- listing worktrees
 - removing worktrees safely
+
+### Orchestration Store
+
+Responsible for:
+- top-level run records
+- task graph rows
+- artifact references
+- host recovery checkpoints or leases
+
+Boundary:
+- `orchestration.db` owns swarm-level truth
+- `runs.db` is not the top-level swarm-run store in the adopted design
 
 ### Session Store
 
 Responsible for:
-- tracking agent identity and state
-- storing runtime pid and other minimal launch metadata
-- tracking parent/child relationships later
-- supporting active and historical queries
+- per-agent runtime records
+- role metadata
+- run linkage
+- parent/child or task linkage where needed
 
-Current session states:
-- `starting`
-- `running`
-- `stopped`
-- `failed`
-
-These may expand later only if the operator loop needs more lifecycle precision.
-
-### Process Manager
+### Host And Policy Layer
 
 Responsible for:
-- detached process spawn
-- readiness waiting
-- signal delivery
-- liveness checks
+- accepting only lead-owned delegation
+- validating specialist scopes
+- enforcing bounded depth and concurrency limits
+- advancing runs through planning, dispatch, integration, verification, and closure
 
-This should remain separate from the worktree manager.
-
-### Mail Store
+### Mail, Event, And Verification Stores
 
 Responsible for:
-- simple inter-agent messages
-- unread/read tracking
-- thread grouping later if needed
-
-Mail should stay intentionally small in v1.
-
-### Event Store
-
-Responsible for:
-- append-only observability events
-- timeline queries
-- future diagnostics and watchdog support
-
-This can start minimal and expand later.
+- durable communication
+- append-only timelines
+- verification artifact references and summaries
 
 ## Data Model Direction
+
+### Orchestration Run
+
+Suggested fields:
+- `id`
+- `objective`
+- `targetBranch`
+- `integrationBranch`
+- `integrationWorktreePath`
+- `mergePolicy`
+- `state`
+- `startedAt`
+- `updatedAt`
 
 ### Session
 
 Suggested fields:
 - `id`
+- `runId`
+- `role`
 - `agentName`
-- `runtime`
-- `capability`
-- `taskId`
 - `branchName`
 - `worktreePath`
 - `runtimePid`
+- `parentSessionId`
+- `objectiveTaskId`
 - `state`
 - `startedAt`
 - `lastActivity`
-- `runId`
 
-### Run
-
-Suggested fields:
-- `id`
-- `startedAt`
-- `completedAt`
-- `status`
-
-### Mail Message
-
-Suggested fields:
-- `id`
-- `fromAgent`
-- `toAgent`
-- `subject`
-- `body`
-- `type`
-- `priority`
-- `read`
-- `createdAt`
-
-### Event
+### Task
 
 Suggested fields:
 - `id`
 - `runId`
-- `agentName`
-- `eventType`
-- `level`
-- `data`
+- `parentTaskId`
+- `role`
+- `title`
+- `fileScope`
+- `state`
+
+### Artifact
+
+Suggested fields:
+- `id`
+- `runId`
+- `taskId`
+- `sessionId`
+- `kind`
+- `path`
 - `createdAt`
 
 ## Command Flow Direction
-
-### `sy init`
-
-Should:
-- create `.switchyard/`
-- write config
-- create databases or required dirs
-- add ignore entries if needed
 
 ### `sy sling`
 
 Should:
 - validate config
-- create worktree
-- write agent instructions
-- spawn the runtime session
-- persist the session
+- create one orchestration run
+- create the lead integration branch and worktree
+- write one objective spec
+- write one lead handoff spec and result-envelope path
+- launch the lead session
 
 ### `sy status`
 
 Should:
-- read session state
-- check liveness where needed
-- show concise operator-friendly output
+- read run and session state
+- show run-centric progress first
+- preserve exact lead and specialist inspection when needed
 
 ### `sy stop`
 
 Should:
-- find the session
-- stop the pid-backed runtime
-- update session state
-- optionally clean worktree later
+- stop the whole run when the selector resolves to a run or its lead
+- stop one specialist only when the operator explicitly targets that specialist
+- preserve artifacts until cleanup is safe or explicitly abandoned
+
+### `sy merge`
+
+Should:
+- merge the verified integration branch under the active policy
+- stop at `merge_ready` for the default `manual-ready` path
 
 ## Risk Areas
 
 Important risks to design around:
-- shell/runtime startup races
-- stale runtime pids vs stale DB state
-- branch naming collisions
-- hidden runtime-specific assumptions leaking into generic code
-- overbuilding automation before the basic operator loop is stable
+- hidden delegation beyond the lead
+- overlapping builder file scopes
+- resuming a host without enough durable state
+- confusing run-centric versus session-centric operator surfaces
+- enabling automatic merge before the repo has adopted that policy deliberately
 
 ## Recommended Implementation Strategy
 
-Build milestone bundles around the operator workflow, not all subsystems at once:
+Build milestone bundles around the bounded orchestration workflow:
 
-1. config + init
-2. session DB + status
-3. worktree + spawn
-4. stop + cleanup
-5. mail
-6. events and inspection
-
-That order forces the core workflow to become real early.
+1. direction and policy adoption
+2. durable orchestration state
+3. objective specs and role-aware launch
+4. bounded host, resume, and stop policy
+5. composition, verification, and merge gate
+6. closure and run-centric operator surfaces

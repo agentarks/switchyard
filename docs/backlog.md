@@ -4,29 +4,30 @@ This is the ordered backlog for the next several sessions. Execute it as milesto
 
 ## Now
 
-1. Additional reintegration hardening only where the new review assessment, summary, or artifact history still creates operator ambiguity
+1. Durable orchestration state: top-level runs, task graphs, artifact references, role metadata, and orchestration config/bootstrap
 
 ## Next
 
-2. Broader surface area only if a concrete operator workflow now requires it
+2. Objective specs, structured result envelopes, and role-aware specialist launch
 
 ## After That
 
-3. Dashboard or TUI work, if still justified after the CLI reintegration milestone is complete
+3. Bounded lead host, resume, run-scoped stop semantics, and run-aware mail/events
 
 ## Then
 
-4. Multiple runtimes beyond Codex, if still justified
+4. Integration composition, verification, and the `manual-ready` `merge_ready` workflow
 
 ## Later
 
-- richer runtime matrix, if still justified
+- run-centric closure, cleanup, and retained post-closure history
+- run-centric status, events, logs, and mail surfaces
+- `auto-after-verify`, only if a later explicit policy adoption justifies it
 
 ## Not A Priority Yet
 
-- coordinator processes
-- watchdog daemons
-- dashboard or TUI work
-- tmux-backed interactive control
-- merge queue automation
 - multiple runtimes beyond Codex
+- dashboard or TUI work
+- watchdog daemons
+- unbounded delegation trees
+- merge queue automation
