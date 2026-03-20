@@ -4,7 +4,7 @@
 
 **Goal:** Cut `sy sling` over from the legacy detached-worker launch path to a bounded run bootstrap that creates one run, one lead session, and the durable objective/handoff/result artifacts needed for later orchestration work.
 
-**Architecture:** Reuse the Chunk 2 orchestration and session stores, keep the existing bounded Codex runtime wrapper, and add a thin orchestration launcher boundary that writes run-scoped specs and reserved result-envelope paths before spawning the lead. Extend the worktree and naming helpers for run-aware lead integration branches/worktrees instead of inventing a second launch path.
+**Architecture:** Reuse the Chunk 2 orchestration and session stores, keep the existing bounded Codex runtime wrapper, and add a thin orchestration launcher boundary that writes run-scoped specs and reserved result-envelope paths before spawning the lead. Extend the worktree and naming helpers for run-aware lead integration branches/worktrees, and preserve the current exact-session `status` bridge by keeping or remapping launch metadata to the new lead handoff/objective artifacts in the same bundle.
 
 **Tech Stack:** TypeScript, Node.js, commander, `node:sqlite`, git CLI, Codex `exec --json`, existing Switchyard stores/tests/docs
 
@@ -18,10 +18,12 @@
 - Create: `src/orchestration/launcher.test.ts`
 - Create: `src/specs/objective.test.ts`
 - Modify: `src/commands/sling.test.ts`
+- Modify: `src/commands/status.test.ts`
 - Modify: `src/worktrees/manager.test.ts`
 - Test: `src/orchestration/launcher.test.ts`
 - Test: `src/specs/objective.test.ts`
 - Test: `src/commands/sling.test.ts`
+- Test: `src/commands/status.test.ts`
 - Test: `src/worktrees/manager.test.ts`
 
 - [ ] **Step 1: Write the failing objective-spec tests**
@@ -43,6 +45,10 @@ assert.equal(run.state, "planning");
 assert.equal(session.role, "lead");
 assert.equal(task.role, "lead");
 assert.match(resultEnvelopePath, /^\\.switchyard\\/agent-results\\//);
+assert.deepEqual(
+  artifacts.map((artifact) => artifact.kind),
+  ["objective_spec", "agent_handoff_spec", "session_log", "branch", "integration_worktree", "result_envelope"]
+);
 ```
 
 - [ ] **Step 3: Update `src/commands/sling.test.ts` for the CLI cutover**
@@ -62,7 +68,7 @@ Cover:
 
 - [ ] **Step 5: Run the targeted tests to verify RED**
 
-Run: `npm test -- src/orchestration/launcher.test.ts src/specs/objective.test.ts src/commands/sling.test.ts src/worktrees/manager.test.ts`
+Run: `npm test -- src/orchestration/launcher.test.ts src/specs/objective.test.ts src/commands/sling.test.ts src/commands/status.test.ts src/worktrees/manager.test.ts`
 
 Expected: FAIL because the launcher still uses the detached-worker flow and the objective-spec writer does not exist yet.
 
@@ -73,7 +79,9 @@ Expected: FAIL because the launcher still uses the detached-worker flow and the 
 - Create: `src/orchestration/prompt.ts`
 - Create: `src/specs/objective.ts`
 - Modify: `src/specs/task.ts`
+- Modify: `src/commands/status.ts`
 - Test: `src/specs/objective.test.ts`
+- Test: `src/commands/status.test.ts`
 
 - [ ] **Step 1: Implement the objective-spec writer**
 
@@ -107,6 +115,10 @@ Add a role-aware handoff document shape that includes:
 - result-envelope path
 - integration branch/worktree
 
+The same step must preserve the current exact-session inspection path by doing one of these in the same change:
+- keep `src/specs/task.ts` able to read the new lead handoff shape for task summary, spec path, and full instruction
+- or teach `src/commands/status.ts` to read the new lead handoff/objective pair directly
+
 - [ ] **Step 4: Run the new spec-focused tests to verify GREEN**
 
 Run: `npm test -- src/specs/objective.test.ts`
@@ -117,6 +129,7 @@ Expected: PASS with deterministic objective and handoff documents.
 
 **Files:**
 - Create: `src/orchestration/launcher.ts`
+- Modify: `src/orchestration/types.ts`
 - Modify: `src/orchestration/store.ts`
 - Modify: `src/runtimes/codex/index.ts`
 - Modify: `src/sessions/store.ts`
@@ -131,6 +144,7 @@ Create a helper that:
 - creates the lead worktree
 - writes the objective spec and lead handoff spec
 - reserves the result-envelope path
+- persists artifact rows for the objective spec, lead handoff spec, lead log, integration branch, integration worktree, and result envelope
 
 - [ ] **Step 2: Spawn the lead through the existing runtime adapter**
 
@@ -152,7 +166,7 @@ Create the session with:
 
 Run: `npm test -- src/orchestration/launcher.test.ts`
 
-Expected: PASS with one run, one lead task, one lead session, and deterministic artifact paths.
+Expected: PASS with one run, one lead task, one lead session, deterministic artifact paths, and matching `orchestration.db` artifact rows.
 
 ## Chunk 2: `sy sling` Command Cutover
 
@@ -174,7 +188,7 @@ Make `sy sling` accept:
 
 - [ ] **Step 2: Route the command through the new orchestration launcher**
 
-Replace direct detached-worker setup with the launcher result object.
+Replace direct detached-worker setup with the launcher result object, while preserving the launch metadata that current exact-session `status` reads.
 
 - [ ] **Step 3: Rewrite operator output to be run-aware**
 
@@ -192,7 +206,7 @@ Print:
 
 - [ ] **Step 4: Run the command tests to verify GREEN**
 
-Run: `npm test -- src/commands/sling.test.ts src/index.test.ts`
+Run: `npm test -- src/commands/sling.test.ts src/commands/status.test.ts src/index.test.ts`
 
 Expected: PASS with the new CLI contract and output.
 
@@ -229,11 +243,12 @@ Expected: remaining legacy references are either removed or clearly historical.
 - Test: `src/orchestration/launcher.test.ts`
 - Test: `src/specs/objective.test.ts`
 - Test: `src/commands/sling.test.ts`
+- Test: `src/commands/status.test.ts`
 - Test: `src/worktrees/manager.test.ts`
 
 - [ ] **Step 1: Run the targeted Chunk 3 tests**
 
-Run: `npm test -- src/orchestration/launcher.test.ts src/specs/objective.test.ts src/commands/sling.test.ts src/worktrees/manager.test.ts`
+Run: `npm test -- src/orchestration/launcher.test.ts src/specs/objective.test.ts src/commands/sling.test.ts src/commands/status.test.ts src/worktrees/manager.test.ts`
 
 Expected: PASS
 

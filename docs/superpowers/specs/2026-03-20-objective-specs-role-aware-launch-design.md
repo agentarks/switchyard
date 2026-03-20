@@ -31,6 +31,8 @@ This chunk should:
 - write one objective spec under `.switchyard/objectives/`
 - write one lead handoff spec under `.switchyard/specs/`
 - reserve one structured result-envelope path under `.switchyard/agent-results/`
+- preserve exact-session launch metadata for the current `sy status <session>` and `sy status <session> --task` bridge
+- persist run-scoped artifact references into `orchestration.db`
 - launch the existing bounded Codex runtime with a role-aware prompt/spec contract
 
 This chunk should not:
@@ -105,6 +107,25 @@ The lead handoff spec should live under `.switchyard/specs/` and describe:
 
 The handoff should be role-aware and deterministic, not a generic worker note.
 
+### Session-centric status bridge
+
+Chunk 3 cannot strand the current exact-session operator surfaces while run-centric status is still deferred.
+
+Today, selected-session status reads launch context from:
+- `sling.spawned` or `sling.completed` event payload fields such as `taskSummary` and `taskSpecPath`
+- the legacy per-session handoff reader in `src/specs/task.ts`
+
+That means the hard cutover must preserve one truthful session-level launch metadata path for the lead session.
+
+Acceptable implementations for this chunk are:
+- keep a session-scoped lead handoff document readable through the existing `src/specs/task.ts` helpers, extended for the new role-aware format
+- or remap `status` and `--task` to the new lead handoff/objective artifacts in the same bundle
+
+The bundle should not claim completion while exact-session `status` loses:
+- `Task`
+- `Spec`
+- `--task` instruction inspection
+
 ### Result envelope
 
 Chunk 3 only needs the contract and reserved path, not the full host parser.
@@ -115,6 +136,20 @@ At minimum, the contract should support a lead completion payload that can event
 - planned tasks
 - summary text
 - final run outcome such as `merge_ready`, `blocked`, or `failed`
+
+### Artifact persistence
+
+The filesystem files are not enough on their own. Chunk 3 should also persist artifact references into `orchestration.db`, because the adopted swarm store already owns run-level artifact truth.
+
+The launcher should create artifact rows for at least:
+- the objective spec
+- the lead handoff spec
+- the lead session log
+- the integration branch
+- the integration worktree
+- the reserved result-envelope path
+
+If the current artifact taxonomy does not yet have a dedicated result-envelope kind, widen it in this chunk instead of leaving the store blind to the reserved path.
 
 ## Launch Model
 
@@ -198,6 +233,9 @@ The initial failing tests should cover:
 - the objective spec is written under `.switchyard/objectives/`
 - the lead handoff spec is written under `.switchyard/specs/`
 - the reserved result-envelope path is deterministic under `.switchyard/agent-results/`
+- `sy status <lead-session>` still surfaces the lead task summary and spec path after launch
+- `sy status <lead-session> --task` still reads the lead instruction text after launch
+- `orchestration.db` stores artifact rows for the objective spec, lead handoff, session log, branch, integration worktree, and result envelope
 - the runtime command/prompt contract becomes role-aware
 - the legacy `<agent>` positional is rejected by the CLI surface because it no longer exists
 
