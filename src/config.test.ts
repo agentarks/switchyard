@@ -107,21 +107,36 @@ test("buildDefaultConfig includes orchestration defaults", () => {
   });
 });
 
-test("loadConfig preserves explicit orchestration settings", async () => {
+test("loadConfig preserves explicit allowed orchestration settings", async () => {
   const repoDir = await createTempGitRepo("switchyard-config-test-");
 
   try {
     const config = buildDefaultConfig(repoDir, "switchyard", "main");
     config.orchestration.maxConcurrentSpecialists = 5;
     config.orchestration.reviewPolicy = "optional";
-    config.orchestration.mergePolicy = "auto-after-verify";
+    config.orchestration.mergePolicy = "manual-ready";
     await mkdir(join(repoDir, ".switchyard"), { recursive: true });
     await writeFile(join(repoDir, ".switchyard", "config.yaml"), stringify(config), "utf8");
 
     const loaded = await loadConfig(repoDir);
     assert.equal(loaded.orchestration.maxConcurrentSpecialists, 5);
     assert.equal(loaded.orchestration.reviewPolicy, "optional");
-    assert.equal(loaded.orchestration.mergePolicy, "auto-after-verify");
+    assert.equal(loaded.orchestration.mergePolicy, "manual-ready");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("loadConfig rejects auto-after-verify before the policy flip is adopted", async () => {
+  const repoDir = await createTempGitRepo("switchyard-config-test-");
+
+  try {
+    const config = buildDefaultConfig(repoDir, "switchyard", "main");
+    config.orchestration.mergePolicy = "auto-after-verify";
+    await mkdir(join(repoDir, ".switchyard"), { recursive: true });
+    await writeFile(join(repoDir, ".switchyard", "config.yaml"), stringify(config), "utf8");
+
+    await assert.rejects(() => loadConfig(repoDir), /Invalid \.switchyard\/config\.yaml shape\./);
   } finally {
     await removeTempDir(repoDir);
   }

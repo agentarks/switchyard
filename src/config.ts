@@ -133,8 +133,7 @@ export async function loadConfig(startDir = process.cwd()): Promise<SwitchyardCo
           : DEFAULT_MAX_CONCURRENT_SPECIALISTS,
       reviewPolicy:
         orchestration.reviewPolicy === "optional" ? "optional" : DEFAULT_REVIEW_POLICY,
-      mergePolicy:
-        orchestration.mergePolicy === "auto-after-verify" ? "auto-after-verify" : DEFAULT_MERGE_POLICY
+      mergePolicy: DEFAULT_MERGE_POLICY
     }
   };
 }
@@ -186,8 +185,7 @@ function isSwitchyardConfig(value: unknown): value is SwitchyardConfig {
         orchestration.reviewPolicy === "required" ||
         orchestration.reviewPolicy === "optional") &&
       (orchestration.mergePolicy === undefined ||
-        orchestration.mergePolicy === "manual-ready" ||
-        orchestration.mergePolicy === "auto-after-verify"));
+        orchestration.mergePolicy === "manual-ready"));
 
   return (
     typeof value.project.name === "string" &&

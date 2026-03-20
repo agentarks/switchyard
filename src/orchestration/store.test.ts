@@ -152,3 +152,122 @@ test("orchestration store persists runs, task graphs, artifacts, and host checkp
     await removeTempDir(repoDir);
   }
 });
+
+test("orchestration tasks are scoped per run and reject cross-run parent references", async () => {
+  const repoDir = await createTempGitRepo("switchyard-orchestration-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createOrchestrationRun(repoDir, {
+      id: "run-001",
+      objective: "First run",
+      targetBranch: "main",
+      integrationBranch: "runs/run-001/lead",
+      integrationWorktreePath: join(repoDir, ".switchyard", "worktrees", "run-001-lead"),
+      mergePolicy: "manual-ready",
+      state: "planning"
+    });
+    await createOrchestrationRun(repoDir, {
+      id: "run-002",
+      objective: "Second run",
+      targetBranch: "main",
+      integrationBranch: "runs/run-002/lead",
+      integrationWorktreePath: join(repoDir, ".switchyard", "worktrees", "run-002-lead"),
+      mergePolicy: "manual-ready",
+      state: "planning"
+    });
+
+    await createTaskRecord(repoDir, {
+      id: "task-root",
+      runId: "run-001",
+      role: "lead",
+      title: "Plan run one",
+      state: "planned"
+    });
+    await createTaskRecord(repoDir, {
+      id: "task-root",
+      runId: "run-002",
+      role: "lead",
+      title: "Plan run two",
+      state: "planned"
+    });
+
+    await createTaskRecord(repoDir, {
+      id: "task-run-1-only",
+      runId: "run-001",
+      parentTaskId: "task-root",
+      role: "builder",
+      title: "Run one child",
+      state: "planned"
+    });
+
+    await assert.rejects(
+      () =>
+        createTaskRecord(repoDir, {
+          id: "task-cross-run-child",
+          runId: "run-002",
+          parentTaskId: "task-run-1-only",
+          role: "builder",
+          title: "Should fail",
+          state: "planned"
+        }),
+      /constraint/i
+    );
+
+    const runOneTasks = await listTasksForRun(repoDir, "run-001");
+    const runTwoTasks = await listTasksForRun(repoDir, "run-002");
+
+    assert.equal(runOneTasks[0]?.id, "task-root");
+    assert.equal(runTwoTasks[0]?.id, "task-root");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("host checkpoints reject checkpoint task ids that are not owned by the same run", async () => {
+  const repoDir = await createTempGitRepo("switchyard-orchestration-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createOrchestrationRun(repoDir, {
+      id: "run-001",
+      objective: "First run",
+      targetBranch: "main",
+      integrationBranch: "runs/run-001/lead",
+      integrationWorktreePath: join(repoDir, ".switchyard", "worktrees", "run-001-lead"),
+      mergePolicy: "manual-ready",
+      state: "planning"
+    });
+    await createOrchestrationRun(repoDir, {
+      id: "run-002",
+      objective: "Second run",
+      targetBranch: "main",
+      integrationBranch: "runs/run-002/lead",
+      integrationWorktreePath: join(repoDir, ".switchyard", "worktrees", "run-002-lead"),
+      mergePolicy: "manual-ready",
+      state: "planning"
+    });
+
+    await createTaskRecord(repoDir, {
+      id: "task-run-1-only",
+      runId: "run-001",
+      role: "lead",
+      title: "Run one root",
+      state: "planned"
+    });
+
+    await assert.rejects(
+      () =>
+        upsertHostCheckpoint(repoDir, {
+          runId: "run-002",
+          checkpointTaskId: "task-run-1-only",
+          completedSessionIds: []
+        }),
+      /constraint/i
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});

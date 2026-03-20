@@ -29,8 +29,8 @@ const CREATE_RUNS_TABLE_SQL = `
 
 const CREATE_TASKS_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS orchestration_tasks (
-    id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,
+    id TEXT NOT NULL,
     parent_task_id TEXT,
     role TEXT NOT NULL,
     title TEXT NOT NULL,
@@ -38,7 +38,9 @@ const CREATE_TASKS_TABLE_SQL = `
     state TEXT NOT NULL,
     assigned_session_id TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, id),
+    FOREIGN KEY (run_id, parent_task_id) REFERENCES orchestration_tasks (run_id, id)
   )
 `;
 
@@ -71,7 +73,8 @@ const CREATE_HOST_CHECKPOINTS_TABLE_SQL = `
     lease_expires_at TEXT,
     checkpoint_task_id TEXT,
     completed_session_ids_json TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (run_id, checkpoint_task_id) REFERENCES orchestration_tasks (run_id, id)
   )
 `;
 
@@ -335,6 +338,7 @@ async function withOrchestrationDatabase<T>(projectRoot: string, operation: (db:
   const db = new DatabaseSync(dbPath);
 
   try {
+    db.exec("PRAGMA foreign_keys = ON");
     ensureOrchestrationSchema(db);
     return operation(db);
   } finally {
@@ -344,11 +348,120 @@ async function withOrchestrationDatabase<T>(projectRoot: string, operation: (db:
 
 function ensureOrchestrationSchema(db: DatabaseSync): void {
   db.exec(CREATE_RUNS_TABLE_SQL);
-  db.exec(CREATE_TASKS_TABLE_SQL);
+  ensureTasksTableSchema(db);
   db.exec(CREATE_TASKS_RUN_INDEX_SQL);
   db.exec(CREATE_ARTIFACTS_TABLE_SQL);
   db.exec(CREATE_ARTIFACTS_RUN_INDEX_SQL);
+  ensureHostCheckpointsTableSchema(db);
+}
+
+function ensureTasksTableSchema(db: DatabaseSync): void {
+  if (!tableExists(db, "orchestration_tasks")) {
+    db.exec(CREATE_TASKS_TABLE_SQL);
+    return;
+  }
+
+  if (hasRunScopedTaskSchema(db)) {
+    return;
+  }
+
+  db.exec("ALTER TABLE orchestration_tasks RENAME TO orchestration_tasks_legacy");
+  db.exec(CREATE_TASKS_TABLE_SQL);
+  db.exec(`
+    INSERT INTO orchestration_tasks (
+      run_id, id, parent_task_id, role, title, file_scope_json, state, assigned_session_id, created_at, updated_at
+    )
+    SELECT run_id, id, parent_task_id, role, title, file_scope_json, state, assigned_session_id, created_at, updated_at
+    FROM orchestration_tasks_legacy
+  `);
+  db.exec("DROP TABLE orchestration_tasks_legacy");
+}
+
+function ensureHostCheckpointsTableSchema(db: DatabaseSync): void {
+  if (!tableExists(db, "orchestration_host_checkpoints")) {
+    db.exec(CREATE_HOST_CHECKPOINTS_TABLE_SQL);
+    return;
+  }
+
+  if (hasRunScopedCheckpointSchema(db)) {
+    return;
+  }
+
+  db.exec("ALTER TABLE orchestration_host_checkpoints RENAME TO orchestration_host_checkpoints_legacy");
   db.exec(CREATE_HOST_CHECKPOINTS_TABLE_SQL);
+  db.exec(`
+    INSERT INTO orchestration_host_checkpoints (
+      run_id, lease_owner, lease_expires_at, checkpoint_task_id, completed_session_ids_json, updated_at
+    )
+    SELECT run_id, lease_owner, lease_expires_at, checkpoint_task_id, completed_session_ids_json, updated_at
+    FROM orchestration_host_checkpoints_legacy
+  `);
+  db.exec("DROP TABLE orchestration_host_checkpoints_legacy");
+}
+
+function tableExists(db: DatabaseSync, tableName: string): boolean {
+  const row = db.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table' AND name = ?
+  `).get(tableName) as { name: string } | undefined;
+
+  return row !== undefined;
+}
+
+function hasRunScopedTaskSchema(db: DatabaseSync): boolean {
+  const columns = db.prepare("PRAGMA table_info(orchestration_tasks)").all() as Array<{
+    name: string;
+    pk: number;
+  }>;
+  const primaryKeyOrder = new Map(columns.map((column) => [column.name, column.pk]));
+  const foreignKeys = db.prepare("PRAGMA foreign_key_list(orchestration_tasks)").all() as Array<{
+    from: string;
+    to: string;
+    table: string;
+  }>;
+
+  const hasCompositePrimaryKey =
+    primaryKeyOrder.get("run_id") === 1 &&
+    primaryKeyOrder.get("id") === 2;
+  const hasRunScopedParentForeignKey =
+    foreignKeys.some(
+      (foreignKey) =>
+        foreignKey.table === "orchestration_tasks" &&
+        foreignKey.from === "run_id" &&
+        foreignKey.to === "run_id"
+    ) &&
+    foreignKeys.some(
+      (foreignKey) =>
+        foreignKey.table === "orchestration_tasks" &&
+        foreignKey.from === "parent_task_id" &&
+        foreignKey.to === "id"
+    );
+
+  return hasCompositePrimaryKey && hasRunScopedParentForeignKey;
+}
+
+function hasRunScopedCheckpointSchema(db: DatabaseSync): boolean {
+  const foreignKeys = db.prepare("PRAGMA foreign_key_list(orchestration_host_checkpoints)").all() as Array<{
+    from: string;
+    to: string;
+    table: string;
+  }>;
+
+  return (
+    foreignKeys.some(
+      (foreignKey) =>
+        foreignKey.table === "orchestration_tasks" &&
+        foreignKey.from === "run_id" &&
+        foreignKey.to === "run_id"
+    ) &&
+    foreignKeys.some(
+      (foreignKey) =>
+        foreignKey.table === "orchestration_tasks" &&
+        foreignKey.from === "checkpoint_task_id" &&
+        foreignKey.to === "id"
+    )
+  );
 }
 
 function mapRunRow(row: OrchestrationRunRow): OrchestrationRunRecord {
