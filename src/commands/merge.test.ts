@@ -260,6 +260,78 @@ test("mergeCommand keeps a completed merge when run persistence fails", async ()
   assert.match(stderrWrites.join(""), /WARN: failed to persist run state for session 'session-merge-warning': runs unavailable/);
 });
 
+test("mergeCommand still marks merged orchestration state when legacy run persistence fails for a lead session", async () => {
+  const repoDir = await createInitializedRepo();
+  const stderrWrites: string[] = [];
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+  const notesPath = join(repoDir, "merge-lead-warning.txt");
+
+  try {
+    await writeFile(notesPath, "base\n", "utf8");
+    await git(repoDir, ["add", "merge-lead-warning.txt"]);
+    await git(repoDir, ["commit", "-m", "Add merge lead warning notes"]);
+
+    const launched = await launchOrchestrationRun({
+      startDir: repoDir,
+      objective: "Merge the lead branch even if legacy run persistence fails afterward.",
+      spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
+        const runtime = {
+          pid: 6161,
+          command: {
+            command: "codex",
+            args: runtimeArgs
+          }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    await git(launched.worktree.path, ["config", "user.name", "Switchyard Test"]);
+    await git(launched.worktree.path, ["config", "user.email", "switchyard@example.com"]);
+    await writeFile(join(launched.worktree.path, "merge-lead-warning.txt"), "lead merged\n", "utf8");
+    await git(launched.worktree.path, ["add", "merge-lead-warning.txt"]);
+    await git(launched.worktree.path, ["commit", "-m", "Lead warning branch change"]);
+    await updateSessionState(repoDir, {
+      id: launched.session.id,
+      state: "stopped",
+      runtimePid: null,
+      updatedAt: "2026-03-24T16:40:00.000Z"
+    });
+
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    await mergeCommand({
+      selector: launched.session.id,
+      startDir: repoDir,
+      updateLatestRun: async () => {
+        throw new Error("runs unavailable");
+      }
+    });
+
+    const orchestrationRun = await getOrchestrationRunById(repoDir, launched.run.id);
+    const tasks = await listTasksForRun(repoDir, launched.run.id);
+
+    assert.equal(orchestrationRun?.state, "merged");
+    assert.equal(orchestrationRun?.outcome, "merged");
+    assert.equal(tasks[0]?.state, "completed");
+    assert.equal(await readFile(notesPath, "utf8"), "lead merged\n");
+  } finally {
+    process.stderr.write = originalStderrWrite;
+    await removeTempDir(repoDir);
+  }
+
+  assert.match(stderrWrites.join(""), /WARN: failed to persist run state for session '.*': runs unavailable/);
+});
+
 test("mergeCommand rejects selectors that match multiple sessions by agent name", async () => {
   const repoDir = await createInitializedRepo();
 

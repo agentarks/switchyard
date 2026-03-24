@@ -513,6 +513,7 @@ async function markRunMergedBestEffort(
   updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>
 ): Promise<void> {
   const finishedAt = new Date().toISOString();
+  let legacyWarning: string | undefined;
 
   try {
     await updateLatestRun(projectRoot, session.id, {
@@ -521,9 +522,14 @@ async function markRunMergedBestEffort(
       updatedAt: finishedAt,
       finishedAt
     });
-    await syncOrchestrationSessionStateBestEffort(projectRoot, session, "stopped", finishedAt, "merged");
   } catch (error) {
-    process.stderr.write(`WARN: failed to persist run state for session '${session.id}': ${formatErrorMessage(error)}\n`);
+    legacyWarning = `WARN: failed to persist run state for session '${session.id}': ${formatErrorMessage(error)}\n`;
+  }
+
+  await syncOrchestrationSessionStateBestEffort(projectRoot, session, "stopped", finishedAt, "merged");
+
+  if (legacyWarning) {
+    process.stderr.write(legacyWarning);
   }
 }
 
