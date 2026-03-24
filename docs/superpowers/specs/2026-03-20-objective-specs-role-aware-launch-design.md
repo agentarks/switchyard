@@ -32,6 +32,7 @@ This chunk should:
 - write one lead handoff spec under `.switchyard/specs/`
 - reserve one structured result-envelope path under `.switchyard/agent-results/`
 - preserve exact-session launch metadata for the current `sy status <session>` and `sy status <session> --task` bridge
+- preserve the default `sy status` table semantics while it still depends on legacy per-session run summaries
 - persist run-scoped artifact references into `orchestration.db`
 - launch the existing bounded Codex runtime with a role-aware prompt/spec contract
 
@@ -125,6 +126,21 @@ The bundle should not claim completion while exact-session `status` loses:
 - `Task`
 - `Spec`
 - `--task` instruction inspection
+
+### All-session status bridge
+
+Chunk 3 also cannot regress the default `sy status` table while list status is still session-centric.
+
+Today, the all-session table still derives its `TASK`, `RUN`, review hints, and some follow-up guidance from the legacy per-session run summary in `runs.db`. The architecture docs already treat that store as the rollout bridge until broader run-centric surfaces land.
+
+That means Chunk 3 must keep writing and updating the legacy run summary for the lead session, with truthful lead-launch values, until one of these becomes true:
+- the default table is widened to read orchestration-first run state in the same bundle
+- or a later bundle deliberately replaces the table contract
+
+For this chunk, the smaller coherent choice is to preserve the bridge:
+- create/update the lead session's legacy run row in `runs.db`
+- keep `taskSummary`, launch state, and launch outcome readable for the default table
+- keep operator review and follow-up guidance at least as informative as the pre-cutover path
 
 ### Result envelope
 
@@ -235,6 +251,7 @@ The initial failing tests should cover:
 - the reserved result-envelope path is deterministic under `.switchyard/agent-results/`
 - `sy status <lead-session>` still surfaces the lead task summary and spec path after launch
 - `sy status <lead-session> --task` still reads the lead instruction text after launch
+- the default `sy status` table still shows a non-empty `TASK`, truthful `RUN`, and existing follow-up/review guidance for the lead session row after launch
 - `orchestration.db` stores artifact rows for the objective spec, lead handoff, session log, branch, integration worktree, and result envelope
 - the runtime command/prompt contract becomes role-aware
 - the legacy `<agent>` positional is rejected by the CLI surface because it no longer exists

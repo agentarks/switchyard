@@ -4,7 +4,7 @@
 
 **Goal:** Cut `sy sling` over from the legacy detached-worker launch path to a bounded run bootstrap that creates one run, one lead session, and the durable objective/handoff/result artifacts needed for later orchestration work.
 
-**Architecture:** Reuse the Chunk 2 orchestration and session stores, keep the existing bounded Codex runtime wrapper, and add a thin orchestration launcher boundary that writes run-scoped specs and reserved result-envelope paths before spawning the lead. Extend the worktree and naming helpers for run-aware lead integration branches/worktrees, and preserve the current exact-session `status` bridge by keeping or remapping launch metadata to the new lead handoff/objective artifacts in the same bundle.
+**Architecture:** Reuse the Chunk 2 orchestration and session stores, keep the existing bounded Codex runtime wrapper, and add a thin orchestration launcher boundary that writes run-scoped specs and reserved result-envelope paths before spawning the lead. Extend the worktree and naming helpers for run-aware lead integration branches/worktrees, preserve the current exact-session `status` bridge by keeping or remapping launch metadata to the new lead handoff/objective artifacts, and keep the legacy `runs.db` summary path truthful until run-centric list status lands.
 
 **Tech Stack:** TypeScript, Node.js, commander, `node:sqlite`, git CLI, Codex `exec --json`, existing Switchyard stores/tests/docs
 
@@ -59,14 +59,21 @@ Cover:
 - no legacy `Spawned <agent>` output
 - command parsing rejects the removed positional contract
 
-- [ ] **Step 4: Update `src/worktrees/manager.test.ts` for lead integration naming**
+- [ ] **Step 4: Update `src/commands/status.test.ts` for the rollout-bridge table**
+
+Cover:
+- exact-session lead status still shows task summary and spec path
+- exact-session `--task` still renders the lead instruction text
+- default `sy status` still shows a populated `TASK` cell, truthful `RUN` cell, and current follow-up guidance for the lead session row
+
+- [ ] **Step 5: Update `src/worktrees/manager.test.ts` for lead integration naming**
 
 Cover:
 - deterministic integration branch naming
 - deterministic integration worktree naming
 - collision checks for run-aware lead worktrees
 
-- [ ] **Step 5: Run the targeted tests to verify RED**
+- [ ] **Step 6: Run the targeted tests to verify RED**
 
 Run: `npm test -- src/orchestration/launcher.test.ts src/specs/objective.test.ts src/commands/sling.test.ts src/commands/status.test.ts src/worktrees/manager.test.ts`
 
@@ -80,6 +87,7 @@ Expected: FAIL because the launcher still uses the detached-worker flow and the 
 - Create: `src/specs/objective.ts`
 - Modify: `src/specs/task.ts`
 - Modify: `src/commands/status.ts`
+- Modify: `src/runs/store.ts`
 - Test: `src/specs/objective.test.ts`
 - Test: `src/commands/status.test.ts`
 
@@ -119,6 +127,8 @@ The same step must preserve the current exact-session inspection path by doing o
 - keep `src/specs/task.ts` able to read the new lead handoff shape for task summary, spec path, and full instruction
 - or teach `src/commands/status.ts` to read the new lead handoff/objective pair directly
 
+The same bundle must also preserve the default table bridge by keeping the lead session's legacy run-summary path truthful.
+
 - [ ] **Step 4: Run the new spec-focused tests to verify GREEN**
 
 Run: `npm test -- src/specs/objective.test.ts`
@@ -132,6 +142,7 @@ Expected: PASS with deterministic objective and handoff documents.
 - Modify: `src/orchestration/types.ts`
 - Modify: `src/orchestration/store.ts`
 - Modify: `src/runtimes/codex/index.ts`
+- Modify: `src/runs/store.ts`
 - Modify: `src/sessions/store.ts`
 - Test: `src/orchestration/launcher.test.ts`
 
@@ -145,6 +156,7 @@ Create a helper that:
 - writes the objective spec and lead handoff spec
 - reserves the result-envelope path
 - persists artifact rows for the objective spec, lead handoff spec, lead log, integration branch, integration worktree, and result envelope
+- creates and updates the legacy per-session run summary for the lead session so the default `sy status` table keeps working during the rollout bridge
 
 - [ ] **Step 2: Spawn the lead through the existing runtime adapter**
 
@@ -162,11 +174,18 @@ Create the session with:
 }
 ```
 
-- [ ] **Step 4: Run the launcher tests to verify GREEN**
+- [ ] **Step 4: Preserve the lead run-summary bridge**
+
+Create or update the lead session's legacy run summary with:
+- the lead task summary
+- `starting` to `active` launch state transitions
+- truthful launch failure or completion outcomes
+
+- [ ] **Step 5: Run the launcher tests to verify GREEN**
 
 Run: `npm test -- src/orchestration/launcher.test.ts`
 
-Expected: PASS with one run, one lead task, one lead session, deterministic artifact paths, and matching `orchestration.db` artifact rows.
+Expected: PASS with one run, one lead task, one lead session, deterministic artifact paths, matching `orchestration.db` artifact rows, and a truthful lead summary in `runs.db`.
 
 ## Chunk 2: `sy sling` Command Cutover
 
@@ -188,7 +207,7 @@ Make `sy sling` accept:
 
 - [ ] **Step 2: Route the command through the new orchestration launcher**
 
-Replace direct detached-worker setup with the launcher result object, while preserving the launch metadata that current exact-session `status` reads.
+Replace direct detached-worker setup with the launcher result object, while preserving the launch metadata that current exact-session `status` reads and the legacy run summary that the default table still uses.
 
 - [ ] **Step 3: Rewrite operator output to be run-aware**
 
