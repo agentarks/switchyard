@@ -2,7 +2,11 @@
 
 ## Status
 
-Active design for the repo workflow used to build Switchyard itself.
+Superseded as an implementation basis.
+
+This file remains as the broader target-state discussion, but it should not be used as the planning source for the next implementation slice.
+
+Use [2026-03-24-repo-workflow-state-and-resume-design.md](/Users/shakilakram/projects/switchyard/docs/superpowers/specs/2026-03-24-repo-workflow-state-and-resume-design.md) for the first implementation-oriented workflow spec.
 
 This design changes how future Switchyard development sessions should operate once a milestone bundle is approved:
 - the default unit of autonomous execution becomes the active milestone bundle
@@ -55,6 +59,22 @@ The repo workflow should match that reality.
 - Keep PRs in the workflow, but merge automatically only after the milestone gate passes
 - Use repo-local docs as durable controller memory so a fresh session can resume correctly
 - Preserve explicit stop points for real ambiguity, scope drift, or failed verification
+
+## Review framing
+
+This design is intentionally trying to replace the current handholding-heavy small-batch repo workflow with a larger autonomous workflow.
+
+Reviewers should evaluate it against these questions:
+- is the workflow internally coherent
+- does it contradict existing source-of-truth docs in ways that require migration work
+- are the state, review, and merge contracts precise enough to implement safely
+
+Reviewers should not reject the design merely because:
+- it moves away from the current small-batch habit
+- it prefers milestone-scale autonomy over slice-by-slice human orchestration
+- it introduces a larger repo-workflow change than the current docs would have chosen by default
+
+The standard for review is architectural soundness and explicit migration, not loyalty to the old handholding loop.
 
 ## Non-Goals
 
