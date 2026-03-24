@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
@@ -902,7 +902,7 @@ test("sy sling reports task-file read failures through the Switchyard error cont
     await assert.rejects(
       () => execFileAsync(
         process.execPath,
-        [tsxCliPath, cliEntryPath, "sling", "agent-cli-task-file", "--task-file", "missing-task.md"],
+        [tsxCliPath, cliEntryPath, "sling", "--task-file", "missing-task.md"],
         { cwd: repoDir }
       ),
       (error: unknown) => {
@@ -917,6 +917,59 @@ test("sy sling reports task-file read failures through the Switchyard error cont
         return true;
       }
     );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy sling rejects the removed positional agent contract through the real CLI entrypoint", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-sling-contract-test-");
+
+  try {
+    await assert.rejects(
+      () => execFileAsync(
+        process.execPath,
+        [tsxCliPath, cliEntryPath, "sling", "legacy-agent", "--task", "Inspect the lead bootstrap."],
+        { cwd: repoDir }
+      ),
+      (error: unknown) => {
+        assert.ok(error && typeof error === "object" && "stderr" in error);
+        const cliError = error as { stderr: string; code: number };
+        assert.equal(cliError.code, 1);
+        assert.match(cliError.stderr, /legacy '<agent>' positional is removed/i);
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy sling accepts runtime pass-through arguments through the real CLI entrypoint", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-sling-runtime-args-test-");
+  const binDir = join(repoDir, "bin");
+  const codexPath = join(binDir, "codex");
+
+  try {
+    await mkdir(binDir, { recursive: true });
+    await writeFile(codexPath, "#!/bin/sh\nsleep 2\n", "utf8");
+    await chmod(codexPath, 0o755);
+
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [tsxCliPath, cliEntryPath, "sling", "--task", "Inspect the lead runtime overrides.", "--sandbox", "read-only", "--model", "gpt-5"],
+      {
+        cwd: repoDir,
+        env: {
+          ...process.env,
+          PATH: `${binDir}:${process.env.PATH ?? ""}`
+        }
+      }
+    );
+
+    assert.equal(stderr, "");
+    assert.match(stdout, /Runtime: codex exec --json --sandbox read-only --model gpt-5/);
+    assert.match(stdout, /Run: run-/);
   } finally {
     await removeTempDir(repoDir);
   }

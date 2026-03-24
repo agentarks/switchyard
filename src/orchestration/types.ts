@@ -25,6 +25,7 @@ export type ArtifactKind =
   | "branch"
   | "worktree"
   | "integration_worktree"
+  | "result_envelope"
   | "verification_output";
 
 export interface OrchestrationRunRecord {
@@ -53,6 +54,13 @@ export interface CreateOrchestrationRunInput {
   updatedAt?: string;
 }
 
+export interface UpdateOrchestrationRunInput {
+  id: string;
+  state: OrchestrationRunState;
+  outcome?: OrchestrationRunOutcome | null;
+  updatedAt?: string;
+}
+
 export interface TaskRecord {
   id: string;
   runId: string;
@@ -76,6 +84,14 @@ export interface CreateTaskRecordInput {
   state: TaskState;
   assignedSessionId?: string | null;
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UpdateTaskRecordInput {
+  runId: string;
+  id: string;
+  state: TaskState;
+  assignedSessionId?: string | null;
   updatedAt?: string;
 }
 

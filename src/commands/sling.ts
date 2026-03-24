@@ -6,23 +6,20 @@ import { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { recordEventBestEffort, recordEventWithFallback, type EventRecorder } from "../events/store.js";
 import { SlingError } from "../errors.js";
-import { stopProcess } from "../runtimes/process.js";
-import { createRun, updateRun } from "../runs/store.js";
-import type { RunRecord, UpdateRunInput } from "../runs/types.js";
 import { getSessionLogPath } from "../logs/path.js";
+import { launchOrchestrationRun, type OrchestrationLaunchResult } from "../orchestration/launcher.js";
+import { createRun, updateRun } from "../runs/store.js";
+import type { UpdateRunInput } from "../runs/types.js";
+import { stopProcess } from "../runtimes/process.js";
+import type { SpawnedRuntimeProcess, SpawnedRuntimeSession } from "../runtimes/codex/index.js";
+import { buildCodexCommand, spawnCodexSession } from "../runtimes/codex/index.js";
 import { createSession } from "../sessions/store.js";
 import type { CreateSessionInput } from "../sessions/types.js";
 import { summarizeTask, writeTaskSpec, type TaskSpecRecord } from "../specs/task.js";
-import {
-  buildCodexCommand,
-  type SpawnedRuntimeProcess,
-  type SpawnedRuntimeSession,
-  spawnCodexSession
-} from "../runtimes/codex/index.js";
-import { createWorktree, type ManagedWorktree, removeWorktree } from "../worktrees/manager.js";
+import { createWorktree, removeWorktree, type ManagedWorktree } from "../worktrees/manager.js";
 
 interface SlingOptions {
-  agentName: string;
+  agentName?: string;
   task?: string;
   taskFile?: string;
   runtimeArgs?: string[];
@@ -38,26 +35,67 @@ interface SlingOptions {
   createSessionRecord?: (projectRoot: string, input: CreateSessionInput) => Promise<unknown>;
   updateRunRecord?: (projectRoot: string, input: UpdateRunInput) => Promise<unknown>;
   stopRuntime?: (pid: number) => Promise<boolean>;
+  now?: () => string;
 }
 
 export function createSlingCommand(): Command {
   return new Command("sling")
-    .description("Spawn one Codex agent into an isolated worktree")
-    .argument("<agent>", "Deterministic agent name")
-    .option("--task <instruction>", "Operator task or instruction to hand off")
-    .option("--task-file <path>", "Read the operator task or instruction from a file")
-    .argument("[args...]", "Arguments reserved for future Codex/runtime inputs")
-    .action(async (
-      agentName: string,
-      runtimeArgs: string[],
-      commandOptions: { task?: string; taskFile?: string }
-    ) => {
-      await slingCommand({ agentName, task: commandOptions.task, taskFile: commandOptions.taskFile, runtimeArgs });
+    .description("Start one bounded orchestration run with a lead session")
+    .option("--task <instruction>", "Operator objective or instruction to hand off to the lead")
+    .option("--task-file <path>", "Read the operator objective or instruction from a file")
+    .argument("[runtimeArgs...]", "Pass through Codex/runtime arguments such as '--sandbox read-only'")
+    .allowUnknownOption(true)
+    .action(async (runtimeArgs: string[], commandOptions: { task?: string; taskFile?: string }) => {
+      validateCliRuntimeArgs(runtimeArgs);
+      await slingCommand({ task: commandOptions.task, taskFile: commandOptions.taskFile, runtimeArgs });
     });
 }
 
 export async function slingCommand(options: SlingOptions): Promise<void> {
   const task = await loadTask(options);
+
+  if (typeof options.agentName === "string") {
+    await legacySlingCommand({
+      ...options,
+      agentName: options.agentName,
+      task
+    });
+    return;
+  }
+
+  const launched = await launchOrchestrationRun({
+    objective: task,
+    startDir: options.startDir,
+    runtimeArgs: options.runtimeArgs,
+    spawnRuntime: options.spawnRuntime,
+    recordEvent: options.recordEvent,
+    updateRunRecord: options.updateRunRecord,
+    stopRuntime: options.stopRuntime,
+    now: options.now
+  });
+
+  writeSuccessOutput(launched);
+}
+
+function writeSuccessOutput(launched: OrchestrationLaunchResult): void {
+  process.stdout.write(`Run: ${launched.run.id}\n`);
+  process.stdout.write(`Lead session: ${launched.session.id}\n`);
+  process.stdout.write("Role: lead\n");
+  process.stdout.write(`Target branch: ${launched.run.targetBranch}\n`);
+  process.stdout.write(`Integration branch: ${launched.run.integrationBranch}\n`);
+  process.stdout.write(`Objective: ${launched.objectiveSpec.objectiveSummary}\n`);
+  process.stdout.write(`Objective spec: ${launched.objectiveSpec.relativePath}\n`);
+  process.stdout.write(`Handoff spec: ${launched.handoffSpec.relativePath}\n`);
+  process.stdout.write(`Result envelope: ${launched.resultEnvelopePath}\n`);
+  process.stdout.write(`Log: ${launched.sessionLogRelativePath}\n`);
+  process.stdout.write(`Worktree: ${formatRelativePath(launched.projectRoot, launched.worktree.path)}\n`);
+  process.stdout.write(`Runtime: ${launched.runtime.command.command} ${launched.runtime.command.args.slice(0, -1).join(" ")}\n`);
+  process.stdout.write(`Ready: initial launch check passed after ${launched.runtime.readyAfterMs}ms\n`);
+}
+
+async function legacySlingCommand(
+  options: SlingOptions & { agentName: string; task: string }
+): Promise<void> {
   const config = await loadConfig(options.startDir);
   const recordEvent = options.recordEvent ?? recordEventBestEffort;
   const createSessionRecord = options.createSessionRecord ?? createSession;
@@ -70,25 +108,25 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
 
   const managedWorktree = await createWorktree(config, options.agentName);
   const runtimeArgs = options.runtimeArgs ?? [];
-  const runtimeArgsWithTask = [...buildCodexCommand(runtimeArgs).args, task];
-  const createdAt = new Date().toISOString();
+  const runtimeArgsWithTask = [...buildCodexCommand(runtimeArgs).args, options.task];
+  const createdAt = options.now?.() ?? new Date().toISOString();
   let lastLifecycleTimestamp = createdAt;
   const sessionId = randomUUID();
   const sessionLog = getSessionLogPath(config.project.root, managedWorktree.agentName, sessionId);
-  const spawnRuntime = options.spawnRuntime ?? (async ({ runtimeArgs, logPath, worktreePath }) => {
-    return await spawnCodexSession({ runtimeArgs, logPath, worktreePath });
+  const spawnRuntime = options.spawnRuntime ?? (async ({ runtimeArgs: launchArgs, logPath, worktreePath }) => {
+    return await spawnCodexSession({ runtimeArgs: launchArgs, logPath, worktreePath });
   });
-  const taskSummary = summarizeTask(task);
+  const taskSummary = summarizeTask(options.task);
   let runtimeSession: SpawnedRuntimeSession;
   let taskSpec: TaskSpecRecord | undefined;
-  let runRecord: RunRecord | undefined;
+  let runRecord: Awaited<ReturnType<typeof createRun>> | undefined;
 
   try {
     taskSpec = await writeTaskSpec({
       projectRoot: config.project.root,
       sessionId,
       agentName: managedWorktree.agentName,
-      task,
+      task: options.task,
       createdAt,
       branch: managedWorktree.branch,
       baseBranch: managedWorktree.baseBranch,
@@ -127,7 +165,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
             taskSpecPath,
             logPath: sessionLog.relativePath,
             runtimePid: spawnedRuntime.pid,
-            runtimeCommand: formatRuntimeCommandForOperator(spawnedRuntime, task)
+            runtimeCommand: formatLegacyRuntimeCommandForOperator(spawnedRuntime, options.task)
           }
         });
       }
@@ -215,7 +253,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
         worktreePath: formatRelativePath(config.project.root, managedWorktree.path),
         errorMessage: formatErrorMessage(error),
         taskSummary,
-        taskSpecPath: taskSpec?.relativePath ?? null,
+        taskSpecPath: taskSpec.relativePath,
         runtimePid: runtimeSession.pid,
         runtimeStopped: teardown.stopError ? false : true,
         cleanupSucceeded: teardown.cleanupError ? false : true
@@ -247,7 +285,7 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
       taskSpecPath: taskSpec.relativePath,
       logPath: sessionLog.relativePath,
       runtimePid: runtimeSession.pid,
-      runtimeCommand: formatRuntimeCommandForOperator(runtimeSession, task),
+      runtimeCommand: formatLegacyRuntimeCommandForOperator(runtimeSession, options.task),
       readyAfterMs: runtimeSession.readyAfterMs
     }
   });
@@ -269,28 +307,8 @@ export async function slingCommand(options: SlingOptions): Promise<void> {
   process.stdout.write(`Spec: ${taskSpec.relativePath}\n`);
   process.stdout.write(`Log: ${sessionLog.relativePath}\n`);
   process.stdout.write(`Worktree: ${formatRelativePath(config.project.root, managedWorktree.path)}\n`);
-  process.stdout.write(`Runtime: ${formatRuntimeCommandForOperator(runtimeSession, task)}\n`);
+  process.stdout.write(`Runtime: ${formatLegacyRuntimeCommandForOperator(runtimeSession, options.task)}\n`);
   process.stdout.write(`Ready: initial launch check passed after ${runtimeSession.readyAfterMs}ms\n`);
-}
-
-function formatRelativePath(projectRoot: string, path: string): string {
-  const relativePath = relative(projectRoot, path);
-  return relativePath.length > 0 ? relativePath : ".";
-}
-
-function formatRuntimeCommand(runtimeSession: SpawnedRuntimeProcess): string {
-  const parts = [runtimeSession.command.command, ...runtimeSession.command.args];
-  return parts.join(" ");
-}
-
-function formatRuntimeCommandForOperator(runtimeSession: SpawnedRuntimeProcess, task: string): string {
-  const args = [...runtimeSession.command.args];
-
-  if (args.at(-1) === task) {
-    args.pop();
-  }
-
-  return [runtimeSession.command.command, ...args].join(" ");
 }
 
 async function loadTask(options: Pick<SlingOptions, "task" | "taskFile" | "startDir">): Promise<string> {
@@ -325,6 +343,37 @@ function validateTask(task: string | undefined): string {
   return task;
 }
 
+function validateCliRuntimeArgs(runtimeArgs: string[]): void {
+  if (runtimeArgs.length === 0) {
+    return;
+  }
+
+  if (!runtimeArgs[0]?.startsWith("-")) {
+    throw new SlingError(
+      "The legacy '<agent>' positional is removed. Use '--task' or '--task-file' for the objective, and pass runtime overrides as option-like arguments such as '--sandbox read-only'."
+    );
+  }
+}
+
+function formatRelativePath(projectRootPath: string, path: string): string {
+  const relativePath = relative(projectRootPath, path);
+  return relativePath.length > 0 ? relativePath : ".";
+}
+
+function formatLegacyRuntimeCommandForOperator(runtimeSession: SpawnedRuntimeProcess, task: string): string {
+  const args = [...runtimeSession.command.args];
+
+  if (args.at(-1) === task) {
+    args.pop();
+  }
+
+  return [runtimeSession.command.command, ...args].join(" ");
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function cleanupFailedLaunch(projectRoot: string, worktree: ManagedWorktree): Promise<Error | undefined> {
   try {
     await removeWorktree(projectRoot, worktree);
@@ -332,10 +381,6 @@ async function cleanupFailedLaunch(projectRoot: string, worktree: ManagedWorktre
   } catch (error) {
     return error instanceof Error ? error : new Error(String(error));
   }
-}
-
-function formatErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 async function cleanupPostSpawnPersistenceFailure(options: {

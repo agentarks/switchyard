@@ -13,6 +13,8 @@ import {
   initializeOrchestrationStore,
   listArtifactsForRun,
   listTasksForRun,
+  updateOrchestrationRun,
+  updateTaskRecord,
   upsertHostCheckpoint
 } from "./store.js";
 
@@ -149,6 +151,62 @@ test("orchestration store persists runs, task graphs, artifacts, and host checkp
     assert.equal(checkpoint?.leaseOwner, "host-1");
     assert.equal(checkpoint?.checkpointTaskId, "task-build-store");
     assert.deepEqual(checkpoint?.completedSessionIds, ["session-lead", "session-builder-1"]);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("orchestration store updates durable run and task state", async () => {
+  const repoDir = await createTempGitRepo("switchyard-orchestration-store-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+
+    await createOrchestrationRun(repoDir, {
+      id: "run-001",
+      objective: "Update orchestration lifecycle state",
+      targetBranch: "main",
+      integrationBranch: "runs/run-001/lead",
+      integrationWorktreePath: join(repoDir, ".switchyard", "worktrees", "run-001-lead"),
+      mergePolicy: "manual-ready",
+      state: "planning",
+      createdAt: "2026-03-24T14:00:00.000Z",
+      updatedAt: "2026-03-24T14:00:00.000Z"
+    });
+    await createTaskRecord(repoDir, {
+      id: "task-001",
+      runId: "run-001",
+      role: "lead",
+      title: "Launch the lead",
+      state: "in_progress",
+      assignedSessionId: "session-001",
+      createdAt: "2026-03-24T14:00:00.000Z",
+      updatedAt: "2026-03-24T14:00:00.000Z"
+    });
+
+    const updatedRun = await updateOrchestrationRun(repoDir, {
+      id: "run-001",
+      state: "failed",
+      outcome: "failed",
+      updatedAt: "2026-03-24T14:05:00.000Z"
+    });
+    const updatedTask = await updateTaskRecord(repoDir, {
+      runId: "run-001",
+      id: "task-001",
+      state: "blocked",
+      updatedAt: "2026-03-24T14:05:00.000Z"
+    });
+
+    const storedRun = await getOrchestrationRunById(repoDir, "run-001");
+    const tasks = await listTasksForRun(repoDir, "run-001");
+
+    assert.equal(updatedRun.state, "failed");
+    assert.equal(updatedRun.outcome, "failed");
+    assert.equal(updatedTask.state, "blocked");
+    assert.equal(storedRun?.state, "failed");
+    assert.equal(storedRun?.outcome, "failed");
+    assert.equal(tasks[0]?.state, "blocked");
+    assert.equal(tasks[0]?.updatedAt, "2026-03-24T14:05:00.000Z");
   } finally {
     await removeTempDir(repoDir);
   }

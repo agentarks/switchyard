@@ -5,7 +5,14 @@ import { promisify } from "node:util";
 import { resolveBranchStartPoint } from "../config.js";
 import type { SwitchyardConfig } from "../types.js";
 import { WorktreeError } from "../errors.js";
-import { buildWorktreeBranchName, normalizeAgentName, resolveWorktreePath } from "./naming.js";
+import {
+  buildIntegrationBranchName,
+  buildLeadAgentName,
+  buildWorktreeBranchName,
+  normalizeAgentName,
+  resolveIntegrationWorktreePath,
+  resolveWorktreePath
+} from "./naming.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -30,6 +37,30 @@ export async function createWorktree(config: SwitchyardConfig, requestedAgentNam
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new WorktreeError(`Failed to create worktree for ${agentName}: ${message}`);
+  }
+
+  return {
+    agentName,
+    branch,
+    path,
+    baseBranch: config.project.canonicalBranch
+  };
+}
+
+export async function createLeadWorktree(config: SwitchyardConfig, runId: string): Promise<ManagedWorktree> {
+  const agentName = buildLeadAgentName(runId);
+  const branch = buildIntegrationBranchName(runId);
+  const path = resolveIntegrationWorktreePath(config, runId);
+  const startPoint = await resolveCanonicalStartPoint(config.project.root, config.project.canonicalBranch);
+
+  await ensureWorktreeTargetAvailable(config.project.root, branch, path);
+  await mkdir(dirname(path), { recursive: true });
+
+  try {
+    await runGit(config.project.root, ["worktree", "add", "-b", branch, path, startPoint]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new WorktreeError(`Failed to create lead worktree for ${runId}: ${message}`);
   }
 
   return {

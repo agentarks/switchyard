@@ -12,6 +12,7 @@ import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from
 import { updateLatestRunForSession } from "../runs/store.js";
 import type { UpdateRunInput } from "../runs/types.js";
 import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
+import { syncOrchestrationSessionStateBestEffort } from "../orchestration/lifecycle.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_DIRTY_ENTRY_DETAILS = 5;
@@ -162,7 +163,7 @@ async function mergeResolvedSession(
         reason: "already_up_to_date"
       }
     });
-    await markRunMergedBestEffort(projectRoot, session.id, updateLatestRun);
+    await markRunMergedBestEffort(projectRoot, session, updateLatestRun);
 
     process.stdout.write(`Session ${session.agentName} is already merged into ${canonicalBranch}\n`);
     process.stdout.write(`Session: ${session.id}\n`);
@@ -203,7 +204,7 @@ async function mergeResolvedSession(
       canonicalBranch
     }
   });
-  await markRunMergedBestEffort(projectRoot, session.id, updateLatestRun);
+  await markRunMergedBestEffort(projectRoot, session, updateLatestRun);
 
   process.stdout.write(`Merged ${session.agentName} into ${canonicalBranch}\n`);
   process.stdout.write(`Session: ${session.id}\n`);
@@ -508,20 +509,27 @@ function formatRelativePath(projectRoot: string, path: string): string {
 
 async function markRunMergedBestEffort(
   projectRoot: string,
-  sessionId: string,
+  session: SessionRecord,
   updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>
 ): Promise<void> {
   const finishedAt = new Date().toISOString();
+  let legacyWarning: string | undefined;
 
   try {
-    await updateLatestRun(projectRoot, sessionId, {
+    await updateLatestRun(projectRoot, session.id, {
       state: "finished",
       outcome: "merged",
       updatedAt: finishedAt,
       finishedAt
     });
   } catch (error) {
-    process.stderr.write(`WARN: failed to persist run state for session '${sessionId}': ${formatErrorMessage(error)}\n`);
+    legacyWarning = `WARN: failed to persist run state for session '${session.id}': ${formatErrorMessage(error)}\n`;
+  }
+
+  await syncOrchestrationSessionStateBestEffort(projectRoot, session, "stopped", finishedAt, "merged");
+
+  if (legacyWarning) {
+    process.stderr.write(legacyWarning);
   }
 }
 

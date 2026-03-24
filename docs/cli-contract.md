@@ -34,6 +34,7 @@ Purpose:
 
 Adopted contract:
 - accept one objective via `--task <instruction>` or `--task-file <path>`
+- continue accepting option-like runtime pass-through arguments such as `--sandbox read-only` or `--model gpt-5`
 - create one top-level run record
 - create one `lead` session linked to that run
 - create the lead-owned integration branch and integration worktree
@@ -44,8 +45,8 @@ Adopted contract:
 - record durable launch and failure events that preserve role, objective, spec, and artifact metadata
 
 Rollout note:
-- until the orchestration launcher lands, the implementation still accepts an `<agent>` positional argument and launches one detached worker session
-- that implementation gap should be removed by the swarm-launch bundle rather than preserved as the long-term contract
+- the launcher cutover has landed: the CLI now accepts only one objective source and starts one run plus one `lead`
+- broader run-centric inspection, host recovery, and specialist lifecycle behavior are still rollout work, not completed contract
 
 ## `sy status`
 

@@ -9,6 +9,8 @@ import type {
   HostCheckpointRecord,
   OrchestrationRunRecord,
   TaskRecord,
+  UpdateOrchestrationRunInput,
+  UpdateTaskRecordInput,
   UpsertHostCheckpointInput
 } from "./types.js";
 
@@ -187,6 +189,39 @@ export async function getOrchestrationRunById(
   });
 }
 
+export async function updateOrchestrationRun(
+  projectRoot: string,
+  input: UpdateOrchestrationRunInput
+): Promise<OrchestrationRunRecord> {
+  const existing = await getOrchestrationRunById(projectRoot, input.id);
+
+  if (!existing) {
+    throw new Error(`Orchestration run '${input.id}' does not exist.`);
+  }
+
+  const updatedAt = input.updatedAt ?? new Date().toISOString();
+  const outcome = input.outcome ?? null;
+
+  await withOrchestrationDatabase(projectRoot, (db) => {
+    const result = db.prepare(`
+      UPDATE orchestration_runs
+      SET state = ?, outcome = ?, updated_at = ?
+      WHERE id = ?
+    `).run(input.state, outcome, updatedAt, input.id);
+
+    if (result.changes === 0) {
+      throw new Error(`Orchestration run '${input.id}' does not exist.`);
+    }
+  });
+
+  return {
+    ...existing,
+    state: input.state,
+    outcome,
+    updatedAt
+  };
+}
+
 export async function createTaskRecord(projectRoot: string, input: CreateTaskRecordInput): Promise<TaskRecord> {
   const fileScope = input.fileScope ?? [];
   const parentTaskId = input.parentTaskId ?? null;
@@ -239,6 +274,38 @@ export async function listTasksForRun(projectRoot: string, runId: string): Promi
 
     return rows.map(mapTaskRow);
   });
+}
+
+export async function updateTaskRecord(projectRoot: string, input: UpdateTaskRecordInput): Promise<TaskRecord> {
+  const existing = await getTaskRecordById(projectRoot, input.runId, input.id);
+
+  if (!existing) {
+    throw new Error(`Orchestration task '${input.id}' does not exist for run '${input.runId}'.`);
+  }
+
+  const updatedAt = input.updatedAt ?? new Date().toISOString();
+  const assignedSessionId = typeof input.assignedSessionId === "undefined"
+    ? existing.assignedSessionId
+    : input.assignedSessionId;
+
+  await withOrchestrationDatabase(projectRoot, (db) => {
+    const result = db.prepare(`
+      UPDATE orchestration_tasks
+      SET state = ?, assigned_session_id = ?, updated_at = ?
+      WHERE run_id = ? AND id = ?
+    `).run(input.state, assignedSessionId, updatedAt, input.runId, input.id);
+
+    if (result.changes === 0) {
+      throw new Error(`Orchestration task '${input.id}' does not exist for run '${input.runId}'.`);
+    }
+  });
+
+  return {
+    ...existing,
+    state: input.state,
+    assignedSessionId,
+    updatedAt
+  };
 }
 
 export async function createArtifactRecord(
@@ -616,4 +683,20 @@ function mapHostCheckpointRow(row: HostCheckpointRow): HostCheckpointRecord {
     completedSessionIds: JSON.parse(row.completed_session_ids_json) as string[],
     updatedAt: row.updated_at
   };
+}
+
+async function getTaskRecordById(
+  projectRoot: string,
+  runId: string,
+  id: string
+): Promise<TaskRecord | undefined> {
+  return await withOrchestrationDatabase(projectRoot, (db) => {
+    const row = db.prepare(`
+      SELECT id, run_id, parent_task_id, role, title, file_scope_json, state, assigned_session_id, created_at, updated_at
+      FROM orchestration_tasks
+      WHERE run_id = ? AND id = ?
+    `).get(runId, id) as unknown as TaskRow | undefined;
+
+    return row ? mapTaskRow(row) : undefined;
+  });
 }
