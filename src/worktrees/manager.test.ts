@@ -12,7 +12,7 @@ import {
   git,
   removeTempDir
 } from "../test-helpers/git.js";
-import { createWorktree } from "./manager.js";
+import { createLeadWorktree, createWorktree } from "./manager.js";
 
 test("createWorktree creates a deterministic branch and path from the repo root", async () => {
   const repoDir = await createInitializedRepo("switchyard-worktree-test-");
@@ -110,6 +110,38 @@ test("createWorktree accepts an already-qualified remote canonical ref", async (
 
     assert.equal(worktree.branch, "agents/writer-remote-ref");
     assert.equal(await git(worktree.path, ["branch", "--show-current"]), "agents/writer-remote-ref");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("createLeadWorktree creates a deterministic integration branch and worktree name", async () => {
+  const repoDir = await createInitializedRepo("switchyard-worktree-test-");
+
+  try {
+    const config = await loadConfig(repoDir);
+    const worktree = await createLeadWorktree(config, "run-1234abcd");
+
+    assert.equal(worktree.agentName, "run-1234abcd-lead");
+    assert.equal(worktree.branch, "runs/run-1234abcd/lead");
+    assert.equal(worktree.path, join(repoDir, ".switchyard", "worktrees", "run-1234abcd-lead"));
+    assert.equal(await git(worktree.path, ["branch", "--show-current"]), "runs/run-1234abcd/lead");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("createLeadWorktree rejects run-aware lead collisions", async () => {
+  const repoDir = await createInitializedRepo("switchyard-worktree-test-");
+
+  try {
+    const config = await loadConfig(repoDir);
+    await createLeadWorktree(config, "run-1234abcd");
+
+    await assert.rejects(
+      () => createLeadWorktree(config, "run-1234abcd"),
+      /already exists/
+    );
   } finally {
     await removeTempDir(repoDir);
   }

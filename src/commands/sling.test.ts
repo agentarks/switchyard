@@ -9,7 +9,88 @@ import { listSessions } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
 import { statusCommand } from "./status.js";
-import { slingCommand } from "./sling.js";
+import { createSlingCommand, slingCommand } from "./sling.js";
+
+test("slingCommand creates one orchestration run plus one lead session and prints run-aware launch output", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await slingCommand({
+      task: "Replace the detached worker launch path with one bounded lead-owned run bootstrap.",
+      startDir: repoDir,
+      spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
+        const runtime = {
+          pid: 4242,
+          command: {
+            command: "codex",
+            args: runtimeArgs
+          }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
+          readyAfterMs: 500
+        };
+      }
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+
+  try {
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions.length, 1);
+    const session = sessions[0];
+    const output = writes.join("");
+
+    assert.equal(session?.role, "lead");
+    assert.ok(session?.runId);
+    assert.ok(session?.objectiveTaskId);
+    assert.match(output, /Run: run-/);
+    assert.match(output, new RegExp(`Lead session: ${session?.id}`));
+    assert.match(output, /Role: lead/);
+    assert.match(output, /Target branch: main/);
+    assert.match(output, /Integration branch: runs\/run-/);
+    assert.match(output, /Objective spec: \.switchyard\/objectives\/run-/);
+    assert.match(output, /Handoff spec: \.switchyard\/specs\/run-.*-lead-.*\.md/);
+    assert.match(output, /Result envelope: \.switchyard\/agent-results\/run-.*-lead\.json/);
+    assert.doesNotMatch(output, /Spawned /);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("createSlingCommand rejects the removed positional agent contract", async () => {
+  const command = createSlingCommand();
+  const writes: string[] = [];
+  const originalWrite = process.stderr.write.bind(process.stderr);
+
+  command.exitOverride();
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+    return true;
+  }) as typeof process.stderr.write;
+
+  try {
+    await assert.rejects(
+      () => command.parseAsync(["node", "sling", "legacy-agent", "--task", "Inspect the lead bootstrap."]),
+      /too many arguments/
+    );
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+
+  assert.match(writes.join(""), /too many arguments/i);
+});
 
 test("slingCommand creates a worktree and persists a started session", async () => {
   const repoDir = await createInitializedRepo();

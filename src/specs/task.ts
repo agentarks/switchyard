@@ -12,6 +12,15 @@ interface WriteTaskSpecInput {
   branch: string;
   baseBranch: string | null;
   worktreePath: string;
+  runId?: string;
+  role?: string;
+  objectiveTaskId?: string;
+  taskSummary?: string;
+  targetBranch?: string;
+  integrationBranch?: string;
+  objectiveSpecPath?: string;
+  resultEnvelopePath?: string;
+  mergePolicy?: string;
 }
 
 export interface TaskSpecRecord {
@@ -54,14 +63,21 @@ export async function readTaskSpecHandoff(
   sessionId: string
 ): Promise<StoredTaskHandoff | undefined> {
   const taskSpecPath = getRelativeTaskSpecPath(projectRoot, agentName, sessionId);
-  const instruction = await readTaskInstruction(projectRoot, agentName, sessionId);
+  const document = await readTaskSpecDocument(projectRoot, agentName, sessionId);
+
+  if (!document) {
+    return undefined;
+  }
+
+  const instruction = extractTaskInstruction(document);
+  const taskSummary = extractMetadataValue(document, "Task summary");
 
   if (!instruction) {
     return undefined;
   }
 
   return {
-    taskSummary: summarizeTask(instruction),
+    taskSummary: taskSummary ?? summarizeTask(instruction),
     taskSpecPath
   };
 }
@@ -71,15 +87,10 @@ export async function readTaskInstruction(
   agentName: string,
   sessionId: string
 ): Promise<string | undefined> {
-  const path = getTaskSpecPath(projectRoot, agentName, sessionId);
-
-  let document: string;
-  try {
-    document = await readFile(path, "utf8");
-  } catch {
+  const document = await readTaskSpecDocument(projectRoot, agentName, sessionId);
+  if (!document) {
     return undefined;
   }
-
   return extractTaskInstruction(document);
 }
 
@@ -92,11 +103,20 @@ function buildTaskSpecDocument(input: WriteTaskSpecInput): string {
     "# Switchyard Task Handoff",
     "",
     `Session: ${input.sessionId}`,
+    ...(typeof input.runId === "string" ? [`Run: ${input.runId}`] : []),
     `Agent: ${input.agentName}`,
+    ...(typeof input.role === "string" ? [`Role: ${input.role}`] : []),
     `Created: ${input.createdAt}`,
+    ...(typeof input.objectiveTaskId === "string" ? [`Objective task: ${input.objectiveTaskId}`] : []),
+    ...(typeof input.taskSummary === "string" ? [`Task summary: ${input.taskSummary}`] : []),
+    ...(typeof input.targetBranch === "string" ? [`Target branch: ${input.targetBranch}`] : []),
+    ...(typeof input.integrationBranch === "string" ? [`Integration branch: ${input.integrationBranch}`] : []),
     `Branch: ${input.branch}`,
     `Base: ${input.baseBranch ?? "-"}`,
     `Worktree: ${formatRelativePath(input.projectRoot, input.worktreePath)}`,
+    ...(typeof input.objectiveSpecPath === "string" ? [`Objective spec: ${input.objectiveSpecPath}`] : []),
+    ...(typeof input.resultEnvelopePath === "string" ? [`Result envelope: ${input.resultEnvelopePath}`] : []),
+    ...(typeof input.mergePolicy === "string" ? [`Merge policy: ${input.mergePolicy}`] : []),
     "",
     "## Instruction",
     "",
@@ -109,6 +129,20 @@ function getTaskSpecPath(projectRoot: string, agentName: string, sessionId: stri
   return join(projectRoot, ".switchyard", "specs", `${agentName}-${sessionId}.md`);
 }
 
+async function readTaskSpecDocument(
+  projectRoot: string,
+  agentName: string,
+  sessionId: string
+): Promise<string | undefined> {
+  const path = getTaskSpecPath(projectRoot, agentName, sessionId);
+
+  try {
+    return await readFile(path, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
 function extractTaskInstruction(document: string): string | undefined {
   const marker = "\n## Instruction\n\n";
   const markerIndex = document.indexOf(marker);
@@ -119,6 +153,16 @@ function extractTaskInstruction(document: string): string | undefined {
 
   const instruction = document.slice(markerIndex + marker.length).trim();
   return instruction.length > 0 ? instruction : undefined;
+}
+
+function extractMetadataValue(document: string, label: string): string | undefined {
+  const pattern = new RegExp(`^${escapeRegExp(label)}: (.+)$`, "m");
+  const match = document.match(pattern);
+  return match?.[1]?.trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function formatRelativePath(projectRoot: string, path: string): string {

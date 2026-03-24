@@ -902,7 +902,7 @@ test("sy sling reports task-file read failures through the Switchyard error cont
     await assert.rejects(
       () => execFileAsync(
         process.execPath,
-        [tsxCliPath, cliEntryPath, "sling", "agent-cli-task-file", "--task-file", "missing-task.md"],
+        [tsxCliPath, cliEntryPath, "sling", "--task-file", "missing-task.md"],
         { cwd: repoDir }
       ),
       (error: unknown) => {
@@ -914,6 +914,29 @@ test("sy sling reports task-file read failures through the Switchyard error cont
           cliError.stderr,
           /SLING_ERROR: Failed to read task file 'missing-task\.md': ENOENT: no such file or directory/
         );
+        return true;
+      }
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("sy sling rejects the removed positional agent contract through the real CLI entrypoint", async () => {
+  const repoDir = await createInitializedRepo("switchyard-cli-sling-contract-test-");
+
+  try {
+    await assert.rejects(
+      () => execFileAsync(
+        process.execPath,
+        [tsxCliPath, cliEntryPath, "sling", "legacy-agent", "--task", "Inspect the lead bootstrap."],
+        { cwd: repoDir }
+      ),
+      (error: unknown) => {
+        assert.ok(error && typeof error === "object" && "stderr" in error);
+        const cliError = error as { stderr: string; code: number };
+        assert.equal(cliError.code, 1);
+        assert.match(cliError.stderr, /too many arguments for 'sling'/i);
         return true;
       }
     );

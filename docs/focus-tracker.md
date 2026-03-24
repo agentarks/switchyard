@@ -11,7 +11,7 @@ Canonical implementation history now lives in [docs/slice-ledger.md](slice-ledge
 The current target is a reliable bounded autonomous swarm loop for one repository at a time.
 
 The current active milestone inside that target is:
-- objective specs and role-aware specialist launch
+- bounded lead host, resume, run-scoped stop semantics, and run-aware operator inspection
 
 The intended operator-visible outcome is:
 - one operator can start one bounded objective with `sy sling`
@@ -43,6 +43,8 @@ Completed enough to count as materially real:
 - durable sessions, runs, events, and mail
 - durable orchestration runs, task graphs, artifact references, and host checkpoints
 - role-aware session linkage and orchestration config/bootstrap defaults
+- run-aware `sy sling` launch with one orchestration run plus one `lead`
+- objective specs, lead handoff specs, and reserved result-envelope paths
 - readable log rendering
 - truthful stop, merge, and cleanup behavior for preserved session branches
 - exact-session status, event, and mail inspection
@@ -50,18 +52,18 @@ Completed enough to count as materially real:
 
 Current planning state:
 - bounded autonomous swarm v1 is now the adopted source-of-truth direction
-- the implementation now has a real durable orchestration layer under the earlier single-agent launch surface, but the launcher does not populate it yet
+- the implementation now has a real durable orchestration layer and a run-aware launcher
 - the bounded runtime baseline should stay fixed unless a concrete failure disproves it
-- the active milestone is objective specs and role-aware launch, not broad swarm-foundation work in general
-- the next bundle is objective specs and role-aware launch, not automatic merge or broader runtime work
+- the active milestone is bounded lead host and run-scoped lifecycle behavior, not broad swarm-foundation work in general
+- the next bundle is bounded lead host and run-scoped lifecycle behavior, not automatic merge or broader runtime work
 - the accepted rollout gate is `manual-ready`
 - `auto-after-verify` is deferred until a later explicit policy adoption
 
 ## Current In-Scope Work
 
 These are the right kinds of tasks right now:
-- make `sy sling` create one orchestration run plus one `lead`
-- write durable objective specs, handoff specs, and reserved result-envelope paths
+- make the launched `lead` run resumable and stoppable as one bounded unit
+- keep mail, events, and status truthful while the operator view shifts toward run-aware inspection
 - keep launcher prompts and contracts role-aware without broadening runtime scope
 - make status, events, logs, and stop semantics truthful for run-centric orchestration as the rollout progresses
 - preserve or improve operator readability while the model transitions from session-centric to run-centric
@@ -95,8 +97,8 @@ Use this rough project view instead of one flat percentage:
 - bounded single-agent foundation: materially real
 - direction adoption: complete
 - durable orchestration state: materially real
-- role-aware launch: next
-- bounded lead host and resume: not started
+- role-aware launch: materially real
+- bounded lead host and resume: next
 - integration composition and `merge_ready` gate: not started
 - run-centric operator surfaces and closure: not started
 

@@ -23,3 +23,29 @@ export function buildWorktreeBranchName(agentName: string): string {
 export function resolveWorktreePath(config: SwitchyardConfig, agentName: string): string {
   return resolve(config.project.root, config.worktrees.baseDir, normalizeAgentName(agentName));
 }
+
+export function buildLeadAgentName(runId: string): string {
+  return `${normalizeRunScopedName(runId)}-lead`;
+}
+
+export function buildIntegrationBranchName(runId: string): string {
+  return `runs/${normalizeRunScopedName(runId)}/lead`;
+}
+
+export function resolveIntegrationWorktreePath(config: SwitchyardConfig, runId: string): string {
+  return resolve(config.project.root, config.worktrees.baseDir, buildLeadAgentName(runId));
+}
+
+function normalizeRunScopedName(runId: string): string {
+  const normalized = runId
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (!normalized) {
+    throw new WorktreeError("Run id must contain at least one letter or number.");
+  }
+
+  return normalized;
+}

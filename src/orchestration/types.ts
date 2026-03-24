@@ -25,6 +25,7 @@ export type ArtifactKind =
   | "branch"
   | "worktree"
   | "integration_worktree"
+  | "result_envelope"
   | "verification_output";
 
 export interface OrchestrationRunRecord {
