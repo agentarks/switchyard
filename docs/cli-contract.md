@@ -34,6 +34,7 @@ Purpose:
 
 Adopted contract:
 - accept one objective via `--task <instruction>` or `--task-file <path>`
+- continue accepting option-like runtime pass-through arguments such as `--sandbox read-only` or `--model gpt-5`
 - create one top-level run record
 - create one `lead` session linked to that run
 - create the lead-owned integration branch and integration worktree

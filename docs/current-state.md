@@ -58,6 +58,7 @@ Today the implementation has partially crossed into the adopted run model:
 
 - `sy sling`
   - requires exactly one objective source via `--task` or `--task-file`
+  - still accepts option-like runtime overrides such as `--sandbox read-only` or `--model gpt-5`
   - creates one orchestration run, one lead task, and one lead session
   - creates one run-aware integration branch and worktree
   - writes one objective spec, one lead handoff spec, and one reserved lead result-envelope path

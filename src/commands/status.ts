@@ -30,6 +30,7 @@ import { isActiveSessionState, type SessionRecord, type SessionState } from "../
 import { getSessionById, listSessions, updateSessionState } from "../sessions/store.js";
 import { readTaskInstruction, readTaskSpecHandoff } from "../specs/task.js";
 import { formatSessionSelectorAmbiguousMessage, resolveSessionByIdOrAgent } from "./session-selector.js";
+import { syncOrchestrationSessionStateBestEffort } from "../orchestration/lifecycle.js";
 
 interface StatusOptions {
   selector?: string;
@@ -653,7 +654,7 @@ async function reconcileSessionLifecycles(
     reconciledEventsBySession.set(nextSession.id, reconciledEvent);
     await syncRunStateAfterReconcile(
       projectRoot,
-      nextSession.id,
+      nextSession,
       nextState.state,
       nextState.runOutcome,
       createdAt,
@@ -1637,24 +1638,23 @@ async function loadLatestLaunchTaskInstruction(projectRoot: string, session: Ses
 
 async function syncRunStateAfterReconcile(
   projectRoot: string,
-  sessionId: string,
+  session: SessionRecord,
   nextState: SessionState,
   runOutcome: RunOutcome | undefined,
   updatedAt: string,
   updateLatestRun: (projectRoot: string, sessionId: string, input: Omit<UpdateRunInput, "id">) => Promise<unknown>
 ): Promise<void> {
+  let legacyWarning: string | undefined;
+
   try {
     if (nextState === "running") {
-      await updateLatestRun(projectRoot, sessionId, {
+      await updateLatestRun(projectRoot, session.id, {
         state: "active",
         updatedAt,
         finishedAt: null
       });
-      return;
-    }
-
-    if (nextState === "failed" || nextState === "stopped") {
-      await updateLatestRun(projectRoot, sessionId, {
+    } else if (nextState === "failed" || nextState === "stopped") {
+      await updateLatestRun(projectRoot, session.id, {
         state: "finished",
         outcome: runOutcome ?? "failed",
         updatedAt,
@@ -1662,7 +1662,19 @@ async function syncRunStateAfterReconcile(
       });
     }
   } catch (error) {
-    process.stderr.write(`WARN: failed to persist run state for session '${sessionId}': ${formatErrorMessage(error)}\n`);
+    legacyWarning = `WARN: failed to persist run state for session '${session.id}': ${formatErrorMessage(error)}\n`;
+  }
+
+  await syncOrchestrationSessionStateBestEffort(
+    projectRoot,
+    session,
+    nextState,
+    updatedAt,
+    nextState === "running" ? undefined : runOutcome ?? "failed"
+  );
+
+  if (legacyWarning) {
+    process.stderr.write(legacyWarning);
   }
 }
 

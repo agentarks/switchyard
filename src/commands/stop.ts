@@ -20,6 +20,7 @@ import {
 import { updateSessionState } from "../sessions/store.js";
 import { isActiveSessionState, type SessionRecord } from "../sessions/types.js";
 import { removeWorktree } from "../worktrees/manager.js";
+import { syncOrchestrationSessionStateBestEffort } from "../orchestration/lifecycle.js";
 type StopCleanupReason = CleanupReason | "cleanup_failed";
 
 class StopCleanupError extends StopError {
@@ -134,6 +135,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
         }
       });
       await updateRunAfterStopBestEffort(config.project.root, session.id, session.state, updateLatestRun, cleanup.cleanupMode);
+      await syncOrchestrationAfterStopBestEffort(config.project.root, session, session.state, cleanup.cleanupMode);
       writeStopResult(
         `Session ${session.agentName} is already ${session.state}.`,
         session.id,
@@ -197,6 +199,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       }
     });
     await updateRunAfterStopBestEffort(config.project.root, nextSession.id, nextSession.state, updateLatestRun, cleanup.cleanupMode);
+    await syncOrchestrationAfterStopBestEffort(config.project.root, nextSession, nextSession.state, cleanup.cleanupMode);
     writeStopResult(
       `Session ${session.agentName} has no recorded runtime pid. Marked failed.`,
       nextSession.id,
@@ -263,6 +266,13 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
           undefined,
           "completed"
         );
+        await syncOrchestrationAfterStopBestEffort(
+          config.project.root,
+          completedSession,
+          completedSession.state,
+          undefined,
+          "completed"
+        );
         writeStopResult(
           `Session ${session.agentName} already finished successfully.`,
           completedSession.id,
@@ -287,6 +297,13 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
         completedSession.id,
         completedSession.state,
         updateLatestRun,
+        cleanup.cleanupMode,
+        "completed"
+      );
+      await syncOrchestrationAfterStopBestEffort(
+        config.project.root,
+        completedSession,
+        completedSession.state,
         cleanup.cleanupMode,
         "completed"
       );
@@ -350,6 +367,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
       ...buildCleanupFailurePayload(error)
     });
     await updateRunAfterStopBestEffort(config.project.root, nextSession.id, nextSession.state, updateLatestRun);
+    await syncOrchestrationAfterStopBestEffort(config.project.root, nextSession, nextSession.state);
     writeStopResult(
       formatStopHeading(session.agentName, nextState),
       nextSession.id,
@@ -369,6 +387,7 @@ export async function stopCommand(options: StopCommandOptions): Promise<void> {
     ...(cleanup.cleanupDetails ?? {})
   });
   await updateRunAfterStopBestEffort(config.project.root, nextSession.id, nextSession.state, updateLatestRun, cleanup.cleanupMode);
+  await syncOrchestrationAfterStopBestEffort(config.project.root, nextSession, nextSession.state, cleanup.cleanupMode);
 
   writeStopResult(
     formatStopHeading(session.agentName, nextState),
@@ -608,6 +627,22 @@ function determineRunOutcomeAfterStop(
   }
 
   return "stopped";
+}
+
+async function syncOrchestrationAfterStopBestEffort(
+  projectRoot: string,
+  session: SessionRecord,
+  sessionState: SessionRecord["state"],
+  cleanupMode?: CleanupMode,
+  overrideOutcome?: RunOutcome
+): Promise<void> {
+  await syncOrchestrationSessionStateBestEffort(
+    projectRoot,
+    session,
+    sessionState,
+    new Date().toISOString(),
+    determineRunOutcomeAfterStop(sessionState, cleanupMode, overrideOutcome)
+  );
 }
 
 function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {

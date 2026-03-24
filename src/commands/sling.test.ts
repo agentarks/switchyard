@@ -71,25 +71,15 @@ test("slingCommand creates one orchestration run plus one lead session and print
 
 test("createSlingCommand rejects the removed positional agent contract", async () => {
   const command = createSlingCommand();
-  const writes: string[] = [];
-  const originalWrite = process.stderr.write.bind(process.stderr);
-
-  command.exitOverride();
-  process.stderr.write = ((chunk: string | Uint8Array) => {
-    writes.push(typeof chunk === "string" ? chunk : chunk.toString());
-    return true;
-  }) as typeof process.stderr.write;
 
   try {
     await assert.rejects(
       () => command.parseAsync(["node", "sling", "legacy-agent", "--task", "Inspect the lead bootstrap."]),
-      /too many arguments/
+      /legacy '<agent>' positional is removed/
     );
   } finally {
-    process.stderr.write = originalWrite;
+    command.exitOverride();
   }
-
-  assert.match(writes.join(""), /too many arguments/i);
 });
 
 test("slingCommand creates a worktree and persists a started session", async () => {

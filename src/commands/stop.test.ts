@@ -10,6 +10,7 @@ import { createRun, getLatestRunForSession } from "../runs/store.js";
 import { createSession, listSessions, updateSessionState } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
+import { getOrchestrationRunById, listTasksForRun } from "../orchestration/store.js";
 import { slingCommand } from "./sling.js";
 import { statusCommand } from "./status.js";
 import { stopCommand } from "./stop.js";
@@ -82,6 +83,46 @@ test("stopCommand stops an active session and preserves the worktree by default"
   assert.match(output, /Stopped agent-one/);
   assert.match(output, /Session: [^\n]+/);
   assert.match(output, /Worktree preserved: \.switchyard\/worktrees\/agent-one/);
+});
+
+test("stopCommand keeps orchestration run and task state in sync for a lead session", async () => {
+  const repoDir = await createInitializedRepo();
+
+  try {
+    await slingCommand({
+      task: TEST_TASK,
+      startDir: repoDir,
+      spawnRuntime: async () => {
+        return {
+          pid: 4444,
+          command: {
+            command: "codex",
+            args: []
+          },
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    const session = (await listSessions(repoDir))[0];
+    assert.ok(session?.runId);
+
+    await stopCommand({
+      selector: session!.id,
+      startDir: repoDir,
+      isRuntimeAlive: (pid) => pid === 4444,
+      stopRuntime: async () => true
+    });
+
+    const orchestrationRun = await getOrchestrationRunById(repoDir, session!.runId!);
+    const tasks = await listTasksForRun(repoDir, session!.runId!);
+
+    assert.equal(orchestrationRun?.state, "blocked");
+    assert.equal(orchestrationRun?.outcome, "blocked");
+    assert.equal(tasks[0]?.state, "completed");
+  } finally {
+    await removeTempDir(repoDir);
+  }
 });
 
 test("stopCommand reports natural completion truthfully when the task already finished", async () => {

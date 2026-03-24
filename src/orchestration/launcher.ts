@@ -19,6 +19,7 @@ import type { SessionRecord } from "../sessions/types.js";
 import { getRelativeTaskSpecPath, summarizeTask, writeTaskSpec, type TaskSpecRecord } from "../specs/task.js";
 import { writeObjectiveSpec, type ObjectiveSpecRecord } from "../specs/objective.js";
 import { createLeadWorktree, removeWorktree, type ManagedWorktree } from "../worktrees/manager.js";
+import { syncOrchestrationLaunchFailureBestEffort, syncOrchestrationSessionStateBestEffort } from "./lifecycle.js";
 import {
   createArtifactRecord,
   createOrchestrationRun,
@@ -221,6 +222,13 @@ export async function launchOrchestrationRun(options: LaunchOrchestrationRunOpti
     const cleanupError = await cleanupFailedLaunch(config.project.root, worktree);
     const failedAt = nextLifecycleTimestamp(lastLifecycleTimestamp);
 
+    await syncOrchestrationLaunchFailureBestEffort(config.project.root, {
+      sessionId,
+      runId,
+      taskId: leadTaskId,
+      updatedAt: failedAt
+    });
+
     await createSession(config.project.root, {
       id: sessionId,
       runId,
@@ -303,6 +311,13 @@ export async function launchOrchestrationRun(options: LaunchOrchestrationRunOpti
       stopRuntime
     });
 
+    await syncOrchestrationLaunchFailureBestEffort(config.project.root, {
+      sessionId,
+      runId,
+      taskId: leadTaskId,
+      updatedAt: failedAt
+    });
+
     await recordEventWithFallback(recordEvent, config.project.root, {
       sessionId,
       agentName: worktree.agentName,
@@ -368,6 +383,13 @@ export async function launchOrchestrationRun(options: LaunchOrchestrationRunOpti
       finishedAt: null
     }, updateRunRecord);
   }
+  await syncOrchestrationSessionStateBestEffort(config.project.root, session, session.state, completedAt);
+  run = {
+    ...run,
+    state: "dispatching",
+    outcome: null,
+    updatedAt: completedAt
+  };
 
   return {
     projectRoot: config.project.root,

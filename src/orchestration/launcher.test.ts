@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildDefaultConfig, writeConfig } from "../config.js";
-import { listArtifactsForRun, listTasksForRun } from "./store.js";
+import { listArtifactsForRun, listTasksForRun, getOrchestrationRunById } from "./store.js";
 import { getLatestRunForSession } from "../runs/store.js";
-import { getSessionById } from "../sessions/store.js";
+import { getSessionById, listSessions } from "../sessions/store.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, removeTempDir } from "../test-helpers/git.js";
 import { launchOrchestrationRun } from "./launcher.js";
@@ -52,7 +52,7 @@ test("launchOrchestrationRun bootstraps one planning run, one lead task, one lea
     const artifacts = await listArtifactsForRun(repoDir, run.id);
     const latestRun = await getLatestRunForSession(repoDir, launched.session.id);
 
-    assert.equal(run.state, "planning");
+    assert.equal(run.state, "dispatching");
     assert.equal(session?.role, "lead");
     assert.equal(session?.runId, run.id);
     assert.equal(session?.objectiveTaskId, task.id);
@@ -67,6 +67,40 @@ test("launchOrchestrationRun bootstraps one planning run, one lead task, one lea
     assert.equal(latestRun?.taskSummary, launched.objectiveSpec.objectiveSummary);
     assert.equal(latestRun?.taskSpecPath, launched.handoffSpec.relativePath);
     assert.equal(latestRun?.state, "active");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("launchOrchestrationRun marks orchestration state failed when runtime spawn fails", async () => {
+  const repoDir = await createTempGitRepo("switchyard-launcher-test-");
+
+  try {
+    await bootstrapSwitchyardLayout(repoDir);
+    await writeConfig(buildDefaultConfig(repoDir, "switchyard-test", "main"));
+
+    await assert.rejects(
+      () =>
+        launchOrchestrationRun({
+          startDir: repoDir,
+          objective: "Fail the lead launch after orchestration bootstrap.",
+          spawnRuntime: async () => {
+            throw new Error("boom");
+          }
+        }),
+      /boom/
+    );
+
+    const sessions = await listSessions(repoDir);
+    assert.equal(sessions.length, 1);
+    assert.ok(sessions[0]?.runId);
+    const run = await getOrchestrationRunById(repoDir, sessions[0]!.runId!);
+    const tasks = await listTasksForRun(repoDir, sessions[0]!.runId!);
+
+    assert.equal(sessions[0]?.state, "failed");
+    assert.equal(run?.state, "failed");
+    assert.equal(run?.outcome, "failed");
+    assert.equal(tasks[0]?.state, "blocked");
   } finally {
     await removeTempDir(repoDir);
   }

@@ -14,6 +14,7 @@ import { createSession, listSessions } from "../sessions/store.js";
 import { summarizeTask, writeTaskSpec } from "../specs/task.js";
 import { bootstrapSwitchyardLayout } from "../storage/bootstrap.js";
 import { createTempGitRepo, git, removeTempDir } from "../test-helpers/git.js";
+import { getOrchestrationRunById, listTasksForRun } from "../orchestration/store.js";
 import { slingCommand } from "./sling.js";
 import { statusCommand } from "./status.js";
 
@@ -89,6 +90,69 @@ test("statusCommand keeps the exact lead session bridge after run-aware launch",
       tableOutput,
       /running\t[0-9a-f-]+\trun-.*-lead\truns\/run-.*\/lead\t\.switchyard\/worktrees\/run-.*-lead\t[0-9T:.-]+Z\t0\t[^\t]+\tInspect the objective and report the next bounded orchestration step\.\tactive\t-\twait\t/
     );
+  } finally {
+    process.stdout.write = originalWrite;
+    await removeTempDir(repoDir);
+  }
+});
+
+test("statusCommand reconciles a completed lead session into blocked orchestration state until host result handling lands", async () => {
+  const repoDir = await createInitializedRepo();
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+
+  try {
+    await slingCommand({
+      task: "Inspect the objective and report the next bounded orchestration step.",
+      startDir: repoDir,
+      spawnRuntime: async ({ runtimeArgs, onSpawned }) => {
+        const runtime = {
+          pid: 41414,
+          command: {
+            command: "codex",
+            args: runtimeArgs
+          }
+        };
+
+        await onSpawned?.(runtime);
+
+        return {
+          ...runtime,
+          readyAfterMs: 500
+        };
+      }
+    });
+
+    const session = (await listSessions(repoDir))[0];
+    assert.ok(session?.id);
+    await writeFile(
+      getSessionLogPath(repoDir, session!.agentName, session!.id).path,
+      "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":10,\"cached_input_tokens\":4,\"output_tokens\":2}}\n",
+      "utf8"
+    );
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    await statusCommand({
+      selector: session!.id,
+      startDir: repoDir,
+      isRuntimeAlive: () => false,
+      now: () => "2026-03-24T12:00:00.000Z"
+    });
+
+    const latestRun = await getLatestRunForSession(repoDir, session!.id);
+    const orchestrationRun = await getOrchestrationRunById(repoDir, session!.runId!);
+    const tasks = await listTasksForRun(repoDir, session!.runId!);
+    const updatedSession = (await listSessions(repoDir))[0];
+
+    assert.equal(updatedSession?.state, "stopped");
+    assert.equal(latestRun?.outcome, "completed");
+    assert.equal(orchestrationRun?.state, "blocked");
+    assert.equal(orchestrationRun?.outcome, "blocked");
+    assert.equal(tasks[0]?.state, "completed");
   } finally {
     process.stdout.write = originalWrite;
     await removeTempDir(repoDir);

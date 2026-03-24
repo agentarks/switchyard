@@ -43,9 +43,11 @@ export function createSlingCommand(): Command {
     .description("Start one bounded orchestration run with a lead session")
     .option("--task <instruction>", "Operator objective or instruction to hand off to the lead")
     .option("--task-file <path>", "Read the operator objective or instruction from a file")
-    .allowExcessArguments(false)
-    .action(async (commandOptions: { task?: string; taskFile?: string }) => {
-      await slingCommand({ task: commandOptions.task, taskFile: commandOptions.taskFile });
+    .argument("[runtimeArgs...]", "Pass through Codex/runtime arguments such as '--sandbox read-only'")
+    .allowUnknownOption(true)
+    .action(async (runtimeArgs: string[], commandOptions: { task?: string; taskFile?: string }) => {
+      validateCliRuntimeArgs(runtimeArgs);
+      await slingCommand({ task: commandOptions.task, taskFile: commandOptions.taskFile, runtimeArgs });
     });
 }
 
@@ -339,6 +341,18 @@ function validateTask(task: string | undefined): string {
   }
 
   return task;
+}
+
+function validateCliRuntimeArgs(runtimeArgs: string[]): void {
+  if (runtimeArgs.length === 0) {
+    return;
+  }
+
+  if (!runtimeArgs[0]?.startsWith("-")) {
+    throw new SlingError(
+      "The legacy '<agent>' positional is removed. Use '--task' or '--task-file' for the objective, and pass runtime overrides as option-like arguments such as '--sandbox read-only'."
+    );
+  }
 }
 
 function formatRelativePath(projectRootPath: string, path: string): string {
