@@ -228,6 +228,18 @@ async function writeFixtureFiles(repoDir: string): Promise<void> {
     }),
     "utf8"
   );
+
+  await writeFile(
+    join(docsDir, "slice-ledger.md"),
+    [
+      "# Slice Ledger",
+      "",
+      "| SEQ | DATE | SLUG | SUMMARY | ARTIFACTS | NOTES |",
+      "| --- | --- | --- | --- | --- | --- |",
+      "| S09 | 2026-03-11 | run-tracking-control-plane | Existing implementation row. | PR #69 | Fixture row for repo-workflow validation tests. |"
+    ].join("\n"),
+    "utf8"
+  );
 }
 
 function projectionBlock({ includeActiveChunkId }: { includeActiveChunkId: boolean }): string {

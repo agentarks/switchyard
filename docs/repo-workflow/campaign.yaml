@@ -6,9 +6,9 @@ repo_workflow_campaign:
   campaign_state: active
   active_chunk_id: c-005
   active_attempt_id: a-005
-  branch_ref: refs/heads/docs/repo-workflow-handoff
+  branch_ref: refs/heads/main
   baseline_command: npm run check
   slice_ledger:
-    disposition: folded-into-existing-row
-    row_ref: S09
+    disposition: pending
+    row_ref: null
   last_updated: 2026-03-25

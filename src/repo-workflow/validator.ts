@@ -35,10 +35,13 @@ export async function validateRepoWorkflow(projectRoot: string): Promise<RepoWor
   try {
     for (const relativePath of MANDATORY_STARTUP_DOCS) {
       const contents = await readStartupDoc(projectRoot, relativePath);
-      if (!contents.includes(STARTUP_MARKER)) {
+      const startupMarkerMatches = contents.match(new RegExp(`^${escapeRegExp(STARTUP_MARKER)}$`, "gm")) ?? [];
+      const markerLineIndex = contents.split("\n").findIndex((line) => line === STARTUP_MARKER);
+
+      if (startupMarkerMatches.length !== 1 || markerLineIndex === -1 || markerLineIndex > 7) {
         throw new RepoWorkflowValidationFailure(
           "invalid_startup_doc",
-          `${relativePath} is missing startup marker '${STARTUP_MARKER}'.`
+          `${relativePath} is missing startup marker '${STARTUP_MARKER}' in the required startup-doc position near the top of the file.`
         );
       }
     }
@@ -88,6 +91,7 @@ export async function validateRepoWorkflow(projectRoot: string): Promise<RepoWor
 
     validateCrossFileIds(campaign, chunkManifest, attemptDocument);
     validateMilestoneRegistry(campaign, milestoneRegistry);
+    validateSliceLedgerLinkage(campaign, documents.sliceLedgerRowRefs);
     validateProjections(campaign, projections);
 
     const activeAttempt = validateActiveState(campaign, chunkManifest, attemptDocument);
@@ -495,6 +499,20 @@ function validateMilestoneRegistry(campaign: LoadedCampaign, registry: LoadedMil
   }
 }
 
+function validateSliceLedgerLinkage(campaign: LoadedCampaign, sliceLedgerRowRefs: Set<string>): void {
+  if (campaign.sliceLedger.disposition === "pending") {
+    return;
+  }
+
+  const rowRef = campaign.sliceLedger.rowRef;
+  if (rowRef === null || !sliceLedgerRowRefs.has(rowRef)) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `campaign.yaml slice_ledger.row_ref '${rowRef}' does not match an existing row in docs/slice-ledger.md.`
+    );
+  }
+}
+
 function validateProjections(campaign: LoadedCampaign, projections: Map<string, LoadedProjection>): void {
   for (const relativePath of PROJECTION_DOCS) {
     const projection = projections.get(relativePath);
@@ -586,6 +604,23 @@ function validateActiveState(
       "invalid_state",
       `campaign_state 'active' does not allow active attempt state '${activeAttempt.state}'.`
     );
+  }
+
+  if (activeAttempt.state === "complete") {
+    if (
+      activeAttempt.specReviewStatus !== "approved" ||
+      activeAttempt.qualityReviewStatus !== "approved" ||
+      activeAttempt.verificationResult !== "passed" ||
+      activeAttempt.specReviewedCommit === null ||
+      activeAttempt.qualityReviewedCommit === null ||
+      activeAttempt.verificationHeadCommit === null ||
+      activeAttempt.docsReconciled !== true
+    ) {
+      throw new RepoWorkflowValidationFailure(
+        "invalid_state",
+        "Active attempt state 'complete' requires approved reviews, passed verification, non-null review/verification commits, and docs_reconciled: true."
+      );
+    }
   }
 
   return activeAttempt;
@@ -744,4 +779,8 @@ function requireEnum<T extends string>(value: unknown, allowed: T[], filePath: s
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

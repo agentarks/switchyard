@@ -259,6 +259,123 @@ test("validateRepoWorkflow fails closed on dirty worktrees, including .switchyar
   }
 });
 
+test("validateRepoWorkflow fails closed on ignored .switchyard artifacts", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    await mkdir(join(repoDir, ".switchyard", "logs"), { recursive: true });
+    await writeFile(join(repoDir, ".switchyard", "events.db"), "sqlite placeholder\n", "utf8");
+
+    const result = await validateRepoWorkflow(repoDir);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "dirty_worktree");
+    assert.match(result.message, /\.switchyard\/events\.db/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("validateRepoWorkflow fails when slice_ledger.row_ref does not exist in docs/slice-ledger.md", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    const campaignPath = join(repoDir, "docs", "repo-workflow", "campaign.yaml");
+    const campaign = parse(await readFile(campaignPath, "utf8")) as {
+      repo_workflow_campaign: { slice_ledger: { disposition: string; row_ref: string | null } };
+    };
+    campaign.repo_workflow_campaign.slice_ledger.disposition = "folded-into-existing-row";
+    campaign.repo_workflow_campaign.slice_ledger.row_ref = "S999";
+    await writeFile(campaignPath, stringify(campaign), "utf8");
+    await git(repoDir, ["add", "docs/repo-workflow/campaign.yaml"]);
+    await git(repoDir, ["commit", "-m", "Use missing slice ledger row ref"]);
+
+    const result = await validateRepoWorkflow(repoDir);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "invalid_state");
+    assert.match(result.message, /docs\/slice-ledger\.md/);
+    assert.match(result.message, /S999/);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("validateRepoWorkflow fails when the startup marker is buried away from the startup-doc header", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    await writeFile(
+      join(repoDir, "AGENTS.md"),
+      ["# AGENTS", "", "line 1", "line 2", "line 3", "line 4", "line 5", "line 6", "", STARTUP_MARKER].join("\n"),
+      "utf8"
+    );
+    await git(repoDir, ["add", "AGENTS.md"]);
+    await git(repoDir, ["commit", "-m", "Bury startup marker"]);
+
+    const result = await validateRepoWorkflow(repoDir);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "invalid_startup_doc");
+    assert.match(result.message, /required startup-doc position/i);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("validateRepoWorkflow fails when a projection doc contains duplicate projection blocks", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    const currentStatePath = join(repoDir, "docs", "current-state.md");
+    const currentState = await readFile(currentStatePath, "utf8");
+    await writeFile(currentStatePath, `${currentState.trim()}\n\n${projectionBlock({ includeActiveChunkId: true })}\n`, "utf8");
+    await git(repoDir, ["add", "docs/current-state.md"]);
+    await git(repoDir, ["commit", "-m", "Duplicate projection block"]);
+
+    const result = await validateRepoWorkflow(repoDir);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "invalid_projection");
+    assert.match(result.message, /projection block delimiters/i);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("validateRepoWorkflow fails when the active attempt is complete without docs reconciliation", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    const currentHead = await git(repoDir, ["rev-parse", "HEAD"]);
+    const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
+    const attempts = parse(await readFile(attemptsPath, "utf8")) as {
+      repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
+    };
+    const activeAttempt = attempts.repo_workflow_attempts.attempts[0]!;
+    activeAttempt.state = "complete";
+    activeAttempt.spec_review_status = "approved";
+    activeAttempt.spec_reviewed_commit = currentHead;
+    activeAttempt.quality_review_status = "approved";
+    activeAttempt.quality_reviewed_commit = currentHead;
+    activeAttempt.verification_result = "passed";
+    activeAttempt.verification_head_commit = currentHead;
+    activeAttempt.verified_at = "2026-03-25T15:00:00.000Z";
+    activeAttempt.docs_reconciled = false;
+    await writeFile(attemptsPath, stringify(attempts), "utf8");
+    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(repoDir, ["commit", "-m", "Leave complete attempt unreconciled"]);
+
+    const result = await validateRepoWorkflow(repoDir);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "invalid_state");
+    assert.match(result.message, /docs_reconciled: true/i);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createValidRepoWorkflowRepo(): Promise<string> {
   const repoDir = await createTempGitRepo("switchyard-repo-workflow-");
 
@@ -424,6 +541,18 @@ async function writeFixtureFiles(repoDir: string): Promise<void> {
         last_updated: "2026-03-25"
       }
     }),
+    "utf8"
+  );
+
+  await writeFile(
+    join(docsDir, "slice-ledger.md"),
+    [
+      "# Slice Ledger",
+      "",
+      "| SEQ | DATE | SLUG | SUMMARY | ARTIFACTS | NOTES |",
+      "| --- | --- | --- | --- | --- | --- |",
+      "| S09 | 2026-03-11 | run-tracking-control-plane | Existing implementation row. | PR #69 | Fixture row for repo-workflow validation tests. |"
+    ].join("\n"),
     "utf8"
   );
 }

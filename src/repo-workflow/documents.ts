@@ -52,7 +52,8 @@ export async function loadRepoWorkflowDocuments(projectRoot: string): Promise<Re
       MILESTONE_BLOCK_START,
       MILESTONE_BLOCK_END,
       "milestone registry"
-    )
+    ),
+    sliceLedgerRowRefs: await readSliceLedgerRowRefs(projectRoot)
   };
 }
 
@@ -84,10 +85,12 @@ function extractDelimitedYamlBlock(
   endMarker: string,
   blockKind: string
 ): string {
-  const startIndex = contents.indexOf(startMarker);
-  const endIndex = contents.indexOf(endMarker);
+  const startIndexes = findAllIndexes(contents, startMarker);
+  const endIndexes = findAllIndexes(contents, endMarker);
+  const startIndex = startIndexes[0] ?? -1;
+  const endIndex = endIndexes[0] ?? -1;
 
-  if (startIndex === -1 || endIndex === -1 || endIndex <= startIndex) {
+  if (startIndexes.length !== 1 || endIndexes.length !== 1 || endIndex <= startIndex) {
     throw new Error(`${relativePath} is missing ${blockKind} block delimiters.`);
   }
 
@@ -99,6 +102,37 @@ function extractDelimitedYamlBlock(
   }
 
   return fencedMatch[1];
+}
+
+async function readSliceLedgerRowRefs(projectRoot: string): Promise<Set<string>> {
+  const contents = await readTextFile(projectRoot, "docs/slice-ledger.md");
+  const rowRefs = new Set<string>();
+
+  for (const line of contents.split("\n")) {
+    const match = line.match(/^\|\s*(S\d+)\s*\|/);
+    if (match?.[1]) {
+      rowRefs.add(match[1]);
+    }
+  }
+
+  return rowRefs;
+}
+
+function findAllIndexes(contents: string, needle: string): number[] {
+  const indexes: number[] = [];
+  let fromIndex = 0;
+
+  while (fromIndex < contents.length) {
+    const index = contents.indexOf(needle, fromIndex);
+    if (index === -1) {
+      break;
+    }
+
+    indexes.push(index);
+    fromIndex = index + needle.length;
+  }
+
+  return indexes;
 }
 
 function parseYaml(contents: string, relativePath: string, kind: string): unknown {

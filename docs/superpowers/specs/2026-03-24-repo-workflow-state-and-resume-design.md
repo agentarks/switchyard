@@ -216,6 +216,7 @@ Allowed `slice_ledger.disposition` values:
 
 Ownership rules:
 - current `branch_ref` lives only here
+- in landed repo state, `branch_ref` must name the canonical long-lived branch the repo-workflow validator should resume on after merge, not a short-lived review branch
 - repo baseline command lives only here
 - canonical slice-ledger linkage lives only here
 
@@ -564,7 +565,8 @@ Rules:
 Mapping rules:
 - internal chunks do not get slice-ledger rows by default
 - one landed repo-workflow bundle gets one slice-ledger row only if it materially changed the operator loop
-- otherwise canonical `slice_ledger.disposition` remains `folded-into-existing-row`
+- if no truthful existing slice-ledger row is the right fold target, canonical `slice_ledger.disposition` may remain `pending` until a later explicit mapping decision is recorded
+- otherwise canonical `slice_ledger.disposition` may use `folded-into-existing-row`
 - canonical `slice_ledger.row_ref` points at the existing or new slice row when `disposition` is not `pending`
 - when a ledger row exists, the same mapping decision is recorded in that row's notes
 

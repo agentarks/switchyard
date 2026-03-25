@@ -111,6 +111,7 @@ export interface RepoWorkflowDocuments {
   attempts: unknown;
   projections: Record<string, unknown>;
   milestoneRegistry: unknown;
+  sliceLedgerRowRefs: Set<string>;
 }
 
 export type RepoWorkflowValidationResult =
