@@ -418,6 +418,7 @@ Rules:
 - `docs/current-state.md` and `docs/next-steps.md` must include `active_chunk_id`
 - `docs/focus-tracker.md` may omit `active_chunk_id`
 - projection ids must match canonical YAML exactly
+- the three projection docs plus the milestone registry block form one current-`HEAD` checkpoint; any mismatch at the checked-out `HEAD` is invalid
 
 Per-chunk doc reconciliation requires:
 - `docs/current-state.md`
@@ -433,6 +434,7 @@ Resume rule:
 ## Review And Verification Currency
 
 Attempt state is always evaluated against the current checked-out `HEAD` commit on canonical `branch_ref`.
+No canonical YAML field stores an authoritative "current head" value for resume decisions; currency is always derived from the checked-out repo state on `branch_ref`.
 
 Completion conditions for a chunk:
 - active attempt `state` is `complete`

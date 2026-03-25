@@ -1,0 +1,21 @@
+repo_workflow_attempts:
+  schema_version: 1
+  campaign_id: rw-001
+  attempts:
+    - attempt_id: a-001
+      chunk_id: c-001
+      attempt_number: 1
+      state: ready
+      blocked_reason: none
+      implementer_status: not-started
+      spec_review_status: not-started
+      spec_reviewed_commit: null
+      quality_review_status: not-started
+      quality_reviewed_commit: null
+      verification_result: not-run
+      verification_head_commit: null
+      verified_at: null
+      docs_reconciled: false
+      summary: ""
+      notes: "Initial repo-workflow bootstrap attempt for the first control-plane slice."
+  last_updated: 2026-03-25

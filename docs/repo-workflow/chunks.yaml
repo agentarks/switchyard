@@ -1,0 +1,35 @@
+repo_workflow_chunks:
+  schema_version: 1
+  campaign_id: rw-001
+  bundle_id: repo-workflow-foundation
+  manifest_state: active
+  chunks:
+    - chunk_id: c-001
+      next_chunk_id: c-002
+      objective: freeze-control-plane-contract
+      scope: repo-workflow-contract-and-red-tests
+      done_condition: contract-cleanup-and-red-tests-landed
+      verification_command: node --import tsx --test src/repo-workflow/validator.test.ts src/repo-workflow/cli.test.ts
+      owner_role: controller
+    - chunk_id: c-002
+      next_chunk_id: c-003
+      objective: implement-repo-workflow-validator
+      scope: repo-workflow-validator
+      done_condition: validator-and-cli-pass-targeted-tests
+      verification_command: node --import tsx --test src/repo-workflow/validator.test.ts src/repo-workflow/cli.test.ts
+      owner_role: controller
+    - chunk_id: c-003
+      next_chunk_id: c-004
+      objective: cut-over-startup-docs-and-projections
+      scope: repo-workflow-startup-doc-cutover
+      done_condition: startup-doc-cutover-validates-cleanly
+      verification_command: npm run repo-workflow:validate
+      owner_role: controller
+    - chunk_id: c-004
+      next_chunk_id: null
+      objective: verify-closeout-and-prepare-pr
+      scope: repo-workflow-closeout
+      done_condition: repo-workflow-slice-verified-and-ready-for-pr
+      verification_command: npm run check
+      owner_role: controller
+  last_updated: 2026-03-25
