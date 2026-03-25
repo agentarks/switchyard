@@ -73,6 +73,16 @@ Defer unless explicitly requested:
 - If you change behavior, add or update tests in the same session when practical.
 - If you change CLI behavior or output, update the relevant docs.
 - Run `npm run check` before closing a milestone bundle when behavior changed.
+- Every material change requires 3 independent subagent reviews before it can be called review-clean, implementation-ready, or merge-ready.
+- A material change includes code, behavior, architecture, workflow docs, specs, plans, merge or PR process changes, and any doc edit that changes meaning.
+- Trivial typo-only edits that do not change meaning do not require the 3-review gate.
+- Independent means 3 distinct reviewer identities. Reusing the same reviewer multiple times does not satisfy the gate.
+- A review counts only when a reviewer returns an actual result on the current diff or current document state; timeout or no-response does not count.
+- If any reviewer returns a non-trivial finding, the change is not clean.
+- A non-trivial finding is any issue involving correctness, contract mismatch, behavioral regression, missing verification, unsafe workflow behavior, scope violation, or ambiguity that changes the effective contract, test oracle, or implementation path. Pure wording preferences or clearly advisory suggestions are not blocking by themselves.
+- After fixes, rerun enough independent reviewers to re-establish 3 clean review results on the updated state.
+- If reviewers disagree, resolve the conflict with direct verification and additional fresh review rather than declaring the change clean early.
+- If 3 independent review-capable subagents are not available, the environment cannot advance a material change to review-clean, implementation-ready, or merge-ready. Surface the constraint and stop rather than inventing a weaker fallback.
 
 ## Pull Request Rules
 

@@ -29,12 +29,21 @@ Use this order:
 2. add or update tests
 3. run the relevant checks at bundle checkpoints
 4. update docs when project state or workflow meaning changes
+5. run 3 independent subagent reviews on the current diff for any material change
+6. fix or reconcile any non-trivial findings
+7. rerun enough independent subagent reviews to get 3 clean results on the updated state before calling the work review-clean, implementation-ready, or merge-ready
 
 Default rule:
 - if you fix a bug, add a regression test
 - if you change behavior, update the CLI contract or current-state docs
 - if you make a durable technical choice, update or add an ADR
 - do not stop to re-triage the next tiny task when the active milestone bundle is already defined
+- treat specs, plans, workflow docs, architecture docs, and merge/PR process changes as material changes, not just code changes
+- independent means 3 distinct reviewer identities; one reviewer reused multiple times does not satisfy the gate
+- timeout or no-response from a reviewer does not count as approval
+- treat correctness, contract mismatch, behavioral regression, missing verification, unsafe workflow behavior, scope violation, and ambiguity that changes the effective contract, test oracle, or implementation path as non-trivial findings
+- pure wording preferences or clearly advisory suggestions are not blocking by themselves
+- if 3 independent review-capable subagents are unavailable, the session cannot advance a material change to review-clean, implementation-ready, or merge-ready; surface the constraint and stop instead of using a weaker fallback
 
 ## End Of Session
 
@@ -42,9 +51,10 @@ Before you consider the session done:
 1. run `npm run check`
 2. review `git diff`
 3. update the docs that changed in meaning
-4. confirm the current milestone bundle is complete or name the remaining checklist items
-5. send a PR for the completed milestone bundle
-6. include example output in the PR description for any operator-facing behavior or CLI output you changed
+4. confirm that 3 independent subagent reviews returned clean on the current state for any material change
+5. confirm the current milestone bundle is complete or name the remaining checklist items
+6. send a PR for the completed milestone bundle
+7. include example output in the PR description for any operator-facing behavior or CLI output you changed
 
 ## If You Only Have 30-60 Minutes
 
