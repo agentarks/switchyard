@@ -4,6 +4,10 @@
 
 This handoff captures the current state of the repo-workflow redesign work for building Switchyard itself.
 
+This file captures the pre-implementation-plan cleanup state from 2026-03-24.
+Later cleanup on 2026-03-25 resolved the startup-marker mismatch, added exact markdown block delimiters to the active spec, replaced scalar slice-ledger mapping with row-addressable linkage, and removed the self-referential `head_commit` contract.
+Use the active spec and plan as the current source of truth.
+
 The user goal is:
 - reduce handholding across sessions
 - make approved milestone work resumable and more autonomous
@@ -72,7 +76,8 @@ The current first spec now assumes:
 
 ## Latest Reviewer Findings Still Open
 
-The latest independent review still found unresolved mechanical blockers in the first spec.
+The 2026-03-24 review loop found unresolved mechanical blockers in the first spec.
+The later 2026-03-25 cleanup resolved the highest-risk contract splits, so this section is preserved as historical context rather than the latest truth.
 
 High-priority blockers:
 - The startup marker contract is inconsistent.

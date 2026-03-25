@@ -4,7 +4,7 @@
 
 **Goal:** Land the first repo-workflow control-plane slice for building Switchyard itself: canonical YAML state under `docs/repo-workflow/`, a fail-closed validator, and startup-doc cutover that makes fresh-session resume deterministic without changing product merge policy or adding PR automation.
 
-**Architecture:** Keep this slice repo-local, not product-facing. Introduce the committed YAML control plane at the start of the slice so it governs the work truthfully from Chunk 1 onward. Implement the validator as focused TypeScript modules under `src/repo-workflow/` plus one `npm` script entrypoint, and give repo-workflow validation its own strict dirty-worktree check instead of inheriting the product helper’s `.switchyard/` exception. Treat the current spec as close but not fully frozen: the first chunk must tighten the remaining contract gaps before code lands so the validator encodes one exact control-plane format.
+**Architecture:** Keep this slice repo-local, not product-facing. Introduce the committed YAML control plane at the start of the slice so it governs the work truthfully from Chunk 1 onward. Implement the validator as focused TypeScript modules under `src/repo-workflow/` plus one `npm` script entrypoint, and give repo-workflow validation its own strict dirty-worktree check instead of inheriting the product helper’s `.switchyard/` exception. The active spec is the source of truth; if RED tests expose any remaining ambiguity, fix the spec before validator code lands.
 
 **Tech Stack:** TypeScript, Node.js, `yaml`, markdown docs, git CLI, npm scripts, existing Switchyard test harness
 
@@ -28,9 +28,9 @@ repo-workflow-startup: repo-workflow-v1
 
 Remove any alternative field names or examples that imply another startup marker shape.
 
-- [ ] **Step 2: Make embedded markdown blocks parseable without guesswork**
+- [ ] **Step 2: Remove any stale delimiter drift before implementation**
 
-Amend the spec so the machine-readable markdown-embedded blocks use explicit sentinels, for example:
+Confirm the spec and examples consistently use the exact delimited markdown blocks the validator will parse, for example:
 
 ```md
 <!-- repo-workflow-projection:start -->
@@ -45,31 +45,28 @@ repo_workflow_projection:
 <!-- repo-workflow-projection:end -->
 ```
 
-Do the same for the milestone registry block in `docs/milestones.md`.
+Do the same for the milestone registry block in `docs/milestones.md`. If any stale non-delimited examples remain, remove them before code lands.
 
-- [ ] **Step 3: Resolve the null-versus-empty contradiction**
+- [ ] **Step 3: Remove any stale scalar slice-ledger or empty-value examples**
 
-Pick one rule and apply it consistently:
-- if `summary` and `notes` are meant to be blank-capable text, keep them as strings and explicitly allow `""`
-- otherwise change them to `null`-capable fields and update every schema example and rule accordingly
+Confirm the spec and plan both use:
+- nested `slice_ledger` linkage with `disposition` and `row_ref`
+- `""` only for fields whose schema explicitly allows empty strings
 
-Do not leave shared syntax rules saying "`null` is the only legal empty value" while examples still use `""`.
+If any stale scalar `slice_ledger_mapping` or contradictory empty-value examples remain, remove them before code lands.
 
-- [ ] **Step 4: Add the missing state invariants and transition ownership**
+- [ ] **Step 4: Verify the current-HEAD currency rules are consistent**
 
-Update the spec to define all of these explicitly:
-- replace the current self-referential `campaign.head_commit == checked-out HEAD` rule with a persistable rule the repo can actually satisfy after commit
-- either rename the field or redefine it so it represents the last validated clean checkpoint commit
-- validator logic should then compare that field against git in a non-self-referential way, such as "must resolve to an existing commit on the current branch and must not point to a commit newer than `HEAD`"
-- `campaign.active_chunk_id` and `campaign.active_attempt_id` must reference existing records that point at each other legally
-- terminal campaign states require both active ids to become `null`, or the spec must explicitly say they remain historical pointers
-- `doc-reconciliation` has an explicit transition path, not only a named blocked reason
-- slice-ledger linkage must be row-addressable, not only an enum; define the exact canonical field shape for both "new row" and "folded into existing row"
-- multi-file updates to `campaign.yaml`, `chunks.yaml`, `attempts.yaml`, and projection docs are validated as one logical checkpoint
+Confirm the spec consistently uses:
+- `branch_ref` plus the current checked-out `HEAD` for runtime currency checks
+- current-`HEAD` review and verification comparisons
+- explicit active-id linkage, doc-reconciliation transitions, and multi-file checkpoint validation
+
+If any stale `head_commit` references or inconsistent transition language remain, remove them before code lands.
 
 - [ ] **Step 5: Refresh the handoff doc so it matches the tightened contract**
 
-Replace the stale blocker list in the handoff with the actual remaining implementation risks after the spec cleanup. The handoff should stop telling future sessions that planning must wait for a cleanup pass once this chunk is done.
+Replace the stale blocker list in the handoff with the actual remaining implementation risks after the spec cleanup. The handoff should stop telling future sessions that the implementation basis is still blocked on the slice-ledger shape, `head_commit`, or block delimiters.
 
 ### Task 2: Write RED tests that encode the contract before implementation
 
@@ -126,7 +123,7 @@ Cover:
 - `attempt.chunk_id` does not match the active chunk
 - illegal enum values
 - `verification_command` defined in the wrong file
-- the persisted checkpoint commit does not satisfy the final spec rule you chose in Task 1
+- a reviewed or verified commit does not equal the current checked-out `HEAD` on canonical `branch_ref`
 
 - [ ] **Step 5: Add failing tests for dirty-worktree fail-closed behavior**
 
@@ -144,6 +141,18 @@ Run: `node --import tsx --test src/repo-workflow/validator.test.ts src/repo-work
 
 Expected: FAIL because the validator modules and CLI entrypoint do not exist yet.
 
+- [ ] **Step 8: Make an early clean checkpoint commit**
+
+After the initial YAML files and RED tests exist, make one local checkpoint commit so the control plane is actually committed before later chunks depend on it.
+
+```bash
+git add docs/repo-workflow/campaign.yaml docs/repo-workflow/chunks.yaml docs/repo-workflow/attempts.yaml \
+  src/repo-workflow/validator.test.ts src/repo-workflow/cli.test.ts \
+  docs/superpowers/specs/2026-03-24-repo-workflow-state-and-resume-design.md \
+  docs/session-handoffs/2026-03-24-repo-workflow-handoff.md
+git commit -m "docs: bootstrap repo workflow control plane"
+```
+
 ## Chunk 2: Implement The Repo-Workflow Validator
 
 ### Task 3: Implement the canonical types, document loaders, and cross-file validator
@@ -160,6 +169,8 @@ Expected: FAIL because the validator modules and CLI entrypoint do not exist yet
 Model the three YAML files and the embedded markdown blocks directly, for example:
 
 ```ts
+type SliceLedgerRowRef = `S${number}` | null;
+
 export interface RepoWorkflowCampaignDocument {
   repo_workflow_campaign: {
     schema_version: 1;
@@ -169,11 +180,10 @@ export interface RepoWorkflowCampaignDocument {
     active_chunk_id: string | null;
     active_attempt_id: string | null;
     branch_ref: string;
-    head_commit: string;
     baseline_command: string;
     slice_ledger: {
       disposition: "pending" | "new-row" | "folded-into-existing-row";
-      row_ref: string | null;
+      row_ref: SliceLedgerRowRef;
     };
     last_updated: string;
   };
@@ -201,7 +211,7 @@ export interface RepoWorkflowCampaignDocument {
 6. projection-block equality
 7. active attempt/chunk linkage
 8. legal state and transition invariants
-9. persisted checkpoint-commit rule versus checked-out git state
+9. current checked-out `HEAD` versus canonical `branch_ref` and review currency
 
 Return a structured result object instead of only throwing strings, for example:
 
@@ -267,9 +277,9 @@ Expected: PASS with exit-code and stdout/stderr assertions.
 - [ ] **Step 1: Sync `docs/repo-workflow/campaign.yaml` to the state after the slice lands**
 
 Update it so the landed repo does not ship stale campaign truth. The document must reflect:
-- the final persisted checkpoint-commit for the landed clean checkpoint
 - the final active-or-terminal campaign state
 - the final active ids or explicit `null` values if the contract now requires terminal nulling
+- the canonical `branch_ref`
 - the final slice-ledger linkage shape chosen in Task 1
 
 - [ ] **Step 2: Sync `docs/repo-workflow/chunks.yaml` to the executed chunk order**
@@ -334,10 +344,10 @@ Specifically rework:
 - `docs/current-state.md`
 - `docs/next-steps.md`
 - `docs/focus-tracker.md`
-- `docs/backlog.md`
-- `docs/roadmap.md`
 
 so they describe the new control-plane precedence truthfully.
+
+For `docs/backlog.md` and `docs/roadmap.md`, add the startup marker and a short note that they remain product-policy context, not repo-workflow state owners.
 
 - [ ] **Step 5: Preserve the slice-ledger boundary**
 
@@ -363,8 +373,6 @@ Expected: PASS with the current tracked repo state.
 - Modify: `docs/current-state.md`
 - Modify: `docs/next-steps.md`
 - Modify: `docs/focus-tracker.md`
-- Modify: `docs/backlog.md`
-- Modify: `docs/roadmap.md`
 - Modify: `docs/repo-workflow/campaign.yaml`
 - Modify: `docs/repo-workflow/chunks.yaml`
 - Modify: `docs/repo-workflow/attempts.yaml`
@@ -446,4 +454,14 @@ Call out:
 - canonical YAML files added under `docs/repo-workflow/`
 - repo-local validator and npm script
 - startup-doc cutover and milestone registry
+- example output from `npm run repo-workflow:validate`
 - any remaining follow-up reserved for the proof-gate/PR-lifecycle slice
+
+- [ ] **Step 3: Send the milestone PR**
+
+Push the branch and open or update the PR so this milestone bundle is not left only in a local commit.
+
+The PR body must include:
+- the repo-workflow migration summary
+- the verification evidence
+- example output for the new operator-facing validation command

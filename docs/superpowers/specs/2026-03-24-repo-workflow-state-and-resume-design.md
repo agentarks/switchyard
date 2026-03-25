@@ -71,6 +71,7 @@ Reviewers should not reject it merely because it reduces human checkpoints.
 These docs define what Switchyard the product should do:
 - `PLAN.md`
 - `docs/cli-contract.md`
+- `docs/backlog.md`
 - `docs/merge-workflow.md`
 - `docs/milestones.md`
 - `docs/roadmap.md`
@@ -147,12 +148,14 @@ All three must be valid YAML.
 ### Shared syntax rules
 
 - top-level keys are fixed and case-sensitive
-- ids match `[a-z0-9-]+`
+- repo-workflow ids match `[a-z0-9-]+`
+- slice-ledger row refs match `S[0-9]+`
 - dates use `YYYY-MM-DD`
 - timestamps use ISO 8601 UTC
 - git commits use full 40-character lowercase hex SHA
 - enums use lowercase kebab-case
-- `null` is the only legal empty value
+- `null` is the only legal empty value for nullable fields
+- string fields may use `""` only when the field-specific schema explicitly allows it
 
 ## `docs/repo-workflow/campaign.yaml`
 
@@ -170,9 +173,10 @@ repo_workflow_campaign:
   active_chunk_id: c-001
   active_attempt_id: a-001
   branch_ref: refs/heads/repo-workflow-foundation
-  head_commit: 0123456789abcdef0123456789abcdef01234567
   baseline_command: npm run check
-  slice_ledger_mapping: pending
+  slice_ledger:
+    disposition: pending
+    row_ref: null
   last_updated: 2026-03-24
 ```
 
@@ -185,9 +189,8 @@ Required keys:
 - `active_chunk_id`
 - `active_attempt_id`
 - `branch_ref`
-- `head_commit`
 - `baseline_command`
-- `slice_ledger_mapping`
+- `slice_ledger`
 - `last_updated`
 
 Allowed `campaign_state` values:
@@ -197,15 +200,19 @@ Allowed `campaign_state` values:
 - `abandoned`
 - `superseded`
 
-Allowed `slice_ledger_mapping` values:
+Allowed `slice_ledger.disposition` values:
 - `pending`
 - `new-row`
 - `folded-into-existing-row`
 
+`slice_ledger` rules:
+- `row_ref` is `null` when `disposition` is `pending`
+- `row_ref` must match an existing stable slice id such as `S09` when `disposition` is `new-row` or `folded-into-existing-row`
+
 Ownership rules:
 - current `branch_ref` lives only here
-- current `head_commit` lives only here
 - repo baseline command lives only here
+- canonical slice-ledger linkage lives only here
 
 ## `docs/repo-workflow/chunks.yaml`
 
@@ -366,7 +373,18 @@ Rules:
 - `quality_reviewed_commit` is `null` unless `quality_review_status` is not `not-started`
 - `verification_head_commit` is `null` unless `verification_result` is not `not-run`
 - `verified_at` is `null` unless `verification_result` is not `not-run`
-- `summary` and `notes` are single-line YAML strings
+- `summary` and `notes` are single-line YAML strings and may be empty strings
+
+## Cross-File Invariants
+
+- when `campaign_state` is `active` or `blocked`, `active_chunk_id` and `active_attempt_id` must both be non-`null`
+- when `campaign_state` is `complete`, `abandoned`, or `superseded`, `active_chunk_id` and `active_attempt_id` must both be `null`
+- `active_chunk_id` must reference one chunk row in `chunks.yaml` when it is non-`null`
+- `active_attempt_id` must reference one attempt row in `attempts.yaml` when it is non-`null`
+- the active attempt's `chunk_id` must equal `active_chunk_id`
+- `campaign_state: blocked` requires the active attempt `state` to be `blocked`
+- `campaign_state: active` allows active attempt `state` values `ready`, `implementing`, `awaiting-spec-review`, `awaiting-quality-review`, `awaiting-verification`, `review-failed`, `blocked`, or `complete`
+- only the attempt referenced by `active_attempt_id` is treated as the resumable current attempt; all other attempt rows are historical context
 
 ## Projection Markdown Docs
 
@@ -375,8 +393,10 @@ These docs remain human-facing:
 - `docs/next-steps.md`
 - `docs/focus-tracker.md`
 
-Each must contain a small projection block near the top:
+Each must contain exactly one delimited projection block near the top:
 
+````md
+<!-- repo-workflow-projection:start -->
 ```yaml
 repo_workflow_projection:
   schema_version: 1
@@ -385,8 +405,11 @@ repo_workflow_projection:
   active_chunk_id: c-001
   last_updated: 2026-03-24
 ```
+<!-- repo-workflow-projection:end -->
+````
 
 Rules:
+- the validator reads only the YAML content between the exact start and end markers
 - `docs/current-state.md` and `docs/next-steps.md` must include `active_chunk_id`
 - `docs/focus-tracker.md` may omit `active_chunk_id`
 - projection ids must match canonical YAML exactly
@@ -404,19 +427,19 @@ Resume rule:
 
 ## Review And Verification Currency
 
-Attempt state is always evaluated against canonical `repo_workflow_campaign.head_commit`.
+Attempt state is always evaluated against the current checked-out `HEAD` commit on canonical `branch_ref`.
 
 Completion conditions for a chunk:
 - active attempt `state` is `complete`
 - `spec_review_status` is `approved`
 - `quality_review_status` is `approved`
-- `spec_reviewed_commit` equals canonical `head_commit`
-- `quality_reviewed_commit` equals canonical `head_commit`
+- `spec_reviewed_commit` equals the current checked-out `HEAD`
+- `quality_reviewed_commit` equals the current checked-out `HEAD`
 - `verification_result` is `passed`
-- `verification_head_commit` equals canonical `head_commit`
+- `verification_head_commit` equals the current checked-out `HEAD`
 - `docs_reconciled` is `true`
 
-Reset rules when canonical `head_commit` changes:
+Reset rules when the checked-out `HEAD` commit changes:
 - `spec_review_status` resets to `not-started`
 - `spec_reviewed_commit` resets to `null`
 - `quality_review_status` resets to `not-started`
@@ -452,9 +475,12 @@ If fixes have started but no new commit exists yet:
 | `awaiting-quality-review` | quality review issues found | `review-failed` | set `quality_review_status: issues-found` |
 | `review-failed` | operator or controller begins new coded fix attempt | new row with incremented `attempt_number`, state `implementing` | append new attempt row |
 | `blocked` | block resolved and new coded fix attempt begins | new row with incremented `attempt_number`, state `implementing` | append new attempt row |
-| `blocked` | block resolved by doc reconciliation only | `awaiting-spec-review`, `awaiting-quality-review`, or `awaiting-verification` based on prior statuses | update existing row |
-| `awaiting-verification` | verification passed for canonical `head_commit` and docs reconciled | `complete` | set verification fields |
+| `awaiting-verification` | verification passed for the current checked-out `HEAD` but docs are not yet reconciled | `blocked` | set verification fields, set `blocked_reason: doc-reconciliation` |
+| `awaiting-verification` | verification passed for the current checked-out `HEAD` and docs reconciled | `complete` | set verification fields |
 | `awaiting-verification` | verification failed | `blocked` | set `blocked_reason: execution-failure` |
+| `blocked` | block resolved by doc reconciliation only and review/verification state is still current | `complete` | set `blocked_reason: none`, set `docs_reconciled: true` |
+| `blocked` | block resolved by doc reconciliation only and review or verification is stale | `awaiting-spec-review`, `awaiting-quality-review`, or `awaiting-verification` based on prior statuses | set `blocked_reason: none`, update existing row |
+| `blocked` | execution environment fixed and verification can be retried without code changes | `awaiting-verification` | set `blocked_reason: none` |
 | `complete` | successor chunk exists | successor attempt `ready` | update canonical `active_chunk_id`, `active_attempt_id`, append successor attempt |
 | `complete` | terminal chunk | campaign `complete` | update `campaign.yaml`, update `chunks.yaml` |
 
@@ -468,11 +494,13 @@ At session start:
 5. parse `docs/repo-workflow/campaign.yaml`
 6. parse `docs/repo-workflow/chunks.yaml`
 7. parse `docs/repo-workflow/attempts.yaml`
-8. verify canonical ids match across the three YAML files
-9. parse projection blocks from `docs/current-state.md`, `docs/next-steps.md`, and `docs/focus-tracker.md`
-10. verify required projection ids match canonical ids
-11. read product-policy docs for canonical `product_milestone_id`
-12. locate the canonical active attempt by `active_attempt_id`
+8. verify the checked-out symbolic branch ref equals canonical `branch_ref`
+9. verify the checked-out `HEAD` resolves to a commit on that branch
+10. verify canonical ids match across the three YAML files
+11. parse projection blocks from `docs/current-state.md`, `docs/next-steps.md`, and `docs/focus-tracker.md`
+12. verify required projection ids match canonical ids
+13. read product-policy docs for canonical `product_milestone_id`
+14. locate the canonical active attempt by `active_attempt_id`
 
 Fail-closed rule:
 - if any step above fails, stop and reconcile before implementation
@@ -491,7 +519,7 @@ Attempt-state behavior:
 - `awaiting-quality-review`: run quality review
 - `review-failed`: begin new fix attempt
 - `awaiting-verification`: run chunk verification command from `chunks.yaml`
-- `blocked`: stop unless `blocked_reason` is `doc-reconciliation`
+- `blocked`: reconcile docs when `blocked_reason` is `doc-reconciliation`, rerun verification when `blocked_reason` is `execution-failure` and the external blocker is cleared, otherwise stop
 - `complete`: advance to successor or finish campaign
 
 ## Baseline Verification
@@ -501,19 +529,24 @@ Repo baseline check comes only from canonical `baseline_command` in `campaign.ya
 Chunk verification comes only from canonical `verification_command` in `chunks.yaml`.
 
 Baseline rule:
-- if baseline has not passed for canonical `head_commit`, run `baseline_command` before continuing
+- if baseline has not passed for the current checked-out `HEAD`, run `baseline_command` before continuing
 
 ## Product Milestone Registry
 
-`docs/milestones.md` must gain a machine-readable registry block near the top:
+`docs/milestones.md` must gain exactly one delimited machine-readable registry block near the top:
 
+````md
+<!-- repo-workflow-milestones:start -->
 ```yaml
 repo_workflow_milestones:
   - milestone_id: m7
     title: lead-host-recovery-and-stop-policy
 ```
+<!-- repo-workflow-milestones:end -->
+````
 
 Rules:
+- the validator reads only the YAML content between the exact start and end markers
 - `product_milestone_id` in `campaign.yaml` must match one registry entry exactly
 - registry ids use the same lowercase format as canonical repo-workflow state
 
@@ -524,7 +557,8 @@ Rules:
 Mapping rules:
 - internal chunks do not get slice-ledger rows by default
 - one landed repo-workflow bundle gets one slice-ledger row only if it materially changed the operator loop
-- otherwise canonical `slice_ledger_mapping` remains `folded-into-existing-row`
+- otherwise canonical `slice_ledger.disposition` remains `folded-into-existing-row`
+- canonical `slice_ledger.row_ref` points at the existing or new slice row when `disposition` is not `pending`
 - when a ledger row exists, the same mapping decision is recorded in that row's notes
 
 ## Supersession
