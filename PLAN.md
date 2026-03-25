@@ -1,5 +1,11 @@
 # Switchyard Plan
 
+repo-workflow-startup: repo-workflow-v1
+
+This is a product-policy startup doc.
+Active repo-workflow implementation state lives in `docs/repo-workflow/campaign.yaml`, `docs/repo-workflow/chunks.yaml`, and `docs/repo-workflow/attempts.yaml`.
+Use this file for product direction and scope, not as the mutable owner of repo-workflow campaign state.
+
 ## Purpose
 
 Switchyard is a CLI-first system for running a bounded autonomous swarm against a single repository with:

@@ -133,8 +133,14 @@ repo-workflow-startup: repo-workflow-v1
 ```
 
 Validation rule:
-- if any mandatory startup doc lacks that exact marker, resume must stop
+- each mandatory startup doc must carry that exact marker exactly once near the top startup-doc header
+- if any mandatory startup doc lacks that exact marker, contains it more than once, or buries it away from the startup-doc header, resume must stop
 - partial cutover is invalid
+
+Pre-cutover bootstrap rule:
+- committed `docs/repo-workflow/*.yaml` files may exist before atomic cutover is finished
+- those files are bootstrap inputs only and must not be treated as resumable canonical workflow state until every mandatory startup doc carries the startup marker
+- a fresh session that finds bootstrap YAML without full startup-doc cutover must treat the repo as still pre-cutover and must not resume through the new validator-driven workflow
 
 ## Canonical YAML Files
 
@@ -172,7 +178,7 @@ repo_workflow_campaign:
   campaign_state: active
   active_chunk_id: c-001
   active_attempt_id: a-001
-  branch_ref: refs/heads/repo-workflow-foundation
+  branch_ref: refs/heads/main
   baseline_command: npm run check
   slice_ledger:
     disposition: pending
@@ -211,6 +217,7 @@ Allowed `slice_ledger.disposition` values:
 
 Ownership rules:
 - current `branch_ref` lives only here
+- in landed repo state, `branch_ref` must name the canonical long-lived branch the repo-workflow validator should resume on after merge, not a short-lived review branch
 - repo baseline command lives only here
 - canonical slice-ledger linkage lives only here
 
@@ -344,6 +351,11 @@ Allowed `blocked_reason` values:
 - `doc-reconciliation`
 - `execution-failure`
 
+Meaning:
+- `operator-input` means implementation cannot continue until the operator supplies missing context or a decision
+- `doc-reconciliation` means code and verification are current but required docs have not yet been reconciled
+- `execution-failure` means either implementation hit an execution/environment blocker before review, or verification failed and must be retried once the blocker is cleared
+
 Allowed `implementer_status` values:
 - `not-started`
 - `done`
@@ -384,6 +396,7 @@ Rules:
 - the active attempt's `chunk_id` must equal `active_chunk_id`
 - `campaign_state: blocked` requires the active attempt `state` to be `blocked`
 - `campaign_state: active` allows active attempt `state` values `ready`, `implementing`, `awaiting-spec-review`, `awaiting-quality-review`, `awaiting-verification`, `review-failed`, `blocked`, or `complete`
+- if the active attempt `state` is `complete` on a terminal chunk (`next_chunk_id: null`), canonical state must advance to `campaign_state: complete` with null active ids instead of keeping that terminal chunk active
 - only the attempt referenced by `active_attempt_id` is treated as the resumable current attempt; all other attempt rows are historical context
 
 ## Projection Markdown Docs
@@ -410,9 +423,11 @@ repo_workflow_projection:
 
 Rules:
 - the validator reads only the YAML content between the exact start and end markers
-- `docs/current-state.md` and `docs/next-steps.md` must include `active_chunk_id`
+- `docs/current-state.md` and `docs/next-steps.md` must include `active_chunk_id` when `campaign.yaml` has a non-`null` `active_chunk_id`
+- `docs/current-state.md` and `docs/next-steps.md` must omit `active_chunk_id` when `campaign.yaml` has `active_chunk_id: null`
 - `docs/focus-tracker.md` may omit `active_chunk_id`
 - projection ids must match canonical YAML exactly
+- the three projection docs plus the milestone registry block form one current-`HEAD` checkpoint; any mismatch at the checked-out `HEAD` is invalid
 
 Per-chunk doc reconciliation requires:
 - `docs/current-state.md`
@@ -428,6 +443,7 @@ Resume rule:
 ## Review And Verification Currency
 
 Attempt state is always evaluated against the current checked-out `HEAD` commit on canonical `branch_ref`.
+No canonical YAML field stores an authoritative "current head" value for resume decisions; currency is always derived from the checked-out repo state on `branch_ref`.
 
 Completion conditions for a chunk:
 - active attempt `state` is `complete`
@@ -448,6 +464,7 @@ Reset rules when the checked-out `HEAD` commit changes:
 - `verification_head_commit` resets to `null`
 - `verified_at` resets to `null`
 - `docs_reconciled` resets to `false`
+- a blocked attempt waiting on `doc-reconciliation` or `execution-failure` may remain `state: blocked` with the same `blocked_reason` after those review and verification fields reset; resume must treat it as blocked-with-stale-currency, not as an invalid snapshot
 
 ## Attempt Lifecycle
 
@@ -557,7 +574,8 @@ Rules:
 Mapping rules:
 - internal chunks do not get slice-ledger rows by default
 - one landed repo-workflow bundle gets one slice-ledger row only if it materially changed the operator loop
-- otherwise canonical `slice_ledger.disposition` remains `folded-into-existing-row`
+- if no truthful existing slice-ledger row is the right fold target, canonical `slice_ledger.disposition` may remain `pending` until a later explicit mapping decision is recorded
+- otherwise canonical `slice_ledger.disposition` may use `folded-into-existing-row`
 - canonical `slice_ledger.row_ref` points at the existing or new slice row when `disposition` is not `pending`
 - when a ledger row exists, the same mapping decision is recorded in that row's notes
 

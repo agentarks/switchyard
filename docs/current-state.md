@@ -1,6 +1,30 @@
 # Current State
 
+repo-workflow-startup: repo-workflow-v1
+
+<!-- repo-workflow-projection:start -->
+```yaml
+repo_workflow_projection:
+  schema_version: 1
+  active_repo_campaign_id: rw-001
+  active_bundle_id: repo-workflow-foundation
+  active_chunk_id: c-005
+  last_updated: 2026-03-25
+```
+<!-- repo-workflow-projection:end -->
+
+This file is a human-facing projection of the canonical repo-workflow control plane.
+Active repo-workflow state lives in `docs/repo-workflow/*.yaml`.
+
 ## Snapshot
+
+Repo-workflow state and resume foundations are now materially real for building Switchyard itself.
+
+What now exists for repo workflow:
+- canonical machine-readable repo-workflow state under `docs/repo-workflow/`
+- a repo-local `npm run repo-workflow:validate` validator
+- startup-doc cutover markers plus machine-readable projection and milestone-registry blocks
+- fail-closed resume validation against clean git state, canonical ids, and current-`HEAD` review currency
 
 Switchyard has now adopted bounded autonomous swarm v1 as its active source-of-truth direction.
 
@@ -24,6 +48,11 @@ That means the durable swarm state layer is now materially real as both storage 
 
 ## What Exists
 
+- canonical repo-workflow campaign, chunk, and attempt state under `docs/repo-workflow/`
+- a repo-local validator and CLI entrypoint for repo-workflow startup/resume checks
+- startup-doc markers across the mandatory startup docs
+- projection blocks in `docs/current-state.md`, `docs/next-steps.md`, and `docs/focus-tracker.md`
+- a machine-readable product milestone registry block in `docs/milestones.md`
 - `sy init`, `sy sling`, `sy status`, `sy events`, `sy logs`, `sy stop`, `sy merge`, and `sy mail` are implemented
 - the bounded Codex runtime path is real and defaults launch to `--sandbox workspace-write` unless the operator overrides it
 - `.switchyard/` bootstrap, durable logs, task specs, worktrees, sessions, runs, events, mail, objectives, agent result envelopes, and orchestration state are real
@@ -44,6 +73,7 @@ That means the durable swarm state layer is now materially real as both storage 
 
 ## What Does Not Exist Yet
 
+- the later repo-workflow proof-gate, PR-lifecycle, and explicit auto-merge-policy slice for building Switchyard itself
 - specialist launch contracts beyond the initial `lead`
 - bounded lead host/resume behavior
 - run-level stop and resume semantics
@@ -113,10 +143,16 @@ The direction-adoption bundle is now the accepted source of truth.
 
 The durable orchestration state bundle has now landed.
 
+The repo-workflow state-and-resume slice has also now landed for building Switchyard itself.
+
 The recommended next task is:
 - start the bounded lead host, resume, and run-scoped stop bundle
 - make the lead-owned run materially resumable and stoppable as one bounded orchestration unit
 - keep `sy status`, `sy events`, and `sy mail` truthful while the operator view transitions from session-centric to run-centric
+
+The recommended next repo-workflow slice is:
+- add the later proof-gate, PR-lifecycle, and explicit auto-merge-policy state for building Switchyard itself
+- keep that later slice repo-local and separate from the product `manual-ready` policy
 
 Do not skip straight to automatic merge or broad runtime expansion. The next value is making the launcher and agent contracts match the durable swarm state that now exists.
 

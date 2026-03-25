@@ -1,0 +1,14 @@
+repo_workflow_campaign:
+  schema_version: 1
+  campaign_id: rw-001
+  bundle_id: repo-workflow-foundation
+  product_milestone_id: m7
+  campaign_state: active
+  active_chunk_id: c-005
+  active_attempt_id: a-005
+  branch_ref: refs/heads/main
+  baseline_command: npm run check
+  slice_ledger:
+    disposition: pending
+    row_ref: null
+  last_updated: 2026-03-25

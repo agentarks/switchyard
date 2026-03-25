@@ -1,5 +1,11 @@
 # AGENTS.md
 
+repo-workflow-startup: repo-workflow-v1
+
+This is a repo-workflow startup doc.
+For active Switchyard implementation state, use `docs/repo-workflow/campaign.yaml`, `docs/repo-workflow/chunks.yaml`, and `docs/repo-workflow/attempts.yaml`.
+The human-facing startup docs explain product meaning and operator context, but they do not own mutable repo-workflow state.
+
 ## Project Identity
 
 Switchyard is a CLI-first, Codex-first orchestration tool for one repository at a time.
@@ -39,9 +45,24 @@ Batch adjacent in-scope changes when they share code, tests, and operator workfl
 
 ## Source Of Truth
 
-Use the docs in `/docs` and `PLAN.md` as the project source of truth.
+Use product-policy docs plus the canonical repo-workflow YAML control plane as the project source of truth.
+
+For active repo-workflow state, read first:
+- `docs/repo-workflow/campaign.yaml`
+- `docs/repo-workflow/chunks.yaml`
+- `docs/repo-workflow/attempts.yaml`
+
+Use the startup docs and product-policy docs as guidance and projections around that state:
+- `PLAN.md`
+- `docs/current-state.md`
+- `docs/next-steps.md`
+- `docs/backlog.md`
+- `docs/focus-tracker.md`
 
 Read these first when the task touches behavior or scope:
+- `docs/repo-workflow/campaign.yaml`
+- `docs/repo-workflow/chunks.yaml`
+- `docs/repo-workflow/attempts.yaml`
 - `docs/current-state.md`
 - `docs/next-steps.md`
 - `docs/backlog.md`

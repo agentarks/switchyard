@@ -143,7 +143,11 @@ Expected: FAIL because the validator modules and CLI entrypoint do not exist yet
 
 - [ ] **Step 8: Make an early clean checkpoint commit**
 
-After the initial YAML files and RED tests exist, make one local checkpoint commit so the control plane is actually committed before later chunks depend on it.
+After the initial YAML files and RED tests exist, make one local checkpoint commit so the bootstrap control-plane files are preserved before later chunks depend on them.
+
+This checkpoint is still pre-cutover:
+- fresh sessions must not treat it as resumable validator-driven repo-workflow state yet
+- the new workflow only becomes resumable after the atomic startup-doc cutover lands
 
 ```bash
 git add docs/repo-workflow/campaign.yaml docs/repo-workflow/chunks.yaml docs/repo-workflow/attempts.yaml \
@@ -359,7 +363,7 @@ Only update `docs/slice-ledger.md` if this slice truly qualifies as a new implem
 
 Do this from a clean checkpoint, not from a dirty in-progress worktree. Use one of these paths:
 - commit the cutover files first, then run `npm run repo-workflow:validate`
-- or validate from a temporary clean checkout of the staged result
+- or validate from a temporary clean checkout/worktree of the staged result with the canonical `branch_ref` created and checked out, not detached `HEAD`
 
 Run: `npm run repo-workflow:validate`
 
@@ -403,7 +407,7 @@ and update any fields that still lag the landed slice state. Do not assume the e
 
 Run:
 - `node --import tsx --test src/repo-workflow/validator.test.ts src/repo-workflow/cli.test.ts`
-- `npm run repo-workflow:validate` from a clean checkpoint or a temporary clean checkout of the staged result
+- `npm run repo-workflow:validate` from a clean checkpoint or a temporary clean checkout/worktree with the canonical `branch_ref` checked out
 
 Expected: PASS.
 

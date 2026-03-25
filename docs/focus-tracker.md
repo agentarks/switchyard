@@ -1,5 +1,20 @@
 # Focus Tracker
 
+repo-workflow-startup: repo-workflow-v1
+
+<!-- repo-workflow-projection:start -->
+```yaml
+repo_workflow_projection:
+  schema_version: 1
+  active_repo_campaign_id: rw-001
+  active_bundle_id: repo-workflow-foundation
+  last_updated: 2026-03-25
+```
+<!-- repo-workflow-projection:end -->
+
+This file is a human-facing projection of the canonical repo-workflow control plane.
+Use `docs/repo-workflow/*.yaml` for active implementation state.
+
 This file exists to keep the project moving toward the intended version instead of drifting into adjacent systems too early.
 
 Use it at the start and end of each session.
@@ -53,9 +68,11 @@ Completed enough to count as materially real:
 Current planning state:
 - bounded autonomous swarm v1 is now the adopted source-of-truth direction
 - the implementation now has a real durable orchestration layer and a run-aware launcher
+- the repo-workflow control plane, validator, and startup-doc cutover are now real for building Switchyard itself
 - the bounded runtime baseline should stay fixed unless a concrete failure disproves it
 - the active milestone is bounded lead host and run-scoped lifecycle behavior, not broad swarm-foundation work in general
 - the next bundle is bounded lead host and run-scoped lifecycle behavior, not automatic merge or broader runtime work
+- the next repo-workflow slice is proof-gate and PR-lifecycle work for building Switchyard itself, not a product merge-policy change
 - the accepted rollout gate is `manual-ready`
 - `auto-after-verify` is deferred until a later explicit policy adoption
 

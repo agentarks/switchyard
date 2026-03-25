@@ -15,6 +15,7 @@
     "check": "npm run build && npm run typecheck && npm test",
     "test": "node scripts/run-tests.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "repo-workflow:validate": "tsx src/repo-workflow/cli.ts",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js"
   },

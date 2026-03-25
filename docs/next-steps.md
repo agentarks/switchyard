@@ -1,5 +1,21 @@
 # Next Steps
 
+repo-workflow-startup: repo-workflow-v1
+
+<!-- repo-workflow-projection:start -->
+```yaml
+repo_workflow_projection:
+  schema_version: 1
+  active_repo_campaign_id: rw-001
+  active_bundle_id: repo-workflow-foundation
+  active_chunk_id: c-005
+  last_updated: 2026-03-25
+```
+<!-- repo-workflow-projection:end -->
+
+This file is a human-facing projection of the canonical repo-workflow control plane.
+Use `docs/repo-workflow/*.yaml` for active implementation state.
+
 This file is the owner-facing execution guide for deciding what the project should do next.
 
 Canonical implementation history now lives in [docs/slice-ledger.md](slice-ledger.md); this file stays focused on the active milestone and the bundle that should advance it next.
@@ -8,6 +24,14 @@ Canonical implementation history now lives in [docs/slice-ledger.md](slice-ledge
 
 The active milestone is:
 - bounded lead host, resume, run-scoped stop semantics, and run-aware mail/events
+
+The repo-workflow state-and-resume slice is now landed.
+The next repo-workflow slice should move to:
+- smoke/demo proof gate
+- PR lifecycle
+- explicit auto-merge policy for building Switchyard itself
+
+That later repo-workflow slice must stay separate from Switchyard's product `manual-ready` merge policy.
 
 The objective-spec and role-aware launch bundle is now landed.
 

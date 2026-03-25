@@ -13,8 +13,8 @@ The user goal is:
 - make approved milestone work resumable and more autonomous
 - use subagent review for honest feedback before later implementation work
 
-The current work is still in design/spec stage.
-No implementation plan should be written yet from the current first spec without one more bounded cleanup pass.
+The current work is no longer blocked on first-spec contract cleanup.
+The active next step is implementing the first slice from the written plan.
 
 ## Current Files
 
@@ -29,7 +29,7 @@ It should not be used as the implementation basis for the next slice.
 
 ## Current Git State
 
-Relevant repo status at handoff:
+Relevant repo status at the original handoff:
 - modified: `docs/superpowers/specs/2026-03-24-milestone-autopilot-repo-workflow-design.md`
 - untracked: `docs/superpowers/specs/2026-03-24-repo-workflow-state-and-resume-design.md`
 - untracked: `.switchyard/`
@@ -74,46 +74,31 @@ The current first spec now assumes:
 - `docs/slice-ledger.md` must remain historical, not mutable campaign state
 - the broad autopilot spec is superseded for state ownership and resume behavior
 
-## Latest Reviewer Findings Still Open
+## Remaining Implementation Risks
 
-The 2026-03-24 review loop found unresolved mechanical blockers in the first spec.
-The later 2026-03-25 cleanup resolved the highest-risk contract splits, so this section is preserved as historical context rather than the latest truth.
+The first-spec contract is now tight enough to implement.
+The remaining risks are implementation and migration risks, not design blockers:
 
-High-priority blockers:
-- The startup marker contract is inconsistent.
-  One part of the spec refers to the literal marker `repo-workflow-startup: repo-workflow-v1`, while YAML examples use `startup_migration_marker: repo-workflow-v1`. This must be collapsed to one exact convention.
-- The attempt lifecycle is still not fully deterministic.
-  In particular:
-  - `ready -> implementing` exists conceptually but needs explicit machine transition ownership
-  - interrupted local edits before a commit still create ambiguity about whether a new attempt has started
-  - current recommendation is to keep v1 fail-closed on dirty worktrees
-- `PLAN.md` is still not clearly inside the atomic cutover despite `AGENTS.md` still pointing to it as startup truth.
-- `verification_command` still risks multiple authorities unless the spec makes `chunks.yaml` the sole source and keeps baseline verification separate in `campaign.yaml`.
-- `docs/milestones.md` still needs an explicit machine-readable milestone registry schema, not just a narrative requirement.
-- slice-ledger mapping still needs a canonical home and exact rule when no new row is created.
-
-Medium-priority blockers:
-- campaign state vs attempt state still needs tighter legal pairings
-- projection docs still need exact required/optional field rules
-- startup-doc migration validation still needs to be machine-checkable, not inferred from prose
-- resume still needs a precise rule for selecting the active attempt and verifying canonical git identity against the checked-out repo state
+- the initial `docs/repo-workflow/*.yaml` bootstrap files must reflect real current slice state from the first commit that introduces them
+- the validator must fail closed on any dirty worktree entry, including `.switchyard/` changes, rather than inheriting the product helper's ignore behavior
+- startup-doc cutover must be atomic across every mandatory startup doc; partial marker rollout must remain invalid
+- projection blocks and the milestone registry must be parsed as exact delimited blocks and validated as one current-`HEAD` checkpoint
+- review and verification currency must compare against the checked-out `HEAD` on canonical `branch_ref`, not against a stored "current head" field
+- clean validation must run from a checkpoint where the canonical `branch_ref` exists and is actually checked out, not from detached `HEAD`
 
 ## Best Current Recommendation
 
 Do not resume patching the broad autopilot spec.
 
 Do this next instead:
-1. Continue with the narrow first spec only:
+1. Implement the narrow first slice only:
    - `docs/superpowers/specs/2026-03-24-repo-workflow-state-and-resume-design.md`
-2. Make one final cleanup pass that resolves the remaining mechanical blockers:
-   - one startup marker convention
-   - explicit atomic cutover including `PLAN.md`
-   - exact milestone registry shape in `docs/milestones.md`
-   - sole ownership of `verification_command`
-   - explicit slice-ledger mapping field/rule
-   - explicit dirty-worktree fail-closed rule in transitions and resume
-3. Re-review the first spec.
-4. Only after that, write the implementation plan for the first slice.
+   - `docs/superpowers/plans/2026-03-24-repo-workflow-state-and-resume.md`
+2. Start with Chunk 1:
+   - add the canonical YAML bootstrap files
+   - encode the contract in RED validator and CLI tests
+   - preserve the early checkpoint commit before cutover
+3. Continue through the validator, startup-doc cutover, and closeout chunks only if each verification gate stays clean.
 
 ## Suggested Next-Session Task
 
@@ -126,9 +111,9 @@ Start by reading:
 - `docs/dev-workflow.md`
 
 Then:
-- fix the remaining first-spec blockers only
-- run a fresh independent review on the narrowed spec
-- do not write the implementation plan until the narrowed spec is review-clean
+- execute the written repo-workflow state-and-resume plan in chunk order
+- keep the work inside the first slice boundary
+- do not expand into PR automation, proof gates, or product merge-policy changes
 
 ## Important Constraints To Preserve
 

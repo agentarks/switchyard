@@ -1,5 +1,15 @@
 # Milestones
 
+repo-workflow-startup: repo-workflow-v1
+
+<!-- repo-workflow-milestones:start -->
+```yaml
+repo_workflow_milestones:
+  - milestone_id: m7
+    title: lead-host-recovery-and-stop-policy
+```
+<!-- repo-workflow-milestones:end -->
+
 ## Completed Foundations
 
 ### M0: Planning Approved
