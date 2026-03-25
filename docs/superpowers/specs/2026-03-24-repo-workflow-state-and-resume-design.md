@@ -136,6 +136,11 @@ Validation rule:
 - if any mandatory startup doc lacks that exact marker, resume must stop
 - partial cutover is invalid
 
+Pre-cutover bootstrap rule:
+- committed `docs/repo-workflow/*.yaml` files may exist before atomic cutover is finished
+- those files are bootstrap inputs only and must not be treated as resumable canonical workflow state until every mandatory startup doc carries the startup marker
+- a fresh session that finds bootstrap YAML without full startup-doc cutover must treat the repo as still pre-cutover and must not resume through the new validator-driven workflow
+
 ## Canonical YAML Files
 
 Only these files own active repo-workflow state:
