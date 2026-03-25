@@ -25,15 +25,15 @@ repo_workflow_attempts:
       blocked_reason: none
       implementer_status: done
       spec_review_status: approved
-      spec_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      spec_reviewed_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
       quality_review_status: approved
-      quality_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      quality_reviewed_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
       verification_result: passed
-      verification_head_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
-      verified_at: 2026-03-25T12:30:00.000Z
+      verification_head_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
+      verified_at: 2026-03-25T15:30:00.000Z
       docs_reconciled: true
-      summary: "Validator and CLI implementation landed."
-      notes: "Targeted repo-workflow tests pass locally."
+      summary: "Validator and CLI implementation landed on a review-corrected implementation commit."
+      notes: "Historical implementation result captured by commit 83ec30f."
     - attempt_id: a-003
       chunk_id: c-003
       attempt_number: 1
@@ -41,15 +41,15 @@ repo_workflow_attempts:
       blocked_reason: none
       implementer_status: done
       spec_review_status: approved
-      spec_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      spec_reviewed_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
       quality_review_status: approved
-      quality_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      quality_reviewed_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
       verification_result: passed
-      verification_head_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
-      verified_at: 2026-03-25T13:00:00.000Z
+      verification_head_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
+      verified_at: 2026-03-25T15:30:00.000Z
       docs_reconciled: true
-      summary: "Startup-doc cutover is staged for clean validation."
-      notes: "Projection docs and milestone registry now match canonical YAML."
+      summary: "Startup-doc cutover landed with projection and milestone-registry checks tightened."
+      notes: "Historical cutover result captured by commit 83ec30f."
     - attempt_id: a-004
       chunk_id: c-004
       attempt_number: 1
@@ -57,15 +57,15 @@ repo_workflow_attempts:
       blocked_reason: none
       implementer_status: done
       spec_review_status: approved
-      spec_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      spec_reviewed_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
       quality_review_status: approved
-      quality_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      quality_reviewed_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
       verification_result: passed
-      verification_head_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
-      verified_at: 2026-03-25T14:00:00.000Z
+      verification_head_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
+      verified_at: 2026-03-25T15:30:00.000Z
       docs_reconciled: true
-      summary: "Full repo-workflow verification and closeout landed."
-      notes: "Chunk 4 closes the first repo-workflow state-and-resume slice."
+      summary: "Full repo-workflow verification and closeout landed on the review-corrected implementation commit."
+      notes: "Chunk 4 is historically captured by commit 83ec30f."
     - attempt_id: a-005
       chunk_id: c-005
       attempt_number: 1
