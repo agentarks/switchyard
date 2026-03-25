@@ -133,7 +133,8 @@ repo-workflow-startup: repo-workflow-v1
 ```
 
 Validation rule:
-- if any mandatory startup doc lacks that exact marker, resume must stop
+- each mandatory startup doc must carry that exact marker exactly once near the top startup-doc header
+- if any mandatory startup doc lacks that exact marker, contains it more than once, or buries it away from the startup-doc header, resume must stop
 - partial cutover is invalid
 
 Pre-cutover bootstrap rule:
@@ -177,7 +178,7 @@ repo_workflow_campaign:
   campaign_state: active
   active_chunk_id: c-001
   active_attempt_id: a-001
-  branch_ref: refs/heads/repo-workflow-foundation
+  branch_ref: refs/heads/main
   baseline_command: npm run check
   slice_ledger:
     disposition: pending
@@ -350,6 +351,11 @@ Allowed `blocked_reason` values:
 - `doc-reconciliation`
 - `execution-failure`
 
+Meaning:
+- `operator-input` means implementation cannot continue until the operator supplies missing context or a decision
+- `doc-reconciliation` means code and verification are current but required docs have not yet been reconciled
+- `execution-failure` means either implementation hit an execution/environment blocker before review, or verification failed and must be retried once the blocker is cleared
+
 Allowed `implementer_status` values:
 - `not-started`
 - `done`
@@ -390,6 +396,7 @@ Rules:
 - the active attempt's `chunk_id` must equal `active_chunk_id`
 - `campaign_state: blocked` requires the active attempt `state` to be `blocked`
 - `campaign_state: active` allows active attempt `state` values `ready`, `implementing`, `awaiting-spec-review`, `awaiting-quality-review`, `awaiting-verification`, `review-failed`, `blocked`, or `complete`
+- if the active attempt `state` is `complete` on a terminal chunk (`next_chunk_id: null`), canonical state must advance to `campaign_state: complete` with null active ids instead of keeping that terminal chunk active
 - only the attempt referenced by `active_attempt_id` is treated as the resumable current attempt; all other attempt rows are historical context
 
 ## Projection Markdown Docs
@@ -416,7 +423,8 @@ repo_workflow_projection:
 
 Rules:
 - the validator reads only the YAML content between the exact start and end markers
-- `docs/current-state.md` and `docs/next-steps.md` must include `active_chunk_id`
+- `docs/current-state.md` and `docs/next-steps.md` must include `active_chunk_id` when `campaign.yaml` has a non-`null` `active_chunk_id`
+- `docs/current-state.md` and `docs/next-steps.md` must omit `active_chunk_id` when `campaign.yaml` has `active_chunk_id: null`
 - `docs/focus-tracker.md` may omit `active_chunk_id`
 - projection ids must match canonical YAML exactly
 - the three projection docs plus the milestone registry block form one current-`HEAD` checkpoint; any mismatch at the checked-out `HEAD` is invalid
@@ -456,6 +464,7 @@ Reset rules when the checked-out `HEAD` commit changes:
 - `verification_head_commit` resets to `null`
 - `verified_at` resets to `null`
 - `docs_reconciled` resets to `false`
+- a blocked attempt waiting on `doc-reconciliation` or `execution-failure` may remain `state: blocked` with the same `blocked_reason` after those review and verification fields reset; resume must treat it as blocked-with-stale-currency, not as an invalid snapshot
 
 ## Attempt Lifecycle
 

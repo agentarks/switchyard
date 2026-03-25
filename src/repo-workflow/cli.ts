@@ -10,9 +10,14 @@ async function main(): Promise<void> {
   const result = await validateRepoWorkflow(projectRoot);
 
   if (result.ok) {
-    process.stdout.write(
-      `repo-workflow: valid campaign ${result.campaign.campaignId} chunk ${result.campaign.activeChunkId} attempt ${result.activeAttempt.attemptId}\n`
-    );
+    if (result.activeAttempt !== null && result.campaign.activeChunkId !== null) {
+      process.stdout.write(
+        `repo-workflow: valid campaign ${result.campaign.campaignId} chunk ${result.campaign.activeChunkId} attempt ${result.activeAttempt.attemptId}\n`
+      );
+      return;
+    }
+
+    process.stdout.write(`repo-workflow: valid campaign ${result.campaign.campaignId} state ${result.campaign.campaignState}\n`);
     return;
   }
 

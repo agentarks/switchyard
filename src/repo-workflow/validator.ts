@@ -95,7 +95,9 @@ export async function validateRepoWorkflow(projectRoot: string): Promise<RepoWor
     validateProjections(campaign, projections);
 
     const activeAttempt = validateActiveState(campaign, chunkManifest, attemptDocument);
-    validateReviewCurrency(activeAttempt, currentHeadCommit);
+    if (activeAttempt !== null) {
+      validateReviewCurrency(activeAttempt, currentHeadCommit);
+    }
 
     return {
       ok: true,
@@ -527,11 +529,18 @@ function validateProjections(campaign: LoadedCampaign, projections: Map<string, 
       );
     }
 
-    const requiresChunkId = relativePath !== "docs/focus-tracker.md";
+    const requiresChunkId = relativePath !== "docs/focus-tracker.md" && campaign.activeChunkId !== null;
     if (requiresChunkId && projection.activeChunkId === undefined) {
       throw new RepoWorkflowValidationFailure(
         "invalid_projection",
         `${relativePath} is missing required active_chunk_id in its projection block.`
+      );
+    }
+
+    if (campaign.activeChunkId === null && projection.activeChunkId !== undefined) {
+      throw new RepoWorkflowValidationFailure(
+        "invalid_projection",
+        `${relativePath} must omit active_chunk_id when campaign.yaml has no active chunk.`
       );
     }
 
@@ -548,7 +557,7 @@ function validateActiveState(
   campaign: LoadedCampaign,
   chunkManifest: LoadedChunkManifest,
   attemptDocument: LoadedAttemptDocument
-): LoadedAttempt {
+): LoadedAttempt | null {
   const activeStateRequiresIds = campaign.campaignState === "active" || campaign.campaignState === "blocked";
 
   if (activeStateRequiresIds && (campaign.activeChunkId === null || campaign.activeAttemptId === null)) {
@@ -566,7 +575,7 @@ function validateActiveState(
   }
 
   if (campaign.activeChunkId === null || campaign.activeAttemptId === null) {
-    throw new RepoWorkflowValidationFailure("invalid_state", "Campaign has no active chunk/attempt to validate.");
+    return null;
   }
 
   const activeChunk = chunkManifest.chunks.find((chunk) => chunk.chunkId === campaign.activeChunkId);
@@ -606,6 +615,8 @@ function validateActiveState(
     );
   }
 
+  validateAttemptSnapshot(activeAttempt);
+
   if (activeAttempt.state === "complete") {
     if (
       activeAttempt.specReviewStatus !== "approved" ||
@@ -621,9 +632,246 @@ function validateActiveState(
         "Active attempt state 'complete' requires approved reviews, passed verification, non-null review/verification commits, and docs_reconciled: true."
       );
     }
+
+    if (activeChunk.nextChunkId === null) {
+      throw new RepoWorkflowValidationFailure(
+        "invalid_state",
+        "A terminal chunk cannot remain the active chunk after its attempt reaches state 'complete'; advance campaign_state to 'complete' and clear active ids."
+      );
+    }
   }
 
   return activeAttempt;
+}
+
+function validateAttemptSnapshot(attempt: LoadedAttempt): void {
+  switch (attempt.state) {
+    case "ready":
+    case "implementing":
+      requireAttemptSnapshot(
+        attempt,
+        attempt.state,
+        ["not-started"],
+        "none",
+        "not-started",
+        "not-started",
+        "not-run",
+        false
+      );
+      return;
+    case "awaiting-spec-review":
+      requireAttemptSnapshot(
+        attempt,
+        "awaiting-spec-review",
+        ["done", "done-with-concerns"],
+        "none",
+        "not-started",
+        "not-started",
+        "not-run",
+        false
+      );
+      return;
+    case "awaiting-quality-review":
+      requireAttemptSnapshot(
+        attempt,
+        "awaiting-quality-review",
+        ["done", "done-with-concerns"],
+        "none",
+        "approved",
+        "not-started",
+        "not-run",
+        false
+      );
+      return;
+    case "awaiting-verification":
+      requireAttemptSnapshot(
+        attempt,
+        "awaiting-verification",
+        ["done", "done-with-concerns"],
+        "none",
+        "approved",
+        "approved",
+        "not-run",
+        false
+      );
+      return;
+    case "review-failed":
+      if (attempt.blockedReason !== "none") {
+        throw new RepoWorkflowValidationFailure(
+          "invalid_state",
+          `Active attempt state 'review-failed' requires blocked_reason 'none', found '${attempt.blockedReason}'.`
+        );
+      }
+      if (!new Set<ImplementerStatus>(["done", "done-with-concerns"]).has(attempt.implementerStatus)) {
+        throw new RepoWorkflowValidationFailure(
+          "invalid_state",
+          `Active attempt state 'review-failed' does not allow implementer_status '${attempt.implementerStatus}'.`
+        );
+      }
+      if (attempt.verificationResult !== "not-run" || attempt.docsReconciled !== false) {
+        throw new RepoWorkflowValidationFailure(
+          "invalid_state",
+          "Active attempt state 'review-failed' requires verification_result 'not-run' and docs_reconciled: false."
+        );
+      }
+      if (attempt.specReviewStatus !== "issues-found" && attempt.qualityReviewStatus !== "issues-found") {
+        throw new RepoWorkflowValidationFailure(
+          "invalid_state",
+          "Active attempt state 'review-failed' requires spec_review_status or quality_review_status to be 'issues-found'."
+        );
+      }
+      return;
+    case "blocked":
+      validateBlockedAttemptSnapshot(attempt);
+      return;
+    case "complete":
+      requireAttemptSnapshot(
+        attempt,
+        "complete",
+        ["done", "done-with-concerns"],
+        "none",
+        "approved",
+        "approved",
+        "passed",
+        true
+      );
+      return;
+    case "abandoned":
+      return;
+  }
+}
+
+function validateBlockedAttemptSnapshot(attempt: LoadedAttempt): void {
+  if (attempt.blockedReason === "none") {
+    throw new RepoWorkflowValidationFailure("invalid_state", "Active attempt state 'blocked' requires a non-'none' blocked_reason.");
+  }
+
+  if (attempt.docsReconciled !== false) {
+    throw new RepoWorkflowValidationFailure("invalid_state", "Active attempt state 'blocked' requires docs_reconciled: false.");
+  }
+
+  switch (attempt.blockedReason) {
+    case "operator-input":
+      if (!new Set<ImplementerStatus>(["needs-context", "blocked"]).has(attempt.implementerStatus)) {
+        throw new RepoWorkflowValidationFailure(
+          "invalid_state",
+          `Blocked operator-input attempts do not allow implementer_status '${attempt.implementerStatus}'.`
+        );
+      }
+      if (attempt.specReviewStatus !== "not-started" || attempt.qualityReviewStatus !== "not-started" || attempt.verificationResult !== "not-run") {
+        throw new RepoWorkflowValidationFailure(
+          "invalid_state",
+          "Blocked operator-input attempts require spec_review_status and quality_review_status to be 'not-started' and verification_result to be 'not-run'."
+        );
+      }
+      return;
+    case "doc-reconciliation":
+      if (matchesResetBlockedAttemptSnapshot(attempt)) {
+        return;
+      }
+      requireAttemptSnapshot(
+        attempt,
+        "blocked",
+        ["done", "done-with-concerns"],
+        "doc-reconciliation",
+        "approved",
+        "approved",
+        "passed",
+        false
+      );
+      return;
+    case "execution-failure":
+      if (matchesPreReviewExecutionFailureSnapshot(attempt)) {
+        return;
+      }
+      if (matchesResetBlockedAttemptSnapshot(attempt)) {
+        return;
+      }
+      requireAttemptSnapshot(
+        attempt,
+        "blocked",
+        ["done", "done-with-concerns"],
+        "execution-failure",
+        "approved",
+        "approved",
+        "failed",
+        false
+      );
+      return;
+  }
+}
+
+function matchesResetBlockedAttemptSnapshot(attempt: LoadedAttempt): boolean {
+  return (
+    new Set<ImplementerStatus>(["done", "done-with-concerns"]).has(attempt.implementerStatus)
+    && attempt.specReviewStatus === "not-started"
+    && attempt.qualityReviewStatus === "not-started"
+    && attempt.verificationResult === "not-run"
+    && attempt.docsReconciled === false
+  );
+}
+
+function matchesPreReviewExecutionFailureSnapshot(attempt: LoadedAttempt): boolean {
+  return (
+    attempt.implementerStatus === "blocked"
+    && attempt.specReviewStatus === "not-started"
+    && attempt.qualityReviewStatus === "not-started"
+    && attempt.verificationResult === "not-run"
+    && attempt.docsReconciled === false
+  );
+}
+
+function requireAttemptSnapshot(
+  attempt: LoadedAttempt,
+  state: AttemptState,
+  allowedImplementerStatuses: ImplementerStatus[],
+  blockedReason: BlockedReason,
+  specReviewStatus: ReviewStatus,
+  qualityReviewStatus: ReviewStatus,
+  verificationResult: VerificationResult,
+  docsReconciled: boolean
+): void {
+  if (!new Set(allowedImplementerStatuses).has(attempt.implementerStatus)) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `Active attempt state '${state}' does not allow implementer_status '${attempt.implementerStatus}'.`
+    );
+  }
+
+  if (attempt.blockedReason !== blockedReason) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `Active attempt state '${state}' requires blocked_reason '${blockedReason}', found '${attempt.blockedReason}'.`
+    );
+  }
+
+  if (attempt.specReviewStatus !== specReviewStatus) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `Active attempt state '${state}' requires spec_review_status '${specReviewStatus}', found '${attempt.specReviewStatus}'.`
+    );
+  }
+
+  if (attempt.qualityReviewStatus !== qualityReviewStatus) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `Active attempt state '${state}' requires quality_review_status '${qualityReviewStatus}', found '${attempt.qualityReviewStatus}'.`
+    );
+  }
+
+  if (attempt.verificationResult !== verificationResult) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `Active attempt state '${state}' requires verification_result '${verificationResult}', found '${attempt.verificationResult}'.`
+    );
+  }
+
+  if (attempt.docsReconciled !== docsReconciled) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `Active attempt state '${state}' requires docs_reconciled: ${String(docsReconciled)}.`
+    );
+  }
 }
 
 function validateReviewCurrency(attempt: LoadedAttempt, currentHeadCommit: string): void {

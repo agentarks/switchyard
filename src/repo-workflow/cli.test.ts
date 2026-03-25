@@ -61,6 +61,82 @@ test("repo-workflow CLI prints one specific validation failure on stderr and exi
   }
 });
 
+test("repo-workflow CLI prints terminal campaign state when validation succeeds without an active attempt", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    await writeFile(
+      join(repoDir, "docs", "repo-workflow", "campaign.yaml"),
+      stringify({
+        repo_workflow_campaign: {
+          schema_version: 1,
+          campaign_id: CAMPAIGN_ID,
+          bundle_id: BUNDLE_ID,
+          product_milestone_id: PRODUCT_MILESTONE_ID,
+          campaign_state: "complete",
+          active_chunk_id: null,
+          active_attempt_id: null,
+          branch_ref: "refs/heads/main",
+          baseline_command: "npm run check",
+          slice_ledger: {
+            disposition: "pending",
+            row_ref: null
+          },
+          last_updated: "2026-03-25"
+        }
+      }),
+      "utf8"
+    );
+
+    await writeFile(
+      join(repoDir, "docs", "repo-workflow", "chunks.yaml"),
+      stringify({
+        repo_workflow_chunks: {
+          schema_version: 1,
+          campaign_id: CAMPAIGN_ID,
+          bundle_id: BUNDLE_ID,
+          manifest_state: "complete",
+          chunks: [
+            {
+              chunk_id: ACTIVE_CHUNK_ID,
+              next_chunk_id: null,
+              objective: "freeze-control-plane-contract",
+              scope: "repo-workflow-foundation",
+              done_condition: "contract-and-validator-foundation-defined",
+              verification_command: "node --import tsx --test src/repo-workflow/validator.test.ts src/repo-workflow/cli.test.ts",
+              owner_role: "controller"
+            }
+          ],
+          last_updated: "2026-03-25"
+        }
+      }),
+      "utf8"
+    );
+
+    await writeFile(
+      join(repoDir, "docs", "current-state.md"),
+      ["# Current State", "", STARTUP_MARKER, "", projectionBlock({ includeActiveChunkId: false }), "", "Projection doc."].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      join(repoDir, "docs", "next-steps.md"),
+      ["# Next Steps", "", STARTUP_MARKER, "", projectionBlock({ includeActiveChunkId: false }), "", "Projection doc."].join("\n"),
+      "utf8"
+    );
+    await git(repoDir, ["add", "docs/repo-workflow/campaign.yaml", "docs/repo-workflow/chunks.yaml", "docs/current-state.md", "docs/next-steps.md"]);
+    await git(repoDir, ["commit", "-m", "Complete terminal campaign CLI fixture"]);
+
+    const { stdout, stderr } = await execFileAsync(process.execPath, [tsxCliPath, repoWorkflowCliPath], {
+      cwd: repoDir
+    });
+
+    assert.equal(stderr, "");
+    assert.equal(stdout, "repo-workflow: valid campaign rw-001 state complete\n");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 async function createValidRepoWorkflowRepo(): Promise<string> {
   const repoDir = await createTempGitRepo("switchyard-repo-workflow-cli-");
 

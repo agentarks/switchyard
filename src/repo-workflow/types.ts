@@ -118,7 +118,7 @@ export type RepoWorkflowValidationResult =
   | {
       ok: true;
       campaign: LoadedCampaign;
-      activeAttempt: LoadedAttempt;
+      activeAttempt: LoadedAttempt | null;
       currentBranchRef: string;
       currentHeadCommit: string;
     }

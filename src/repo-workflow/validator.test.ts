@@ -26,7 +26,11 @@ test("validateRepoWorkflow accepts a clean repo with matching startup docs, cano
     assert.equal(result.ok, true);
     assert.equal(result.campaign.campaignId, CAMPAIGN_ID);
     assert.equal(result.campaign.activeChunkId, ACTIVE_CHUNK_ID);
-    assert.equal(result.activeAttempt.attemptId, ACTIVE_ATTEMPT_ID);
+    const { activeAttempt } = result;
+    if (activeAttempt === null) {
+      assert.fail("expected an active attempt for an active campaign fixture");
+    }
+    assert.equal(activeAttempt.attemptId, ACTIVE_ATTEMPT_ID);
   } finally {
     await removeTempDir(repoDir);
   }
@@ -212,12 +216,29 @@ test("validateRepoWorkflow fails when review or verification commits are stale r
 
   try {
     const staleCommit = await git(repoDir, ["rev-parse", "HEAD"]);
+    const chunksPath = join(repoDir, "docs", "repo-workflow", "chunks.yaml");
+    const chunks = parse(await readFile(chunksPath, "utf8")) as {
+      repo_workflow_chunks: { chunks: Array<Record<string, unknown>> };
+    };
+    chunks.repo_workflow_chunks.chunks[0]!.next_chunk_id = "c-002";
+    chunks.repo_workflow_chunks.chunks.push({
+      chunk_id: "c-002",
+      next_chunk_id: null,
+      objective: "follow-on-fixture-chunk",
+      scope: "repo-workflow-fixture",
+      done_condition: "stale-review-currency-test",
+      verification_command: "npm run check",
+      owner_role: "controller"
+    });
+    await writeFile(chunksPath, stringify(chunks), "utf8");
+
     const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
     const attempts = parse(await readFile(attemptsPath, "utf8")) as {
       repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
     };
     const activeAttempt = attempts.repo_workflow_attempts.attempts[0]!;
     activeAttempt.state = "complete";
+    activeAttempt.implementer_status = "done";
     activeAttempt.spec_review_status = "approved";
     activeAttempt.spec_reviewed_commit = staleCommit;
     activeAttempt.quality_review_status = "approved";
@@ -228,7 +249,7 @@ test("validateRepoWorkflow fails when review or verification commits are stale r
     activeAttempt.docs_reconciled = true;
     activeAttempt.summary = "Chunk finished on an older head.";
     await writeFile(attemptsPath, stringify(attempts), "utf8");
-    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(repoDir, ["add", "docs/repo-workflow/chunks.yaml", "docs/repo-workflow/attempts.yaml"]);
     await git(repoDir, ["commit", "-m", "Record stale review currency"]);
 
     const result = await validateRepoWorkflow(repoDir);
@@ -354,6 +375,7 @@ test("validateRepoWorkflow fails when the active attempt is complete without doc
     };
     const activeAttempt = attempts.repo_workflow_attempts.attempts[0]!;
     activeAttempt.state = "complete";
+    activeAttempt.implementer_status = "done";
     activeAttempt.spec_review_status = "approved";
     activeAttempt.spec_reviewed_commit = currentHead;
     activeAttempt.quality_review_status = "approved";
@@ -371,6 +393,195 @@ test("validateRepoWorkflow fails when the active attempt is complete without doc
     assert.equal(result.ok, false);
     assert.equal(result.code, "invalid_state");
     assert.match(result.message, /docs_reconciled: true/i);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("validateRepoWorkflow fails when the active attempt snapshot is impossible for its state", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
+    const attempts = parse(await readFile(attemptsPath, "utf8")) as {
+      repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
+    };
+    const activeAttempt = attempts.repo_workflow_attempts.attempts[0]!;
+    activeAttempt.state = "ready";
+    activeAttempt.implementer_status = "done";
+    await writeFile(attemptsPath, stringify(attempts), "utf8");
+    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(repoDir, ["commit", "-m", "Use impossible active attempt snapshot"]);
+
+    const result = await validateRepoWorkflow(repoDir);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "invalid_state");
+    assert.match(result.message, /state 'ready'/i);
+    assert.match(result.message, /implementer_status 'done'/i);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("validateRepoWorkflow accepts a terminal complete campaign with null active ids", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    const campaignPath = join(repoDir, "docs", "repo-workflow", "campaign.yaml");
+    const chunksPath = join(repoDir, "docs", "repo-workflow", "chunks.yaml");
+    const currentStatePath = join(repoDir, "docs", "current-state.md");
+    const nextStepsPath = join(repoDir, "docs", "next-steps.md");
+
+    const campaign = parse(await readFile(campaignPath, "utf8")) as {
+      repo_workflow_campaign: Record<string, unknown>;
+    };
+    campaign.repo_workflow_campaign.campaign_state = "complete";
+    campaign.repo_workflow_campaign.active_chunk_id = null;
+    campaign.repo_workflow_campaign.active_attempt_id = null;
+    await writeFile(campaignPath, stringify(campaign), "utf8");
+
+    const chunks = parse(await readFile(chunksPath, "utf8")) as {
+      repo_workflow_chunks: Record<string, unknown>;
+    };
+    chunks.repo_workflow_chunks.manifest_state = "complete";
+    await writeFile(chunksPath, stringify(chunks), "utf8");
+
+    const currentState = await readFile(currentStatePath, "utf8");
+    await writeFile(currentStatePath, currentState.replace(`  active_chunk_id: ${ACTIVE_CHUNK_ID}\n`, ""), "utf8");
+
+    const nextSteps = await readFile(nextStepsPath, "utf8");
+    await writeFile(nextStepsPath, nextSteps.replace(`  active_chunk_id: ${ACTIVE_CHUNK_ID}\n`, ""), "utf8");
+
+    await git(repoDir, ["add", "docs/repo-workflow/campaign.yaml", "docs/repo-workflow/chunks.yaml", "docs/current-state.md", "docs/next-steps.md"]);
+    await git(repoDir, ["commit", "-m", "Complete terminal campaign fixture"]);
+
+    const result = await validateRepoWorkflow(repoDir);
+
+    if (!result.ok) {
+      assert.fail(`expected validation success, got ${result.code}: ${result.message}`);
+    }
+
+    assert.equal(result.campaign.campaignState, "complete");
+    assert.equal(result.campaign.activeChunkId, null);
+    assert.equal(result.activeAttempt, null);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("validateRepoWorkflow accepts a blocked doc-reconciliation attempt after HEAD-reset review currency", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
+    const attempts = parse(await readFile(attemptsPath, "utf8")) as {
+      repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
+    };
+    const activeAttempt = attempts.repo_workflow_attempts.attempts[0]!;
+    activeAttempt.state = "blocked";
+    activeAttempt.blocked_reason = "doc-reconciliation";
+    activeAttempt.implementer_status = "done";
+    activeAttempt.spec_review_status = "not-started";
+    activeAttempt.spec_reviewed_commit = null;
+    activeAttempt.quality_review_status = "not-started";
+    activeAttempt.quality_reviewed_commit = null;
+    activeAttempt.verification_result = "not-run";
+    activeAttempt.verification_head_commit = null;
+    activeAttempt.verified_at = null;
+    activeAttempt.docs_reconciled = false;
+    await writeFile(attemptsPath, stringify(attempts), "utf8");
+    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(repoDir, ["commit", "-m", "Use stale blocked doc reconciliation attempt"]);
+
+    const result = await validateRepoWorkflow(repoDir);
+
+    if (!result.ok) {
+      assert.fail(`expected validation success, got ${result.code}: ${result.message}`);
+    }
+
+    const resultAttempt = result.activeAttempt;
+    if (resultAttempt === null) {
+      assert.fail("expected an active attempt for blocked campaign state");
+    }
+    assert.equal(resultAttempt.state, "blocked");
+    assert.equal(resultAttempt.blockedReason, "doc-reconciliation");
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("validateRepoWorkflow fails when a terminal chunk remains active after its attempt completes", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    const currentHead = await git(repoDir, ["rev-parse", "HEAD"]);
+    const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
+    const attempts = parse(await readFile(attemptsPath, "utf8")) as {
+      repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
+    };
+    const activeAttempt = attempts.repo_workflow_attempts.attempts[0]!;
+    activeAttempt.state = "complete";
+    activeAttempt.implementer_status = "done";
+    activeAttempt.spec_review_status = "approved";
+    activeAttempt.spec_reviewed_commit = currentHead;
+    activeAttempt.quality_review_status = "approved";
+    activeAttempt.quality_reviewed_commit = currentHead;
+    activeAttempt.verification_result = "passed";
+    activeAttempt.verification_head_commit = currentHead;
+    activeAttempt.verified_at = "2026-03-25T16:00:00.000Z";
+    activeAttempt.docs_reconciled = true;
+    await writeFile(attemptsPath, stringify(attempts), "utf8");
+    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(repoDir, ["commit", "-m", "Leave terminal chunk active after completion"]);
+
+    const result = await validateRepoWorkflow(repoDir);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "invalid_state");
+    assert.match(result.message, /terminal chunk/i);
+    assert.match(result.message, /advance campaign_state to 'complete'/i);
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
+test("validateRepoWorkflow accepts an execution-failure block before review starts", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
+    const attempts = parse(await readFile(attemptsPath, "utf8")) as {
+      repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
+    };
+    const activeAttempt = attempts.repo_workflow_attempts.attempts[0]!;
+    activeAttempt.state = "blocked";
+    activeAttempt.blocked_reason = "execution-failure";
+    activeAttempt.implementer_status = "blocked";
+    activeAttempt.spec_review_status = "not-started";
+    activeAttempt.spec_reviewed_commit = null;
+    activeAttempt.quality_review_status = "not-started";
+    activeAttempt.quality_reviewed_commit = null;
+    activeAttempt.verification_result = "not-run";
+    activeAttempt.verification_head_commit = null;
+    activeAttempt.verified_at = null;
+    activeAttempt.docs_reconciled = false;
+    await writeFile(attemptsPath, stringify(attempts), "utf8");
+    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(repoDir, ["commit", "-m", "Use pre-review execution failure block"]);
+
+    const result = await validateRepoWorkflow(repoDir);
+
+    if (!result.ok) {
+      assert.fail(`expected validation success, got ${result.code}: ${result.message}`);
+    }
+
+    const resultAttempt = result.activeAttempt;
+    if (resultAttempt === null) {
+      assert.fail("expected an active attempt for blocked campaign state");
+    }
+    assert.equal(resultAttempt.state, "blocked");
+    assert.equal(resultAttempt.blockedReason, "execution-failure");
   } finally {
     await removeTempDir(repoDir);
   }
