@@ -5,6 +5,70 @@ repo_workflow_attempts:
     - attempt_id: a-001
       chunk_id: c-001
       attempt_number: 1
+      state: complete
+      blocked_reason: none
+      implementer_status: done
+      spec_review_status: approved
+      spec_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      quality_review_status: approved
+      quality_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      verification_result: passed
+      verification_head_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      verified_at: 2026-03-25T12:00:00.000Z
+      docs_reconciled: true
+      summary: "Control-plane contract cleanup and RED tests landed."
+      notes: "Closed by checkpoint commit 1b268f9."
+    - attempt_id: a-002
+      chunk_id: c-002
+      attempt_number: 1
+      state: complete
+      blocked_reason: none
+      implementer_status: done
+      spec_review_status: approved
+      spec_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      quality_review_status: approved
+      quality_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      verification_result: passed
+      verification_head_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      verified_at: 2026-03-25T12:30:00.000Z
+      docs_reconciled: true
+      summary: "Validator and CLI implementation landed."
+      notes: "Targeted repo-workflow tests pass locally."
+    - attempt_id: a-003
+      chunk_id: c-003
+      attempt_number: 1
+      state: complete
+      blocked_reason: none
+      implementer_status: done
+      spec_review_status: approved
+      spec_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      quality_review_status: approved
+      quality_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      verification_result: passed
+      verification_head_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      verified_at: 2026-03-25T13:00:00.000Z
+      docs_reconciled: true
+      summary: "Startup-doc cutover is staged for clean validation."
+      notes: "Projection docs and milestone registry now match canonical YAML."
+    - attempt_id: a-004
+      chunk_id: c-004
+      attempt_number: 1
+      state: complete
+      blocked_reason: none
+      implementer_status: done
+      spec_review_status: approved
+      spec_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      quality_review_status: approved
+      quality_reviewed_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      verification_result: passed
+      verification_head_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
+      verified_at: 2026-03-25T14:00:00.000Z
+      docs_reconciled: true
+      summary: "Full repo-workflow verification and closeout landed."
+      notes: "Chunk 4 closes the first repo-workflow state-and-resume slice."
+    - attempt_id: a-005
+      chunk_id: c-005
+      attempt_number: 1
       state: ready
       blocked_reason: none
       implementer_status: not-started
@@ -17,5 +81,5 @@ repo_workflow_attempts:
       verified_at: null
       docs_reconciled: false
       summary: ""
-      notes: "Initial repo-workflow bootstrap attempt for the first control-plane slice."
+      notes: "Next repo-workflow slice covers proof-gate, PR-lifecycle, and explicit auto-merge policy work."
   last_updated: 2026-03-25

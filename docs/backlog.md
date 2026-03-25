@@ -1,5 +1,10 @@
 # Backlog
 
+repo-workflow-startup: repo-workflow-v1
+
+This is a product-policy startup doc.
+It provides ordered product context, not canonical repo-workflow state ownership.
+
 This is the ordered backlog for the next several sessions. Execute it as milestone bundles, not one tiny slice per PR.
 
 ## Now

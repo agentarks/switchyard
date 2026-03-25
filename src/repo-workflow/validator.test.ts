@@ -19,12 +19,11 @@ test("validateRepoWorkflow accepts a clean repo with matching startup docs, cano
   try {
     const result = await validateRepoWorkflow(repoDir);
 
-    assert.equal(result.ok, true);
-
     if (!result.ok) {
       assert.fail(`expected validation success, got ${result.code}: ${result.message}`);
     }
 
+    assert.equal(result.ok, true);
     assert.equal(result.campaign.campaignId, CAMPAIGN_ID);
     assert.equal(result.campaign.activeChunkId, ACTIVE_CHUNK_ID);
     assert.equal(result.activeAttempt.attemptId, ACTIVE_ATTEMPT_ID);

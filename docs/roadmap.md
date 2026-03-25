@@ -1,5 +1,10 @@
 # Roadmap
 
+repo-workflow-startup: repo-workflow-v1
+
+This is a product-policy startup doc.
+It provides roadmap context, not canonical repo-workflow state ownership.
+
 ## Current Milestone
 
 Switchyard has completed the bounded single-agent foundation and has now adopted bounded autonomous swarm v1 as the active direction.

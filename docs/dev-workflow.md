@@ -1,10 +1,18 @@
 # Dev Workflow
 
+repo-workflow-startup: repo-workflow-v1
+
+This is a repo-workflow startup doc.
+Canonical repo-workflow state lives in `docs/repo-workflow/*.yaml`; the prose docs help operators understand that state but do not replace it.
+
 This file is the recommended owner workflow for a normal Switchyard coding session.
 
 ## Start Of Session
 
 1. At the start of a milestone bundle, or when scope changes, read:
+   - `docs/repo-workflow/campaign.yaml`
+   - `docs/repo-workflow/chunks.yaml`
+   - `docs/repo-workflow/attempts.yaml`
    - `docs/current-state.md`
    - `docs/next-steps.md`
    - `docs/backlog.md`
@@ -16,11 +24,13 @@ This file is the recommended owner workflow for a normal Switchyard coding sessi
 
 3. Run:
    - `npm install` if dependencies changed
+   - `npm run repo-workflow:validate` when resuming from a clean checkpoint
    - `npm run check`
 
 4. Write or load one active execution checklist for the milestone bundle.
 
 If `npm run check` does not pass at milestone start, fix or understand that first before expanding scope.
+If `npm run repo-workflow:validate` fails, reconcile the repo-workflow startup docs or canonical YAML before continuing.
 
 ## During The Session
 

@@ -26,10 +26,17 @@ repo_workflow_chunks:
       verification_command: npm run repo-workflow:validate
       owner_role: controller
     - chunk_id: c-004
-      next_chunk_id: null
+      next_chunk_id: c-005
       objective: verify-closeout-and-prepare-pr
       scope: repo-workflow-closeout
       done_condition: repo-workflow-slice-verified-and-ready-for-pr
+      verification_command: npm run check
+      owner_role: controller
+    - chunk_id: c-005
+      next_chunk_id: null
+      objective: add-proof-gate-pr-lifecycle-and-auto-merge-policy
+      scope: repo-workflow-next-slice
+      done_condition: next-repo-workflow-slice-is-specified-and-ready
       verification_command: npm run check
       owner_role: controller
   last_updated: 2026-03-25
