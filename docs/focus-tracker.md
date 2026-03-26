@@ -72,7 +72,7 @@ Current planning state:
 - the bounded runtime baseline should stay fixed unless a concrete failure disproves it
 - the active milestone is bounded lead host and run-scoped lifecycle behavior, not broad swarm-foundation work in general
 - the next bundle is bounded lead host and run-scoped lifecycle behavior, not automatic merge or broader runtime work
-- the next repo-workflow slice is proof-gate and PR-lifecycle work for building Switchyard itself, not a product merge-policy change
+- the next repo-workflow slice is the repo-local milestone proof gate, with PR lifecycle and explicit auto-merge policy still deferred follow-up work for building Switchyard itself
 - the accepted rollout gate is `manual-ready`
 - `auto-after-verify` is deferred until a later explicit policy adoption
 

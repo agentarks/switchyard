@@ -23,6 +23,8 @@ import type {
   LoadedChunkManifest,
   LoadedMilestoneRegistry,
   LoadedProjection,
+  ProofGate,
+  ProofStatus,
   RepoWorkflowValidationCode,
   RepoWorkflowValidationResult,
   ReviewStatus,
@@ -95,6 +97,7 @@ export async function validateRepoWorkflow(projectRoot: string): Promise<RepoWor
     validateProjections(campaign, projections);
 
     const activeAttempt = validateActiveState(campaign, chunkManifest, attemptDocument);
+    validateProofGateState(campaign, chunkManifest, attemptDocument, activeAttempt, currentHeadCommit);
     if (activeAttempt !== null) {
       validateReviewCurrency(activeAttempt, currentHeadCommit);
     }
@@ -247,6 +250,8 @@ function parseChunkManifest(value: unknown): LoadedChunkManifest {
     }
   }
 
+  validateChunkChain(chunks, filePath);
+
   return {
     schemaVersion: requireLiteralNumber(root.schema_version, 1, filePath, "schema_version"),
     campaignId: requireId(root.campaign_id, filePath, "campaign_id"),
@@ -272,6 +277,7 @@ function parseChunk(value: unknown, index: number): LoadedChunk {
     "scope",
     "done_condition",
     "verification_command",
+    "proof_gate",
     "owner_role"
   ]);
 
@@ -282,6 +288,7 @@ function parseChunk(value: unknown, index: number): LoadedChunk {
     scope: requireString(record.scope, filePath, `chunks[${index}].scope`),
     doneCondition: requireString(record.done_condition, filePath, `chunks[${index}].done_condition`),
     verificationCommand: requireString(record.verification_command, filePath, `chunks[${index}].verification_command`),
+    proofGate: requireEnum<ProofGate>(record.proof_gate, ["not-required", "required"], filePath, `chunks[${index}].proof_gate`),
     ownerRole: requireString(record.owner_role, filePath, `chunks[${index}].owner_role`)
   };
 }
@@ -298,6 +305,19 @@ function parseAttemptDocument(value: unknown): LoadedAttemptDocument {
   const attemptIds = new Set(attempts.map((attempt) => attempt.attemptId));
   if (attemptIds.size !== attempts.length) {
     throw new RepoWorkflowValidationFailure("invalid_yaml", `${filePath} contains duplicate attempt_id values.`);
+  }
+
+  const attemptNumbersByChunkId = new Map<string, Set<number>>();
+  for (const attempt of attempts) {
+    const chunkAttemptNumbers = attemptNumbersByChunkId.get(attempt.chunkId) ?? new Set<number>();
+    if (chunkAttemptNumbers.has(attempt.attemptNumber)) {
+      throw new RepoWorkflowValidationFailure(
+        "invalid_yaml",
+        `${filePath} contains duplicate attempt_number '${attempt.attemptNumber}' for chunk '${attempt.chunkId}'.`
+      );
+    }
+    chunkAttemptNumbers.add(attempt.attemptNumber);
+    attemptNumbersByChunkId.set(attempt.chunkId, chunkAttemptNumbers);
   }
 
   return {
@@ -334,6 +354,12 @@ function parseAttempt(value: unknown, index: number): LoadedAttempt {
     "verification_head_commit",
     "verified_at",
     "docs_reconciled",
+    "proof_status",
+    "proof_summary",
+    "proof_verification_command",
+    "proof_commands",
+    "proof_head_commit",
+    "proof_recorded_at",
     "summary",
     "notes"
   ]);
@@ -368,6 +394,21 @@ function parseAttempt(value: unknown, index: number): LoadedAttempt {
     `attempts[${index}].verification_head_commit`
   );
   const verifiedAt = requireNullableTimestamp(record.verified_at, filePath, `attempts[${index}].verified_at`);
+  const proofStatus = requireEnum<ProofStatus>(
+    record.proof_status,
+    ["not-required", "pending", "recorded"],
+    filePath,
+    `attempts[${index}].proof_status`
+  );
+  const proofSummary = requireString(record.proof_summary, filePath, `attempts[${index}].proof_summary`);
+  const proofVerificationCommand = requireNullableString(
+    record.proof_verification_command,
+    filePath,
+    `attempts[${index}].proof_verification_command`
+  );
+  const proofCommands = requireStringList(record.proof_commands, filePath, `attempts[${index}].proof_commands`);
+  const proofHeadCommit = requireNullableCommit(record.proof_head_commit, filePath, `attempts[${index}].proof_head_commit`);
+  const proofRecordedAt = requireNullableUtcTimestamp(record.proof_recorded_at, filePath, `attempts[${index}].proof_recorded_at`);
 
   if (specReviewStatus === "not-started" && specReviewedCommit !== null) {
     throw new RepoWorkflowValidationFailure(
@@ -387,6 +428,22 @@ function parseAttempt(value: unknown, index: number): LoadedAttempt {
     throw new RepoWorkflowValidationFailure(
       "invalid_yaml",
       `${filePath} requires verification_head_commit and verified_at to be null when verification_result is not-run.`
+    );
+  }
+
+  if (
+    proofStatus !== "recorded"
+    && (
+    proofSummary !== ""
+    || proofVerificationCommand !== null
+    || proofCommands.length !== 0
+    || proofHeadCommit !== null
+    || proofRecordedAt !== null
+    )
+  ) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_yaml",
+      `${filePath} requires proof fields to be empty defaults when proof_status is '${proofStatus}'.`
     );
   }
 
@@ -430,6 +487,12 @@ function parseAttempt(value: unknown, index: number): LoadedAttempt {
     verificationHeadCommit,
     verifiedAt,
     docsReconciled: requireBoolean(record.docs_reconciled, filePath, `attempts[${index}].docs_reconciled`),
+    proofStatus,
+    proofSummary,
+    proofVerificationCommand,
+    proofCommands,
+    proofHeadCommit,
+    proofRecordedAt,
     summary: requireString(record.summary, filePath, `attempts[${index}].summary`),
     notes: requireString(record.notes, filePath, `attempts[${index}].notes`)
   };
@@ -488,6 +551,49 @@ function validateCrossFileIds(
 
   if (campaign.bundleId !== chunkManifest.bundleId) {
     throw new RepoWorkflowValidationFailure("invalid_state", "Canonical repo-workflow bundle ids do not match across campaign.yaml and chunks.yaml.");
+  }
+}
+
+function validateChunkChain(chunks: LoadedChunk[], filePath: string): void {
+  const chunkById = new Map(chunks.map((chunk) => [chunk.chunkId, chunk]));
+  const predecessorCountByChunkId = new Map<string, number>();
+
+  for (const chunk of chunks) {
+    if (chunk.nextChunkId !== null) {
+      predecessorCountByChunkId.set(chunk.nextChunkId, (predecessorCountByChunkId.get(chunk.nextChunkId) ?? 0) + 1);
+    }
+  }
+
+  for (const chunk of chunks) {
+    if ((predecessorCountByChunkId.get(chunk.chunkId) ?? 0) > 1) {
+      throw new RepoWorkflowValidationFailure(
+        "invalid_yaml",
+        `${filePath} must define a single connected chain; chunk '${chunk.chunkId}' has multiple predecessors.`
+      );
+    }
+  }
+
+  const roots = chunks.filter((chunk) => !predecessorCountByChunkId.has(chunk.chunkId));
+  if (roots.length !== 1) {
+    throw new RepoWorkflowValidationFailure("invalid_yaml", `${filePath} must define a single connected chain with exactly one root chunk.`);
+  }
+
+  const visitedChunkIds = new Set<string>();
+  let currentChunk: LoadedChunk | null = roots[0] ?? null;
+  while (currentChunk !== null) {
+    if (visitedChunkIds.has(currentChunk.chunkId)) {
+      throw new RepoWorkflowValidationFailure("invalid_yaml", `${filePath} must define a single connected chain without cycles.`);
+    }
+
+    visitedChunkIds.add(currentChunk.chunkId);
+    currentChunk = currentChunk.nextChunkId === null ? null : (chunkById.get(currentChunk.nextChunkId) ?? null);
+  }
+
+  if (visitedChunkIds.size !== chunks.length) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_yaml",
+      `${filePath} must define a single connected chain without disconnected chunks or cycles.`
+    );
   }
 }
 
@@ -897,6 +1003,226 @@ function validateReviewCurrency(attempt: LoadedAttempt, currentHeadCommit: strin
   }
 }
 
+function validateProofGateState(
+  campaign: LoadedCampaign,
+  chunkManifest: LoadedChunkManifest,
+  attemptDocument: LoadedAttemptDocument,
+  activeAttempt: LoadedAttempt | null,
+  currentHeadCommit: string
+): void {
+  const chunksById = new Map(chunkManifest.chunks.map((chunk) => [chunk.chunkId, chunk]));
+
+  for (const chunk of chunkManifest.chunks) {
+    if (chunk.proofGate === "required" && chunk.nextChunkId === null) {
+      throw new RepoWorkflowValidationFailure(
+        "invalid_state",
+        `chunk '${chunk.chunkId}' cannot use proof_gate: required as a terminal chunk in v1; proof-gated closeout must hand off to a later chunk.`
+      );
+    }
+  }
+
+  for (const attempt of attemptDocument.attempts) {
+    const chunk = chunksById.get(attempt.chunkId);
+    if (!chunk) {
+      throw new RepoWorkflowValidationFailure("invalid_state", `attempt '${attempt.attemptId}' references unknown chunk '${attempt.chunkId}'.`);
+    }
+
+    if (chunk.proofGate === "not-required" && attempt.proofStatus !== "not-required") {
+      throw new RepoWorkflowValidationFailure(
+        "invalid_state",
+        `chunk '${chunk.chunkId}' cannot be rewritten to proof_gate: not-required because canonical attempt history already recorded milestone proof for that chunk.`
+      );
+    }
+
+    if (chunk.proofGate === "required") {
+      validateRequiredProofGateAttempt(attempt, chunk, activeAttempt, campaign, currentHeadCommit);
+    }
+  }
+
+  validateProofGateHandoffs(campaign, chunkManifest, attemptDocument);
+}
+
+function validateRequiredProofGateAttempt(
+  attempt: LoadedAttempt,
+  chunk: LoadedChunk,
+  activeAttempt: LoadedAttempt | null,
+  campaign: LoadedCampaign,
+  currentHeadCommit: string
+): void {
+  const isActiveAttempt = activeAttempt?.attemptId === attempt.attemptId;
+
+  if (attempt.proofStatus === "not-required") {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `proof-gated closeout attempt '${attempt.attemptId}' cannot use proof_status 'not-required'.`
+    );
+  }
+
+  if (attempt.state === "complete" && attempt.proofStatus !== "recorded") {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `closeout attempt '${attempt.attemptId}' is complete without recorded milestone proof.`
+    );
+  }
+
+  if (attempt.proofStatus !== "recorded") {
+    return;
+  }
+
+  if (attempt.proofSummary.trim() === "") {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `proof_summary for attempt '${attempt.attemptId}' must be non-empty when milestone proof is recorded.`
+    );
+  }
+
+  if (attempt.proofHeadCommit === null) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `proof_head_commit is required when attempt '${attempt.attemptId}' records milestone proof.`
+    );
+  }
+
+  if (attempt.proofRecordedAt === null) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `proof_recorded_at is required when attempt '${attempt.attemptId}' records milestone proof.`
+    );
+  }
+
+  if (isActiveAttempt && attempt.state === "blocked" && attempt.proofHeadCommit !== currentHeadCommit) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `active closeout attempt '${attempt.attemptId}' has stale milestone proof and must reset to pending before continuing.`
+    );
+  }
+
+  if (attempt.proofVerificationCommand === null || attempt.proofVerificationCommand.trim() === "") {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `proof_verification_command for attempt '${attempt.attemptId}' must be a non-empty string when milestone proof is recorded.`
+    );
+  }
+
+  if (attempt.proofCommands.some((command) => command.trim() === "")) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `proof_commands for attempt '${attempt.attemptId}' must contain only non-empty commands.`
+    );
+  }
+
+  if (attempt.proofCommands.length === 0 || !attempt.proofCommands.includes(attempt.proofVerificationCommand)) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `proof_commands for attempt '${attempt.attemptId}' must include proof_verification_command '${attempt.proofVerificationCommand}'.`
+    );
+  }
+
+  if (isActiveAttempt && attempt.proofVerificationCommand !== chunk.verificationCommand) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `proof_verification_command for active attempt '${attempt.attemptId}' does not match the chunk verification_command.`
+    );
+  }
+
+  if (attempt.verificationResult !== "passed") {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `closeout attempt '${attempt.attemptId}' cannot record proof unless verification_result is 'passed'.`
+    );
+  }
+
+  if (attempt.verificationHeadCommit !== attempt.proofHeadCommit) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `verification_head_commit for attempt '${attempt.attemptId}' must equal proof_head_commit.`
+    );
+  }
+
+  if (isActiveAttempt && attempt.state === "complete") {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `proof-gated closeout attempt '${attempt.attemptId}' cannot remain active after completion; advance to the next chunk.`
+    );
+  }
+
+  if (isActiveAttempt && attempt.proofHeadCommit !== currentHeadCommit) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `active closeout attempt '${attempt.attemptId}' has stale milestone proof and must reset to pending before continuing.`
+    );
+  }
+
+  if (campaign.activeAttemptId === attempt.attemptId && campaign.activeChunkId !== chunk.chunkId) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_state",
+      `Canonical active attempt '${attempt.attemptId}' does not match proof-gated chunk '${chunk.chunkId}'.`
+    );
+  }
+}
+
+function validateProofGateHandoffs(
+  campaign: LoadedCampaign,
+  chunkManifest: LoadedChunkManifest,
+  attemptDocument: LoadedAttemptDocument
+): void {
+  const predecessorByChunkId = new Map<string, LoadedChunk>();
+  for (const chunk of chunkManifest.chunks) {
+    if (chunk.nextChunkId !== null) {
+      predecessorByChunkId.set(chunk.nextChunkId, chunk);
+    }
+  }
+
+  const attemptsByChunkId = new Map<string, LoadedAttempt[]>();
+  for (const attempt of attemptDocument.attempts) {
+    const chunkAttempts = attemptsByChunkId.get(attempt.chunkId);
+    if (chunkAttempts) {
+      chunkAttempts.push(attempt);
+    } else {
+      attemptsByChunkId.set(attempt.chunkId, [attempt]);
+    }
+  }
+
+  const anchorChunkIds: string[] = [];
+  if (campaign.activeChunkId !== null) {
+    anchorChunkIds.push(campaign.activeChunkId);
+  } else if (campaign.campaignState === "complete") {
+    const terminalChunk = chunkManifest.chunks.find((chunk) => chunk.nextChunkId === null);
+    if (terminalChunk) {
+      anchorChunkIds.push(terminalChunk.chunkId);
+    }
+  }
+
+  for (const anchorChunkId of anchorChunkIds) {
+    let predecessor = predecessorByChunkId.get(anchorChunkId) ?? null;
+    while (predecessor !== null) {
+      if (predecessor.proofGate === "required") {
+        const latestAttempt = getLatestAttempt(attemptsByChunkId.get(predecessor.chunkId) ?? []);
+        if (latestAttempt === null || latestAttempt.state !== "complete" || latestAttempt.proofStatus !== "recorded") {
+          throw new RepoWorkflowValidationFailure(
+            "invalid_state",
+            `campaign cannot advance to chunk '${anchorChunkId}' because predecessor proof-gated chunk '${predecessor.chunkId}' does not have a completed recorded milestone-proof attempt.`
+          );
+        }
+      }
+
+      predecessor = predecessorByChunkId.get(predecessor.chunkId) ?? null;
+    }
+  }
+}
+
+function getLatestAttempt(attempts: LoadedAttempt[]): LoadedAttempt | null {
+  let latestAttempt: LoadedAttempt | null = null;
+
+  for (const attempt of attempts) {
+    if (latestAttempt === null || attempt.attemptNumber > latestAttempt.attemptNumber) {
+      latestAttempt = attempt;
+    }
+  }
+
+  return latestAttempt;
+}
+
 function requireRecord(value: unknown, filePath: string, label: string): Record<string, unknown> {
   if (!isRecord(value)) {
     throw new RepoWorkflowValidationFailure("invalid_yaml", `${filePath} must define ${label} as a mapping.`);
@@ -911,6 +1237,10 @@ function requireArray(value: unknown, filePath: string, field: string): unknown[
   }
 
   return value;
+}
+
+function requireStringList(value: unknown, filePath: string, field: string): string[] {
+  return requireArray(value, filePath, field).map((entry, index) => requireString(entry, filePath, `${field}[${index}]`));
 }
 
 function assertAllowedKeys(record: Record<string, unknown>, filePath: string, label: string, keys: string[]): void {
@@ -1009,6 +1339,22 @@ function requireNullableTimestamp(value: unknown, filePath: string, field: strin
   const stringValue = requireString(value, filePath, field);
   if (Number.isNaN(Date.parse(stringValue))) {
     throw new RepoWorkflowValidationFailure("invalid_yaml", `${filePath} requires ${field} to be an ISO 8601 timestamp or null.`);
+  }
+
+  return stringValue;
+}
+
+function requireNullableUtcTimestamp(value: unknown, filePath: string, field: string): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  const stringValue = requireString(value, filePath, field);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(stringValue)) {
+    throw new RepoWorkflowValidationFailure(
+      "invalid_yaml",
+      `${filePath} requires ${field} to be an ISO 8601 UTC timestamp ending in 'Z' or null.`
+    );
   }
 
   return stringValue;

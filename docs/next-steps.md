@@ -27,9 +27,9 @@ The active milestone is:
 
 The repo-workflow state-and-resume slice is now landed.
 The next repo-workflow slice should move to:
-- smoke/demo proof gate
-- PR lifecycle
-- explicit auto-merge policy for building Switchyard itself
+- the repo-local milestone proof gate first
+- later PR lifecycle
+- later explicit auto-merge policy for building Switchyard itself
 
 That later repo-workflow slice must stay separate from Switchyard's product `manual-ready` merge policy.
 

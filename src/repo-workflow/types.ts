@@ -10,6 +10,7 @@ export type RepoWorkflowValidationCode =
 export type CampaignState = "active" | "blocked" | "complete" | "abandoned" | "superseded";
 export type SliceLedgerDisposition = "pending" | "new-row" | "folded-into-existing-row";
 export type ManifestState = "active" | "complete" | "superseded";
+export type ProofGate = "not-required" | "required";
 export type AttemptState =
   | "ready"
   | "implementing"
@@ -24,6 +25,7 @@ export type BlockedReason = "none" | "operator-input" | "doc-reconciliation" | "
 export type ImplementerStatus = "not-started" | "done" | "done-with-concerns" | "needs-context" | "blocked";
 export type ReviewStatus = "not-started" | "approved" | "issues-found";
 export type VerificationResult = "not-run" | "passed" | "failed";
+export type ProofStatus = "not-required" | "pending" | "recorded";
 export type SliceLedgerRowRef = `S${number}` | null;
 
 export interface LoadedCampaign {
@@ -50,6 +52,7 @@ export interface LoadedChunk {
   scope: string;
   doneCondition: string;
   verificationCommand: string;
+  proofGate: ProofGate;
   ownerRole: string;
 }
 
@@ -77,6 +80,12 @@ export interface LoadedAttempt {
   verificationHeadCommit: string | null;
   verifiedAt: string | null;
   docsReconciled: boolean;
+  proofStatus: ProofStatus;
+  proofSummary: string;
+  proofVerificationCommand: string | null;
+  proofCommands: string[];
+  proofHeadCommit: string | null;
+  proofRecordedAt: string | null;
   summary: string;
   notes: string;
 }

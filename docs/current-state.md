@@ -73,7 +73,7 @@ That means the durable swarm state layer is now materially real as both storage 
 
 ## What Does Not Exist Yet
 
-- the later repo-workflow proof-gate, PR-lifecycle, and explicit auto-merge-policy slice for building Switchyard itself
+- the later repo-workflow PR-lifecycle and explicit auto-merge-policy slice for building Switchyard itself
 - specialist launch contracts beyond the initial `lead`
 - bounded lead host/resume behavior
 - run-level stop and resume semantics
@@ -151,8 +151,9 @@ The recommended next task is:
 - keep `sy status`, `sy events`, and `sy mail` truthful while the operator view transitions from session-centric to run-centric
 
 The recommended next repo-workflow slice is:
-- add the later proof-gate, PR-lifecycle, and explicit auto-merge-policy state for building Switchyard itself
-- keep that later slice repo-local and separate from the product `manual-ready` policy
+- implement the repo-local milestone proof gate first
+- keep PR lifecycle and explicit auto-merge policy deferred to the later follow-up slice
+- keep repo-workflow proof handling separate from the product `manual-ready` policy
 
 Do not skip straight to automatic merge or broad runtime expansion. The next value is making the launcher and agent contracts match the durable swarm state that now exists.
 

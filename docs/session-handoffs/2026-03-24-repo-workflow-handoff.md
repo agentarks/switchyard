@@ -6,6 +6,7 @@ This handoff captures the current state of the repo-workflow redesign work for b
 
 This file captures the pre-implementation-plan cleanup state from 2026-03-24.
 Later cleanup on 2026-03-25 resolved the startup-marker mismatch, added exact markdown block delimiters to the active spec, replaced scalar slice-ledger mapping with row-addressable linkage, and removed the self-referential `head_commit` contract.
+Later canonical repo-workflow state also narrowed the former broad `c-005` follow-up into an explicit proof-gate-first chain: `c-005 -> c-006 -> c-007`.
 Use the active spec and plan as the current source of truth.
 
 The user goal is:
