@@ -8,8 +8,8 @@ repo_workflow_projection:
   schema_version: 1
   active_repo_campaign_id: rw-001
   active_bundle_id: repo-workflow-foundation
-  active_chunk_id: c-005
-  last_updated: 2026-03-25
+  active_chunk_id: c-006
+  last_updated: 2026-03-26
 ```
 <!-- repo-workflow-projection:end -->
 
@@ -150,10 +150,10 @@ The recommended next task is:
 - make the lead-owned run materially resumable and stoppable as one bounded orchestration unit
 - keep `sy status`, `sy events`, and `sy mail` truthful while the operator view transitions from session-centric to run-centric
 
-The recommended next repo-workflow slice is:
-- implement the repo-local milestone proof gate first
+The active repo-workflow slice is now:
+- the proof-gated closeout gate for `c-006`
+- record milestone proof and advance to `c-007`
 - keep PR lifecycle and explicit auto-merge policy deferred to the later follow-up slice
-- keep repo-workflow proof handling separate from the product `manual-ready` policy
 
 Do not skip straight to automatic merge or broad runtime expansion. The next value is making the launcher and agent contracts match the durable swarm state that now exists.
 

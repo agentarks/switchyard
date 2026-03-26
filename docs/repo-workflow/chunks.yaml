@@ -60,4 +60,4 @@ repo_workflow_chunks:
       verification_command: npm run check
       proof_gate: not-required
       owner_role: controller
-  last_updated: 2026-03-25
+  last_updated: 2026-03-26

@@ -93,6 +93,28 @@ repo_workflow_attempts:
     - attempt_id: a-005
       chunk_id: c-005
       attempt_number: 1
+      state: complete
+      blocked_reason: none
+      implementer_status: done
+      spec_review_status: approved
+      spec_reviewed_commit: cc6f95145af981713d3caf9066e625cac0afefc4
+      quality_review_status: approved
+      quality_reviewed_commit: cc6f95145af981713d3caf9066e625cac0afefc4
+      verification_result: passed
+      verification_head_commit: cc6f95145af981713d3caf9066e625cac0afefc4
+      verified_at: 2026-03-26T00:30:00.000Z
+      docs_reconciled: true
+      proof_status: not-required
+      proof_summary: ""
+      proof_verification_command: null
+      proof_commands: []
+      proof_head_commit: null
+      proof_recorded_at: null
+      summary: "Proof-gate schema, validator enforcement, docs, and regression coverage landed."
+      notes: "Historical implementation result captured by commit cc6f951 before the closeout proof gate became active."
+    - attempt_id: a-006
+      chunk_id: c-006
+      attempt_number: 1
       state: ready
       blocked_reason: none
       implementer_status: not-started
@@ -104,12 +126,12 @@ repo_workflow_attempts:
       verification_head_commit: null
       verified_at: null
       docs_reconciled: false
-      proof_status: not-required
+      proof_status: pending
       proof_summary: ""
       proof_verification_command: null
       proof_commands: []
       proof_head_commit: null
       proof_recorded_at: null
       summary: ""
-      notes: "Current repo-workflow slice covers the proof-gate implementation chunk before later PR-lifecycle and explicit auto-merge policy work."
-  last_updated: 2026-03-25
+      notes: "Active closeout gate: record milestone proof for c-005 before advancing to c-007."
+  last_updated: 2026-03-26

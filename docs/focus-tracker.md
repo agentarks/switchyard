@@ -8,7 +8,7 @@ repo_workflow_projection:
   schema_version: 1
   active_repo_campaign_id: rw-001
   active_bundle_id: repo-workflow-foundation
-  last_updated: 2026-03-25
+  last_updated: 2026-03-26
 ```
 <!-- repo-workflow-projection:end -->
 

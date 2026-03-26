@@ -92,6 +92,7 @@ export async function validateRepoWorkflow(projectRoot: string): Promise<RepoWor
     }
 
     validateCrossFileIds(campaign, chunkManifest, attemptDocument);
+    validateAttemptSequence(chunkManifest, attemptDocument);
     validateMilestoneRegistry(campaign, milestoneRegistry);
     validateSliceLedgerLinkage(campaign, documents.sliceLedgerRowRefs);
     validateProjections(campaign, projections);
@@ -551,6 +552,45 @@ function validateCrossFileIds(
 
   if (campaign.bundleId !== chunkManifest.bundleId) {
     throw new RepoWorkflowValidationFailure("invalid_state", "Canonical repo-workflow bundle ids do not match across campaign.yaml and chunks.yaml.");
+  }
+}
+
+function validateAttemptSequence(chunkManifest: LoadedChunkManifest, attemptDocument: LoadedAttemptDocument): void {
+  const predecessorByChunkId = new Map<string, LoadedChunk>();
+  for (const chunk of chunkManifest.chunks) {
+    if (chunk.nextChunkId !== null) {
+      predecessorByChunkId.set(chunk.nextChunkId, chunk);
+    }
+  }
+
+  const attemptsByChunkId = new Map<string, LoadedAttempt[]>();
+  for (const attempt of attemptDocument.attempts) {
+    const chunkAttempts = attemptsByChunkId.get(attempt.chunkId);
+    if (chunkAttempts) {
+      chunkAttempts.push(attempt);
+    } else {
+      attemptsByChunkId.set(attempt.chunkId, [attempt]);
+    }
+  }
+
+  for (const chunk of chunkManifest.chunks) {
+    const predecessor = predecessorByChunkId.get(chunk.chunkId);
+    if (!predecessor) {
+      continue;
+    }
+
+    const chunkAttempts = attemptsByChunkId.get(chunk.chunkId) ?? [];
+    if (chunkAttempts.length === 0) {
+      continue;
+    }
+
+    const predecessorLatestAttempt = getLatestAttempt(attemptsByChunkId.get(predecessor.chunkId) ?? []);
+    if (predecessorLatestAttempt === null || predecessorLatestAttempt.state !== "complete") {
+      throw new RepoWorkflowValidationFailure(
+        "invalid_state",
+        `chunk '${chunk.chunkId}' cannot record attempt history before predecessor chunk '${predecessor.chunkId}' reaches a complete latest attempt.`
+      );
+    }
   }
 }
 
