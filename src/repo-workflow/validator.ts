@@ -92,12 +92,12 @@ export async function validateRepoWorkflow(projectRoot: string): Promise<RepoWor
     }
 
     validateCrossFileIds(campaign, chunkManifest, attemptDocument);
-    validateAttemptSequence(chunkManifest, attemptDocument);
     validateMilestoneRegistry(campaign, milestoneRegistry);
     validateSliceLedgerLinkage(campaign, documents.sliceLedgerRowRefs);
     validateProjections(campaign, projections);
 
     const activeAttempt = validateActiveState(campaign, chunkManifest, attemptDocument);
+    validateAttemptSequence(campaign, chunkManifest, attemptDocument);
     validateProofGateState(campaign, chunkManifest, attemptDocument, activeAttempt, currentHeadCommit);
     if (activeAttempt !== null) {
       validateReviewCurrency(activeAttempt, currentHeadCommit);
@@ -555,12 +555,28 @@ function validateCrossFileIds(
   }
 }
 
-function validateAttemptSequence(chunkManifest: LoadedChunkManifest, attemptDocument: LoadedAttemptDocument): void {
+function validateAttemptSequence(
+  campaign: LoadedCampaign,
+  chunkManifest: LoadedChunkManifest,
+  attemptDocument: LoadedAttemptDocument
+): void {
   const predecessorByChunkId = new Map<string, LoadedChunk>();
+  const chunkById = new Map<string, LoadedChunk>();
   for (const chunk of chunkManifest.chunks) {
+    chunkById.set(chunk.chunkId, chunk);
     if (chunk.nextChunkId !== null) {
       predecessorByChunkId.set(chunk.nextChunkId, chunk);
     }
+  }
+
+  const rootChunk = chunkManifest.chunks.find((chunk) => !predecessorByChunkId.has(chunk.chunkId)) ?? null;
+  const chunkIndexById = new Map<string, number>();
+  let currentChunk = rootChunk;
+  let chunkIndex = 0;
+  while (currentChunk !== null) {
+    chunkIndexById.set(currentChunk.chunkId, chunkIndex);
+    chunkIndex += 1;
+    currentChunk = currentChunk.nextChunkId === null ? null : (chunkById.get(currentChunk.nextChunkId) ?? null);
   }
 
   const attemptsByChunkId = new Map<string, LoadedAttempt[]>();
@@ -572,6 +588,9 @@ function validateAttemptSequence(chunkManifest: LoadedChunkManifest, attemptDocu
       attemptsByChunkId.set(attempt.chunkId, [attempt]);
     }
   }
+
+  const activeChunkIndex =
+    campaign.activeChunkId === null ? null : (chunkIndexById.get(campaign.activeChunkId) ?? null);
 
   for (const chunk of chunkManifest.chunks) {
     const predecessor = predecessorByChunkId.get(chunk.chunkId);
@@ -589,6 +608,14 @@ function validateAttemptSequence(chunkManifest: LoadedChunkManifest, attemptDocu
       throw new RepoWorkflowValidationFailure(
         "invalid_state",
         `chunk '${chunk.chunkId}' cannot record attempt history before predecessor chunk '${predecessor.chunkId}' reaches a complete latest attempt.`
+      );
+    }
+
+    const chunkHistoryIndex = chunkIndexById.get(chunk.chunkId) ?? null;
+    if (activeChunkIndex !== null && chunkHistoryIndex !== null && chunkHistoryIndex > activeChunkIndex) {
+      throw new RepoWorkflowValidationFailure(
+        "invalid_state",
+        `chunk '${chunk.chunkId}' cannot record attempt history while earlier chunk '${campaign.activeChunkId}' remains canonically active. Advance campaign.yaml before appending successor attempts.`
       );
     }
   }

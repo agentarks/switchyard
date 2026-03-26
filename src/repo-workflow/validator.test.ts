@@ -178,6 +178,7 @@ test("validateRepoWorkflow fails when recorded proof omits proof_summary", async
 
   try {
     await markFixtureImplementationChunkComplete(repoDir);
+    await activateFixtureFollowUpChunk(repoDir);
     const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
     const attempts = parse(await readFile(attemptsPath, "utf8")) as {
       repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
@@ -207,7 +208,10 @@ test("validateRepoWorkflow fails when recorded proof omits proof_summary", async
       notes: ""
     });
     await writeFile(attemptsPath, stringify(attempts), "utf8");
-    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(
+      repoDir,
+      ["add", "docs/repo-workflow/campaign.yaml", "docs/repo-workflow/attempts.yaml", "docs/current-state.md", "docs/next-steps.md"]
+    );
     await git(repoDir, ["commit", "-m", "Add recorded proof without summary"]);
 
     const result = await validateRepoWorkflow(repoDir);
@@ -225,6 +229,7 @@ test("validateRepoWorkflow fails when recorded proof uses a different commit tha
 
   try {
     await markFixtureImplementationChunkComplete(repoDir);
+    await activateFixtureFollowUpChunk(repoDir);
     const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
     const attempts = parse(await readFile(attemptsPath, "utf8")) as {
       repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
@@ -254,7 +259,10 @@ test("validateRepoWorkflow fails when recorded proof uses a different commit tha
       notes: ""
     });
     await writeFile(attemptsPath, stringify(attempts), "utf8");
-    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(
+      repoDir,
+      ["add", "docs/repo-workflow/campaign.yaml", "docs/repo-workflow/attempts.yaml", "docs/current-state.md", "docs/next-steps.md"]
+    );
     await git(repoDir, ["commit", "-m", "Add proof and verification commit mismatch"]);
 
     const result = await validateRepoWorkflow(repoDir);
@@ -372,6 +380,7 @@ test("validateRepoWorkflow fails when recorded proof uses an empty proof verific
 
   try {
     await markFixtureImplementationChunkComplete(repoDir);
+    await activateFixtureFollowUpChunk(repoDir);
     const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
     const attempts = parse(await readFile(attemptsPath, "utf8")) as {
       repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
@@ -401,7 +410,10 @@ test("validateRepoWorkflow fails when recorded proof uses an empty proof verific
       notes: ""
     });
     await writeFile(attemptsPath, stringify(attempts), "utf8");
-    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(
+      repoDir,
+      ["add", "docs/repo-workflow/campaign.yaml", "docs/repo-workflow/attempts.yaml", "docs/current-state.md", "docs/next-steps.md"]
+    );
     await git(repoDir, ["commit", "-m", "Add blank proof command snapshot"]);
 
     const result = await validateRepoWorkflow(repoDir);
@@ -419,6 +431,7 @@ test("validateRepoWorkflow fails when recorded proof omits proof_commands", asyn
 
   try {
     await markFixtureImplementationChunkComplete(repoDir);
+    await activateFixtureFollowUpChunk(repoDir);
     const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
     const attempts = parse(await readFile(attemptsPath, "utf8")) as {
       repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
@@ -448,7 +461,10 @@ test("validateRepoWorkflow fails when recorded proof omits proof_commands", asyn
       notes: ""
     });
     await writeFile(attemptsPath, stringify(attempts), "utf8");
-    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(
+      repoDir,
+      ["add", "docs/repo-workflow/campaign.yaml", "docs/repo-workflow/attempts.yaml", "docs/current-state.md", "docs/next-steps.md"]
+    );
     await git(repoDir, ["commit", "-m", "Add recorded proof without proof commands"]);
 
     const result = await validateRepoWorkflow(repoDir);
@@ -466,6 +482,7 @@ test("validateRepoWorkflow fails when recorded proof includes blank proof_comman
 
   try {
     await markFixtureImplementationChunkComplete(repoDir);
+    await activateFixtureFollowUpChunk(repoDir);
     const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
     const attempts = parse(await readFile(attemptsPath, "utf8")) as {
       repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
@@ -495,7 +512,10 @@ test("validateRepoWorkflow fails when recorded proof includes blank proof_comman
       notes: ""
     });
     await writeFile(attemptsPath, stringify(attempts), "utf8");
-    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(
+      repoDir,
+      ["add", "docs/repo-workflow/campaign.yaml", "docs/repo-workflow/attempts.yaml", "docs/current-state.md", "docs/next-steps.md"]
+    );
     await git(repoDir, ["commit", "-m", "Add blank proof_commands entry"]);
 
     const result = await validateRepoWorkflow(repoDir);
@@ -735,11 +755,63 @@ test("validateRepoWorkflow fails when closeout attempt history exists before the
   }
 });
 
+test("validateRepoWorkflow fails when successor attempt history exists before canonical active state advances", async () => {
+  const repoDir = await createValidRepoWorkflowRepo();
+
+  try {
+    await markFixtureImplementationChunkComplete(repoDir);
+
+    const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
+    const attempts = parse(await readFile(attemptsPath, "utf8")) as {
+      repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
+    };
+    attempts.repo_workflow_attempts.attempts.push({
+      attempt_id: CLOSEOUT_ATTEMPT_ID,
+      chunk_id: CLOSEOUT_CHUNK_ID,
+      attempt_number: 1,
+      state: "ready",
+      blocked_reason: "none",
+      implementer_status: "not-started",
+      spec_review_status: "not-started",
+      spec_reviewed_commit: null,
+      quality_review_status: "not-started",
+      quality_reviewed_commit: null,
+      verification_result: "not-run",
+      verification_head_commit: null,
+      verified_at: null,
+      docs_reconciled: false,
+      proof_status: "pending",
+      proof_summary: "",
+      proof_verification_command: null,
+      proof_commands: [],
+      proof_head_commit: null,
+      proof_recorded_at: null,
+      summary: "Invalid successor attempt exists before canonical handoff.",
+      notes: ""
+    });
+    await writeFile(attemptsPath, stringify(attempts), "utf8");
+    await git(repoDir, ["add", "docs/repo-workflow/attempts.yaml"]);
+    await git(repoDir, ["commit", "-m", "Pre-seed successor attempt before active state advances"]);
+
+    const result = await validateRepoWorkflow(repoDir);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "invalid_state");
+    assert.match(
+      result.message,
+      /chunk 'c-006'.*earlier chunk 'c-005'.*canonically active.*advance campaign\.yaml before appending successor attempts/i
+    );
+  } finally {
+    await removeTempDir(repoDir);
+  }
+});
+
 test("validateRepoWorkflow fails when canonical history rewrites a proof-gated chunk to not-required", async () => {
   const repoDir = await createValidRepoWorkflowRepo();
 
   try {
     await markFixtureImplementationChunkComplete(repoDir);
+    await activateFixtureFollowUpChunk(repoDir);
     const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
     const attempts = parse(await readFile(attemptsPath, "utf8")) as {
       repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
@@ -781,7 +853,17 @@ test("validateRepoWorkflow fails when canonical history rewrites a proof-gated c
     closeoutChunk.proof_gate = "not-required";
     await writeFile(chunksPath, stringify(chunks), "utf8");
 
-    await git(repoDir, ["add", "docs/repo-workflow/chunks.yaml", "docs/repo-workflow/attempts.yaml"]);
+    await git(
+      repoDir,
+      [
+        "add",
+        "docs/repo-workflow/campaign.yaml",
+        "docs/repo-workflow/chunks.yaml",
+        "docs/repo-workflow/attempts.yaml",
+        "docs/current-state.md",
+        "docs/next-steps.md"
+      ]
+    );
     await git(repoDir, ["commit", "-m", "Rewrite proof-gated chunk to not-required"]);
 
     const result = await validateRepoWorkflow(repoDir);
@@ -2279,6 +2361,45 @@ async function markFixtureImplementationChunkComplete(repoDir: string, completed
   await writeFile(attemptsPath, stringify(attempts), "utf8");
 
   return headCommit;
+}
+
+async function activateFixtureFollowUpChunk(repoDir: string): Promise<void> {
+  await switchActiveChunk(repoDir, FOLLOW_UP_CHUNK_ID, FOLLOW_UP_ATTEMPT_ID);
+
+  const attemptsPath = join(repoDir, "docs", "repo-workflow", "attempts.yaml");
+  const attempts = parse(await readFile(attemptsPath, "utf8")) as {
+    repo_workflow_attempts: { attempts: Array<Record<string, unknown>> };
+  };
+  const existingFollowUpAttempt = attempts.repo_workflow_attempts.attempts.find((attempt) => attempt.attempt_id === FOLLOW_UP_ATTEMPT_ID);
+  if (existingFollowUpAttempt) {
+    return;
+  }
+
+  attempts.repo_workflow_attempts.attempts.push({
+    attempt_id: FOLLOW_UP_ATTEMPT_ID,
+    chunk_id: FOLLOW_UP_CHUNK_ID,
+    attempt_number: 1,
+    state: "ready",
+    blocked_reason: "none",
+    implementer_status: "not-started",
+    spec_review_status: "not-started",
+    spec_reviewed_commit: null,
+    quality_review_status: "not-started",
+    quality_reviewed_commit: null,
+    verification_result: "not-run",
+    verification_head_commit: null,
+    verified_at: null,
+    docs_reconciled: false,
+    proof_status: "not-required",
+    proof_summary: "",
+    proof_verification_command: null,
+    proof_commands: [],
+    proof_head_commit: null,
+    proof_recorded_at: null,
+    summary: "Follow-up chunk started after closeout handoff.",
+    notes: ""
+  });
+  await writeFile(attemptsPath, stringify(attempts), "utf8");
 }
 
 function projectionBlock({ includeActiveChunkId }: { includeActiveChunkId: boolean }): string {
