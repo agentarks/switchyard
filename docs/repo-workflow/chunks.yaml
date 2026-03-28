@@ -10,6 +10,7 @@ repo_workflow_chunks:
       scope: repo-workflow-contract-and-red-tests
       done_condition: contract-cleanup-and-red-tests-landed
       verification_command: node --import tsx --test src/repo-workflow/validator.test.ts src/repo-workflow/cli.test.ts
+      proof_gate: not-required
       owner_role: controller
     - chunk_id: c-002
       next_chunk_id: c-003
@@ -17,6 +18,7 @@ repo_workflow_chunks:
       scope: repo-workflow-validator
       done_condition: validator-and-cli-pass-targeted-tests
       verification_command: node --import tsx --test src/repo-workflow/validator.test.ts src/repo-workflow/cli.test.ts
+      proof_gate: not-required
       owner_role: controller
     - chunk_id: c-003
       next_chunk_id: c-004
@@ -24,6 +26,7 @@ repo_workflow_chunks:
       scope: repo-workflow-startup-doc-cutover
       done_condition: startup-doc-cutover-validates-cleanly
       verification_command: npm run repo-workflow:validate
+      proof_gate: not-required
       owner_role: controller
     - chunk_id: c-004
       next_chunk_id: c-005
@@ -31,12 +34,30 @@ repo_workflow_chunks:
       scope: repo-workflow-closeout
       done_condition: repo-workflow-slice-verified-and-ready-for-pr
       verification_command: npm run check
+      proof_gate: not-required
       owner_role: controller
     - chunk_id: c-005
+      next_chunk_id: c-006
+      objective: implement-milestone-proof-gate
+      scope: repo-workflow-proof-gate
+      done_condition: proof-gate-schema-validator-and-tests-landed
+      verification_command: node --import tsx --test src/repo-workflow/validator.test.ts src/repo-workflow/cli.test.ts
+      proof_gate: not-required
+      owner_role: controller
+    - chunk_id: c-006
+      next_chunk_id: c-007
+      objective: verify-proof-gate-closeout
+      scope: repo-workflow-proof-gate-closeout
+      done_condition: milestone-proof-recorded-and-next-task-may-begin
+      verification_command: npm run check
+      proof_gate: required
+      owner_role: controller
+    - chunk_id: c-007
       next_chunk_id: null
-      objective: add-proof-gate-pr-lifecycle-and-auto-merge-policy
+      objective: add-pr-lifecycle-and-auto-merge-policy
       scope: repo-workflow-next-slice
       done_condition: next-repo-workflow-slice-is-specified-and-ready
       verification_command: npm run check
+      proof_gate: not-required
       owner_role: controller
-  last_updated: 2026-03-25
+  last_updated: 2026-03-26

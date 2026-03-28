@@ -14,8 +14,10 @@ const repoWorkflowCliPath = fileURLToPath(new URL("./cli.ts", import.meta.url));
 
 const CAMPAIGN_ID = "rw-001";
 const BUNDLE_ID = "repo-workflow-foundation";
-const ACTIVE_CHUNK_ID = "c-001";
-const ACTIVE_ATTEMPT_ID = "a-001";
+const ACTIVE_CHUNK_ID = "c-005";
+const ACTIVE_ATTEMPT_ID = "a-005";
+const CLOSEOUT_CHUNK_ID = "c-006";
+const FOLLOW_UP_CHUNK_ID = "c-007";
 const PRODUCT_MILESTONE_ID = "m7";
 const STARTUP_MARKER = "repo-workflow-startup: repo-workflow-v1";
 
@@ -28,7 +30,7 @@ test("repo-workflow CLI prints one compact success line and exits 0 when validat
     });
 
     assert.equal(stderr, "");
-    assert.equal(stdout, "repo-workflow: valid campaign rw-001 chunk c-001 attempt a-001\n");
+    assert.equal(stdout, "repo-workflow: valid campaign rw-001 chunk c-005 attempt a-005\n");
   } finally {
     await removeTempDir(repoDir);
   }
@@ -104,6 +106,7 @@ test("repo-workflow CLI prints terminal campaign state when validation succeeds 
               scope: "repo-workflow-foundation",
               done_condition: "contract-and-validator-foundation-defined",
               verification_command: "node --import tsx --test src/repo-workflow/validator.test.ts src/repo-workflow/cli.test.ts",
+              proof_gate: "not-required",
               owner_role: "controller"
             }
           ],
@@ -259,11 +262,32 @@ async function writeFixtureFiles(repoDir: string): Promise<void> {
         chunks: [
           {
             chunk_id: ACTIVE_CHUNK_ID,
-            next_chunk_id: null,
-            objective: "freeze-control-plane-contract",
-            scope: "repo-workflow-foundation",
-            done_condition: "contract-and-validator-foundation-defined",
+            next_chunk_id: CLOSEOUT_CHUNK_ID,
+            objective: "implement-milestone-proof-gate",
+            scope: "repo-workflow-proof-gate",
+            done_condition: "proof-gate-schema-validator-and-tests-landed",
             verification_command: "node --import tsx --test src/repo-workflow/validator.test.ts src/repo-workflow/cli.test.ts",
+            proof_gate: "not-required",
+            owner_role: "controller"
+          },
+          {
+            chunk_id: CLOSEOUT_CHUNK_ID,
+            next_chunk_id: FOLLOW_UP_CHUNK_ID,
+            objective: "verify-proof-gate-closeout",
+            scope: "repo-workflow-proof-gate-closeout",
+            done_condition: "milestone-proof-recorded-and-next-task-may-begin",
+            verification_command: "npm run check",
+            proof_gate: "required",
+            owner_role: "controller"
+          },
+          {
+            chunk_id: FOLLOW_UP_CHUNK_ID,
+            next_chunk_id: null,
+            objective: "add-pr-lifecycle-and-auto-merge-policy",
+            scope: "repo-workflow-next-slice",
+            done_condition: "next-repo-workflow-slice-is-specified-and-ready",
+            verification_command: "npm run check",
+            proof_gate: "not-required",
             owner_role: "controller"
           }
         ],
@@ -295,6 +319,12 @@ async function writeFixtureFiles(repoDir: string): Promise<void> {
             verification_head_commit: null,
             verified_at: null,
             docs_reconciled: false,
+            proof_status: "not-required",
+            proof_summary: "",
+            proof_verification_command: null,
+            proof_commands: [],
+            proof_head_commit: null,
+            proof_recorded_at: null,
             summary: "",
             notes: ""
           }

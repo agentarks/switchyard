@@ -16,6 +16,12 @@ repo_workflow_attempts:
       verification_head_commit: 1b268f9b2c4c7715f2829a5ff71de807f40f7376
       verified_at: 2026-03-25T12:00:00.000Z
       docs_reconciled: true
+      proof_status: not-required
+      proof_summary: ""
+      proof_verification_command: null
+      proof_commands: []
+      proof_head_commit: null
+      proof_recorded_at: null
       summary: "Control-plane contract cleanup and RED tests landed."
       notes: "Closed by checkpoint commit 1b268f9."
     - attempt_id: a-002
@@ -32,6 +38,12 @@ repo_workflow_attempts:
       verification_head_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
       verified_at: 2026-03-25T15:30:00.000Z
       docs_reconciled: true
+      proof_status: not-required
+      proof_summary: ""
+      proof_verification_command: null
+      proof_commands: []
+      proof_head_commit: null
+      proof_recorded_at: null
       summary: "Validator and CLI implementation landed on a review-corrected implementation commit."
       notes: "Historical implementation result captured by commit 83ec30f."
     - attempt_id: a-003
@@ -48,6 +60,12 @@ repo_workflow_attempts:
       verification_head_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
       verified_at: 2026-03-25T15:30:00.000Z
       docs_reconciled: true
+      proof_status: not-required
+      proof_summary: ""
+      proof_verification_command: null
+      proof_commands: []
+      proof_head_commit: null
+      proof_recorded_at: null
       summary: "Startup-doc cutover landed with projection and milestone-registry checks tightened."
       notes: "Historical cutover result captured by commit 83ec30f."
     - attempt_id: a-004
@@ -64,10 +82,38 @@ repo_workflow_attempts:
       verification_head_commit: 83ec30ff7a0874555ea7ef55d799d7e5f75ab817
       verified_at: 2026-03-25T15:30:00.000Z
       docs_reconciled: true
+      proof_status: not-required
+      proof_summary: ""
+      proof_verification_command: null
+      proof_commands: []
+      proof_head_commit: null
+      proof_recorded_at: null
       summary: "Full repo-workflow verification and closeout landed on the review-corrected implementation commit."
       notes: "Chunk 4 is historically captured by commit 83ec30f."
     - attempt_id: a-005
       chunk_id: c-005
+      attempt_number: 1
+      state: complete
+      blocked_reason: none
+      implementer_status: done
+      spec_review_status: approved
+      spec_reviewed_commit: cc6f95145af981713d3caf9066e625cac0afefc4
+      quality_review_status: approved
+      quality_reviewed_commit: cc6f95145af981713d3caf9066e625cac0afefc4
+      verification_result: passed
+      verification_head_commit: cc6f95145af981713d3caf9066e625cac0afefc4
+      verified_at: 2026-03-26T00:30:00.000Z
+      docs_reconciled: true
+      proof_status: not-required
+      proof_summary: ""
+      proof_verification_command: null
+      proof_commands: []
+      proof_head_commit: null
+      proof_recorded_at: null
+      summary: "Proof-gate schema, validator enforcement, docs, and regression coverage landed."
+      notes: "Historical implementation result captured by commit cc6f951 before the closeout proof gate became active."
+    - attempt_id: a-006
+      chunk_id: c-006
       attempt_number: 1
       state: ready
       blocked_reason: none
@@ -80,6 +126,12 @@ repo_workflow_attempts:
       verification_head_commit: null
       verified_at: null
       docs_reconciled: false
+      proof_status: pending
+      proof_summary: ""
+      proof_verification_command: null
+      proof_commands: []
+      proof_head_commit: null
+      proof_recorded_at: null
       summary: ""
-      notes: "Next repo-workflow slice covers proof-gate, PR-lifecycle, and explicit auto-merge policy work."
-  last_updated: 2026-03-25
+      notes: "Active closeout gate: record milestone proof at c-006 before handing off to c-007."
+  last_updated: 2026-03-26

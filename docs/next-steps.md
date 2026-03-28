@@ -8,8 +8,8 @@ repo_workflow_projection:
   schema_version: 1
   active_repo_campaign_id: rw-001
   active_bundle_id: repo-workflow-foundation
-  active_chunk_id: c-005
-  last_updated: 2026-03-25
+  active_chunk_id: c-006
+  last_updated: 2026-03-26
 ```
 <!-- repo-workflow-projection:end -->
 
@@ -26,10 +26,11 @@ The active milestone is:
 - bounded lead host, resume, run-scoped stop semantics, and run-aware mail/events
 
 The repo-workflow state-and-resume slice is now landed.
-The next repo-workflow slice should move to:
-- smoke/demo proof gate
-- PR lifecycle
-- explicit auto-merge policy for building Switchyard itself
+The proof-gate implementation slice is also now landed.
+The active repo-workflow closeout slice should now move to:
+- record milestone proof for `c-006`
+- then later PR lifecycle
+- then later explicit auto-merge policy for building Switchyard itself
 
 That later repo-workflow slice must stay separate from Switchyard's product `manual-ready` merge policy.
 
